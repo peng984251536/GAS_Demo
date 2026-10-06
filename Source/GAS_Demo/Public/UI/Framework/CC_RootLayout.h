@@ -33,7 +33,11 @@ public:
 	UCC_RootLayout(const FObjectInitializer& ObjectInitializer);
 	/** 最后一个菜单关闭后，恢复 Game 模式和鼠标行为。 */
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
-	/** 打开页面并传数据；同层同类返回已有实例，过渡/重入/无效请求返回空。 */
+	/**
+	 * 打开页面并传数据；过渡/重入/无效请求返回空。
+	 * 同层同类页面已存在时返回该实例：传入非空 Context 会替换旧上下文并再次触发 On Screen Opened，
+	 * 但被同层其他页面覆盖的实例不会移到栈顶（会输出警告）。
+	 */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(DeterminesOutputType="ScreenClass", Categories="UI.Layer"))
 	UCC_ActivatableWidget* ShowScreen(FGameplayTag Layer, TSubclassOf<UCC_ActivatableWidget> ScreenClass, UObject* Context = nullptr);
 	/** 关闭最上层且允许关闭的页面；退场动画和下页恢复由官方栈完成。 */

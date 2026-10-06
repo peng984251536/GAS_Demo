@@ -52,6 +52,21 @@ bool FCCUIControllerLifecycleTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("New opening rejects the previous controller token"), ReopenedController->IsActivationCurrent(FirstToken));
 	ReopenedController->Release();
 
+	// 同层同类页面被再次 ShowScreen：注入新 Context 时重启激活会话，旧异步回调失效，模型保留。
+	UCC_UIController* ReusedController = NewObject<UCC_UIController>(View);
+	ReusedController->Initialize(View, nullptr);
+	ReusedController->Activate();
+	const FGuid BeforeReuseToken = ReusedController->GetActivationToken();
+	UCC_UIModel* ReusedModel = ReusedController->GetModel();
+	ReusedController->UpdateContext(NewObject<UCC_UIModel>());
+	TestTrue(TEXT("Context update keeps the page active"), ReusedController->IsActive());
+	TestFalse(TEXT("Context update invalidates the previous session token"), ReusedController->IsActivationCurrent(BeforeReuseToken));
+	TestTrue(TEXT("Context update keeps the same model"), ReusedController->GetModel() == ReusedModel);
+	ReusedController->Deactivate();
+	ReusedController->UpdateContext(NewObject<UCC_UIModel>());
+	TestFalse(TEXT("Covered page is not activated by a context update"), ReusedController->IsActive());
+	ReusedController->Release();
+
 	// 模拟同一池化 Widget 重新入栈，验证无需等待 NativeDestruct 才清理旧会话。
 	View->PrepareForDisplay(nullptr);
 	UCC_UIController* PreviousController = View->GetScreenController();

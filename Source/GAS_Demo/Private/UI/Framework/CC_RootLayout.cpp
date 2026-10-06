@@ -1,6 +1,7 @@
 #include "UI/Framework/CC_RootLayout.h"
 #include "UI/Framework/CC_ActivatableWidget.h"
 #include "GameplayTags/CC_Tags.h"
+#include "GAS_Demo.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
 #include "Components/Border.h"
@@ -113,8 +114,23 @@ UCC_ActivatableWidget* UCC_RootLayout::ShowScreen(FGameplayTag Layer, TSubclassO
 	UCommonActivatableWidgetContainerBase* Stack = GetLayer(Layer);
 	if (bShuttingDown || bDetached || bChangingStack || !Stack || !ScreenClass || ScreenClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
 	// 同层同类只保留一个实例；已被覆盖的旧页面不会被悄悄移到栈顶。
+	// 复用时注入新的 Context，否则用不同数据（例如另一个物品）打开详情页会继续显示旧数据。
 	for (UCommonActivatableWidget* Existing : Stack->GetWidgetList())
-		if (Existing->GetClass() == ScreenClass) return Cast<UCC_ActivatableWidget>(Existing);
+	{
+		if (Existing->GetClass() != ScreenClass) continue;
+		UCC_ActivatableWidget* Screen = Cast<UCC_ActivatableWidget>(Existing);
+		if (Screen)
+		{
+			TGuardValue<bool> ChangingStack(bChangingStack, true); // On Screen Opened 中不允许同步导航。
+			Screen->ReuseWithContext(Context);
+		}
+		if (Existing != Stack->GetActiveWidget())
+		{
+			UE_LOG(LogGAS_Demo, Warning, TEXT("ShowScreen: %s 已在 %s 层栈中但被同层其他页面覆盖，返回已有实例且不会移到栈顶。"),
+				*GetNameSafe(ScreenClass), *Layer.ToString());
+		}
+		return Screen;
+	}
 	if (IsTransitioning()) return nullptr;
 	// 作用域结束自动解除重入锁，保证提前返回也不会卡住后续操作。
 	TGuardValue<bool> ChangingStack(bChangingStack, true);

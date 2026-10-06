@@ -75,6 +75,14 @@ void UCC_ActivatableWidget::PrepareForDisplay(UObject* InContext)
 	BP_OnScreenOpened(InContext);
 }
 
+// 复用已在栈中的实例：只换数据，不重建会话对象，避免模型状态（如滚动位置之外的业务快照）被无谓清空。
+void UCC_ActivatableWidget::ReuseWithContext(UObject* InContext)
+{
+	if (!InContext || InContext == ScreenContext) return;
+	ScreenContext = InContext;
+	if (ScreenController) ScreenController->UpdateContext(InContext);
+	BP_OnScreenOpened(InContext);
+}
 // 控件释放 Slate 时清除上下文，避免对象池继续持有旧业务对象。
 void UCC_ActivatableWidget::NativeDestruct()
 {
