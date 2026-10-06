@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
+#include "GameplayTags/CC_Tags.h"
 #include "UI/Framework/CC_DemoScreens.h"
 #include "UI/Framework/CC_UIController.h"
 #include "UI/Framework/CC_UIModel.h"
@@ -99,10 +100,10 @@ bool FCCUIRootLifecycleTest::RunTest(const FString& Parameters)
 	UCC_RootLayout* Root = CreateWidget<UCC_RootLayout>(PC);
 	if (!TestNotNull(TEXT("Root"), Root)) return false;
 	Root->ResumeLayout(); // 此独立根用于无窗口容器测试，显式模拟 Policy 完成挂载。
-	const FGameplayTag Game = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Game"));
-	const FGameplayTag GameMenu = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.GameMenu"));
-	const FGameplayTag Menu = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Menu"));
-	const FGameplayTag Modal = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Modal"));
+	const FGameplayTag Game = CCTags::UILayer::Game;
+	const FGameplayTag GameMenu = CCTags::UILayer::GameMenu;
+	const FGameplayTag Menu = CCTags::UILayer::Menu;
+	const FGameplayTag Modal = CCTags::UILayer::Modal;
 	TestNotNull(TEXT("Game layer"), Root->GetLayer(Game));
 	TestNotNull(TEXT("GameMenu layer"), Root->GetLayer(GameMenu));
 	TestNotNull(TEXT("Menu layer"), Root->GetLayer(Menu));

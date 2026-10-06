@@ -41,5 +41,14 @@ namespace CCTags
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
 	}
-	
+
+	// UI 根布局的四个页面层。名称与 DefaultGameplayTags.ini 中的 UI.Layer.* 保持一致，
+	// C++ 一律引用这里的原生标签，避免字符串拼写错误在运行时静默返回空层。
+	namespace UILayer
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Game);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameMenu);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Menu);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Modal);
+	}
 }

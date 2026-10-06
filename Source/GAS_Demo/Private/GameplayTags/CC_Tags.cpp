@@ -102,4 +102,12 @@ namespace CCTags
 			"角色处于受击状态"
 		);
 	}
+
+	namespace UILayer
+	{
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Game, "UI.Layer.Game", "HUD 层：不响应返回，不抢焦点");
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameMenu, "UI.Layer.GameMenu", "玩法内菜单层：背包、记分板");
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Menu, "UI.Layer.Menu", "菜单层：主菜单、暂停、设置");
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Modal, "UI.Layer.Modal", "弹窗层：确认框");
+	}
 }
