@@ -36,6 +36,11 @@ public:
 	void RefreshNavigationFocus() { RequestRefreshFocus(); }
 	/** 每次入栈前注入数据并重置旧焦点；对象池复用也执行。 */
 	void PrepareForDisplay(UObject* InContext);
+	/**
+	 * 同层同类页面已在栈中、再次 ShowScreen 时调用：不新建控制器/模型，只替换 Context，
+	 * 触发 On Screen Opened，并在页面激活时重启控制器会话。InContext 为空时保持原上下文。
+	 */
+	void ReuseWithContext(UObject* InContext);
 	/** 获取本页独立的业务控制器；未配置或入栈前可能为空。 */
 	UFUNCTION(BlueprintPure, Category="UI|Architecture")
 	UCC_UIController* GetScreenController() const { return ScreenController; }

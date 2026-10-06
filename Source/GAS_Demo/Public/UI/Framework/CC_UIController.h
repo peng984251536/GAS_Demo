@@ -28,6 +28,8 @@ public:
 	void Deactivate();
 	/** 页面释放 Slate 时清理上下文和所有者，不能再用于旧页面。 */
 	void Release();
+	/** 已打开页面被再次 ShowScreen 时注入新上下文；激活中则重启会话，让 OnActivated 重新读取快照。 */
+	void UpdateContext(UObject* InContext);
 	/** 只读访问展示模型；Widget 通过具体模型的 Getter 读取快照。 */
 	UFUNCTION(BlueprintPure, Category="UI|Controller")
 	UCC_UIModel* GetModel() const { return Model; }

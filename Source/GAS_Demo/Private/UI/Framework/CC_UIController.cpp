@@ -35,6 +35,14 @@ void UCC_UIController::Deactivate()
 	OnDeactivated();
 }
 
+void UCC_UIController::UpdateContext(UObject* InContext)
+{
+	Context = InContext;
+	if (!bActive) return; // 被覆盖的页面在恢复激活时自然读取新 Context。
+	// 结束旧会话：旧 ActivationToken 失效，迟到的异步结果会被拒绝。
+	Deactivate();
+	Activate();
+}
 void UCC_UIController::Release()
 {
 	Deactivate();
