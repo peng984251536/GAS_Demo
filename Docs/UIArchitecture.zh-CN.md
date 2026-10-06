@@ -6,7 +6,7 @@
 
 | 层 | 项目类 | 职责 |
 | --- | --- | --- |
-| 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、四层栈、输入、焦点和动画 |
+| 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、可配置层级栈、输入、焦点和动画 |
 | View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_PlayerHUDWidget | 布局、展示、动画；把操作转发给 Controller |
 | Controller | CC_UIController 及功能子类 | 订阅业务系统、协调请求、导航、转换展示数据 |
 | 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel | 保存 UI 快照，通过 OnChanged 通知界面 |

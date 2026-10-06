@@ -14,7 +14,7 @@
 | --- | --- |
 | `UCC_UIManagerSubsystem` | GameInstance 级服务，创建 Policy 并转发本地玩家和世界生命周期 |
 | `UCC_UIPolicy` | 按 LocalPlayer 持有根布局，选择布局类型并挂载玩家视口 |
-| `UCC_RootLayout` | Game/GameMenu/Menu/Modal 四层官方栈、通知层、层级事件、暂停及输入保护 |
+| `UCC_RootLayout` | 按层级表构建官方栈（默认 Game/GameMenu/Menu/Modal 四层）、SafeZone、通知层、层级事件、暂停及输入保护 |
 | `UCC_AsyncShowScreen` | 软引用异步打开页面，等待动画结束，支持取消与切图清理 |
 | `UCC_UIStack` | 对官方 CommonActivatableWidgetStack 的薄封装，设置动画和对象池策略 |
 | `UCC_ActivatableWidget` | 页面基类：输入模式、返回策略、默认焦点、上下文注入、统一关闭 |
@@ -37,6 +37,19 @@ UI 不要求特定 PlayerController 子类；项目控制器直接继承 APlayer
 4. `UI.Layer.Modal`：确认框。显示时下层仍可见，但不能被鼠标点击；输入和焦点由 CommonUI 交给顶层页面。
 5. 通知容器：只显示普通 UserWidget，自身和子控件都不参与命中测试，不抢输入。
 
+C++ 中引用层级一律使用原生标签 `CCTags::UILayer::Game / GameMenu / Menu / Modal`（定义在 `CC_Tags`），不要再写 `RequestGameplayTag(TEXT("UI.Layer.xxx"))` 字符串。
+
+### 自定义层级
+
+根布局类默认值里的 `Layers` 数组就是层级表，下标 0 在最底层。留空时使用上面的内置四层。每一行有两个字段：
+
+- `Tag`：层标签，ShowScreen 按它找容器，不能重复。
+- `Kind`：`Game`（即时切换、不暂停、不挡下层）、`Menu`（MenuTransition，有页面时暂停单机世界并挡住下层点击）、`Modal`（ModalTransition，其余同 Menu）。
+
+新增一层只需在 `DefaultGameplayTags.ini` 注册标签，再在根布局蓝图的 `Layers` 中按顺序填完整的表（填了就不再使用内置四层），不需要改 C++。
+
+`Apply Safe Zone`（默认开启）用 SafeZone 包住全部层和通知，避免主机、移动端的 HUD 被屏幕边缘裁掉；过渡遮罩在安全区之外，仍覆盖整个视口。
+
 `UI.Layer.GameMenu` 现在拥有独立栈，不再是 Menu 别名。不同层的下层页面不必失活；例如 HUD 可继续接收数据事件。
 
 根布局默认在单机打开 GameMenu/Menu/Modal 时暂停世界，在最后一个菜单退出并结束过渡后恢复。仅撤销本 UI 自己施加的暂停。实时背包项目可在根布局类默认值关闭 `Pause Game While Menu Open`。输入模式与世界暂停是两件事；关闭自动暂停后仍可通过页面的 Menu 输入配置阻止角色操作。
@@ -47,7 +60,7 @@ UI 不要求特定 PlayerController 子类；项目控制器直接继承 APlayer
 2. 根布局只由 UIPolicy 配置，地图初始页面由独立装配入口打开，不再读取 Controller 的 HUD/初始菜单属性。
 3. 新建主菜单使用 `CC_MainMenuWidget`；背包、设置和确认框使用 `CC_ActivatableWidget`，复杂页面通过 ControllerClass 配置独立控制器。已经接入 CC 框架的页面无需重新改父类；旧框架页面应先核对绑定，再逐项迁移导航，不要批量删除业务节点。
 4. 自定义玩家 HUD 的父类改为 `CC_PlayerHUDWidget`，实现 `On Vitals Changed` 更新自己的血蓝条。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。
-5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
+5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画、层级表或 SafeZone，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
 6. 通知使用普通 `UserWidget`，世界空间血条仍使用原来的 `CC_AttributeWidget` 和 `CC_WidgetComponent`。
 
 通用页面打开：
@@ -62,7 +75,7 @@ Get Owning Player → Get Root Layout For Player
 
 页面关闭：调用页面自身的 `Close Screen`。需要从外部关闭时：`Get Root Layout For Player → Close Top Screen`。栈内页面不要使用 AddToViewport、RemoveFromParent 或自己修改 ZOrder/InputMode。
 
-同层同类页面不重复创建，返回已有实例，也不自动把被覆盖页面移到最前面。过渡或同步栈修改期间的新打开请求返回空，关闭返回 false；不排队，需要调用方处理返回值。正常按钮在过渡期间被输入过滤和遮罩保护。
+同层同类页面不重复创建，返回已有实例，也不自动把被覆盖页面移到最前面（这种情况会输出 Warning）。复用时若传入非空且不同的 Context，会替换页面的 ScreenContext、再次触发 On Screen Opened；页面激活中则重启控制器会话（旧 ActivationToken 失效，OnActivated 重新读取快照，模型实例保留）。传空 Context 表示沿用原数据。过渡或同步栈修改期间的新打开请求返回空，关闭返回 false；不排队，需要调用方处理返回值。正常按钮在过渡期间被输入过滤和遮罩保护。
 
 异步打开使用 `Show Screen Async`：RootLayout 接 Get Root Layout For Player，ScreenClass 传软类引用，Context 是可选上下文，默认 SuspendInput=true。Completed 输出已入栈的 Screen（不保证入场动画已结束）；Failed 表示无效层、类或加载失败。保存 AsyncAction 输出可以调用 Cancel；取消不发成功/失败事件。根布局 Shutdown 会立即取消挂起请求。加载完成遇到过渡时会等待，多个请求按就绪顺序处理，不保证发起顺序。关闭仍统一使用 CloseScreen，由 CommonUI 管理退出动画。
 
