@@ -3,6 +3,7 @@
 
 #include "UI/DamageText/CC_DamageTextSubsystem.h"
 #include "Engine/LocalPlayer.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Rendering/DrawElements.h"
@@ -131,10 +132,16 @@ int32 SCC_DamageTextLayer::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 	// 所以投影时直接用世界坐标，不要再自己减一次视点——否则整体会偏移一个摄像机位置。
 	const FMatrix ViewProjection = ProjectionData.ComputeViewProjectionMatrix();
 	const FIntRect ViewRect = ProjectionData.GetConstrainedViewRect();
-	if (ViewRect.Width() <= 0 || ViewRect.Height() <= 0)
+	// PlayerRect 为该玩家的视口范围（分屏时只是其中一块）；投影结果是视口像素，不是 Slate 绝对坐标。
+	const FIntRect PlayerRect = ProjectionData.GetViewRect();
+	if (ViewRect.Width() <= 0 || ViewRect.Height() <= 0 || PlayerRect.Width() <= 0 || PlayerRect.Height() <= 0)
 	{
 		return LayerId;
 	}
+	// 与头顶血条相同的换算：视口像素 → 本地玩家 HUD 布局坐标 → Slate 绝对坐标 → 本控件局部坐标。
+	// 这样窗口化/PIE 的窗口偏移、DPI 缩放、分屏和黑边都能正确处理。
+	const FGeometry PlayerGeometry = UWidgetLayoutLibrary::GetPlayerScreenWidgetGeometry(PC);
+	const FVector2D PixelToLocal = PlayerGeometry.GetLocalSize() / FVector2D(PlayerRect.Width(), PlayerRect.Height());
 
 	// 字体度量服务：只取一次，整批复用。
 	const TSharedRef<FSlateFontMeasure> FontMeasure =
@@ -186,13 +193,13 @@ int32 SCC_DamageTextLayer::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 
 		const FVector2D TextSize = FontMeasure->Measure(Label, FontInfo);
 
-		// 屏幕坐标 -> 本控件局部坐标。AllottedGeometry 负责换算，
-		// 这样即使 HUD 有缩放或偏移，飘字依然落在正确的屏幕位置上。
-		const FVector2D ScreenWithOffset(
-			ScreenPos.X - Entry.StackOffset.X,
-			ScreenPos.Y - Entry.StackOffset.Y - RiseOffset);
+		// 视口像素先转换到本地玩家 HUD 布局坐标；错位偏移与上升高度都以 HUD 布局单位计算，
+		// 不随分辨率/DPI 变化。原实现把视口像素直接当作 Slate 绝对坐标，窗口化时会整体偏移。
+		const FVector2D PlayerLocal =
+			(ScreenPos - FVector2D(PlayerRect.Min.X, PlayerRect.Min.Y)) * PixelToLocal
+			- FVector2D(Entry.StackOffset.X, Entry.StackOffset.Y + RiseOffset);
 
-		const FVector2D LocalPos = AllottedGeometry.AbsoluteToLocal(ScreenWithOffset);
+		const FVector2D LocalPos = AllottedGeometry.AbsoluteToLocal(PlayerGeometry.LocalToAbsolute(PlayerLocal));
 		const FVector2D DrawPos = LocalPos - TextSize * 0.5f;
 
 		// 治疗不加描边：本身颜色偏浅，描边反而显脏。
