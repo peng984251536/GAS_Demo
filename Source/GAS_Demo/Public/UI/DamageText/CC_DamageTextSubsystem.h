@@ -6,6 +6,8 @@
 #include "UI/DamageText/CC_DamageTextTypes.h"
 #include "CC_DamageTextSubsystem.generated.h"
 
+class APlayerController;
+
 /**
  * 伤害飘字的数据与生命周期管理。
  *
@@ -46,6 +48,12 @@ public:
 	void ReportHit(const FVector& WorldLocation, float Amount,
 		ECC_DamageTextStyle Style = ECC_DamageTextStyle::Normal);
 
+	/**
+	 * 飘字绘制层构建/释放时登记，返回该玩家登记后的数量。同一玩家有多个绘制层通常意味着
+	 * HUD 蓝图里仍拖着旧的 Damage Text Widget，而根布局也创建了一个，飘字会被画两遍。
+	 */
+	int32 AddDrawLayer(const APlayerController* Player);
+	void RemoveDrawLayer(const APlayerController* Player);
 	/** 当前活动飘字，仅供绘制层只读遍历。 */
 	const TArray<FCC_DamageTextEntry>& GetActiveEntries() const { return ActiveEntries; }
 
@@ -73,6 +81,8 @@ public:
 	int32 LastMergeCount = 0;
 
 private:
+	/** 每个本地玩家的绘制层数量，仅用于重复挂载诊断。 */
+	TMap<TWeakObjectPtr<const APlayerController>, int32> DrawLayerCounts;
 	/** 活动列表。新建时插入最前；超时删除采用交换移除，因此不保证长期保持新旧顺序。 */
 	TArray<FCC_DamageTextEntry> ActiveEntries;
 

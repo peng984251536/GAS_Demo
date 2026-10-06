@@ -2,6 +2,8 @@
 #include "UI/Framework/CC_ActivatableWidget.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
+#include "UI/HealthBar/CC_BatchedHealthBarWidget.h"
+#include "UI/DamageText/CC_DamageTextWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
 #include "Components/Border.h"
@@ -48,6 +50,8 @@ UCC_RootLayout::UCC_RootLayout(const FObjectInitializer& ObjectInitializer) : Su
 {
 	bAutoActivate = true;
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	HealthBarLayerClass = UCC_BatchedHealthBarWidget::StaticClass();
+	DamageTextLayerClass = UCC_DamageTextWidget::StaticClass();
 }
 
 // 根布局提供稳定的游戏输入回退，避免最后一个菜单关闭后卡在 UI 模式。
@@ -73,6 +77,23 @@ void UCC_RootLayout::NativeOnInitialized()
 	UOverlay* Outer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Outer"));
 	WidgetTree->RootWidget = Outer;
 	Outer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	// 世界覆盖层先加入，位于所有页面层之下；不放进 SafeZone，因为投影位置要对应真实视口。
+	WorldOverlayLayer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("WorldOverlay"));
+	WorldOverlayLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Fill(Outer, WorldOverlayLayer);
+	// 在根布局自己的 WidgetTree 中构建，切图更换 Controller 时 SetPlayerContext 会一并传给它们。
+	if (HealthBarLayerClass && !HealthBarLayerClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		HealthBarLayer = WidgetTree->ConstructWidget<UCC_BatchedHealthBarWidget>(HealthBarLayerClass, TEXT("HealthBars"));
+		if (HealthBarLayer) Fill(WorldOverlayLayer, HealthBarLayer);
+	}
+	if (DamageTextLayerClass && !DamageTextLayerClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		DamageTextLayer = WidgetTree->ConstructWidget<UCC_DamageTextWidget>(DamageTextLayerClass, TEXT("DamageText"));
+		if (DamageTextLayer) Fill(WorldOverlayLayer, DamageTextLayer); // 飘字画在血条之上。
+	}
+
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	if (bApplySafeZone)
 	{
@@ -230,6 +251,8 @@ void UCC_RootLayout::UpdateInteraction()
 {
 	if (RuntimeLayers.IsEmpty()) return;
 	const bool bAnyMenu = HasMenu();
+	if (WorldOverlayLayer)
+		WorldOverlayLayer->SetVisibility(bHideWorldOverlayWhenMenuOpen && bAnyMenu ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	if (bPauseGameWhileMenuOpen && GetWorld() && GetWorld()->GetNetMode() == NM_Standalone)
 	{
 		if (bAnyMenu && !UGameplayStatics::IsGamePaused(this)) bPausedWorld = UGameplayStatics::SetGamePaused(this, true);

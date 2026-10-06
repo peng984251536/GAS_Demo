@@ -9,6 +9,8 @@
 
 class UOverlay;
 class UCC_ActivatableWidget;
+class UCC_BatchedHealthBarWidget;
+class UCC_DamageTextWidget;
 
 /** 官方 CommonUI 栈的薄封装，只开放内置过渡配置，不另写动画状态机。 */
 UCLASS()
@@ -124,6 +126,12 @@ public:
 	void Shutdown();
 	/** 精确按 Layer 标签查找对应的栈，未配置的标签返回空。 */
 	UCommonActivatableWidgetContainerBase* GetLayer(FGameplayTag Layer) const;
+	/** 根布局托管的头顶血条绘制层；未配置时为空。 */
+	UFUNCTION(BlueprintPure, Category="UI|World Overlay")
+	UCC_BatchedHealthBarWidget* GetHealthBarLayer() const { return HealthBarLayer; }
+	/** 根布局托管的伤害飘字绘制层；未配置时为空。 */
+	UFUNCTION(BlueprintPure, Category="UI|World Overlay")
+	UCC_DamageTextWidget* GetDamageTextLayer() const { return DamageTextLayer; }
 	/** 外部订阅此事件响应页面变化，不需要每帧轮询。 */
 	UPROPERTY(BlueprintAssignable, Category="UI")
 	FCC_UILayerChanged OnLayerChanged;
@@ -152,6 +160,20 @@ protected:
 	/** 用 SafeZone 包住全部层，避免主机/移动端的 HUD 和菜单被屏幕边缘裁切；PC 上通常无影响。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|Layers")
 	bool bApplySafeZone = true;
+	/**
+	 * 世界覆盖层：位于所有页面层之下、铺满整个视口，不参与输入、不进页面栈。
+	 * 头顶血条与伤害飘字由根布局在这里统一创建，随根布局一起挂载、切图和分屏，
+	 * 不再需要在 PlayerController 里 Add to Player Screen 或往 HUD 蓝图里拖控件。
+	 * 设为空即不创建对应层。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="UI|World Overlay")
+	TSubclassOf<UCC_BatchedHealthBarWidget> HealthBarLayerClass;
+	/** 伤害飘字绘制层的类；设为空即不创建。 */
+	UPROPERTY(EditDefaultsOnly, Category="UI|World Overlay")
+	TSubclassOf<UCC_DamageTextWidget> DamageTextLayerClass;
+	/** 菜单/弹窗层有页面时隐藏世界覆盖层（隐藏期间不执行绘制）。 */
+	UPROPERTY(EditDefaultsOnly, Category="UI|World Overlay")
+	bool bHideWorldOverlayWhenMenuOpen = true;
 	/** 单机打开菜单/弹窗时是否暂停世界；需要实时背包时可关闭。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|Input")
 	bool bPauseGameWhileMenuOpen = true;
@@ -171,6 +193,10 @@ private:
 
 	/** 按视觉顺序（下标 0 最底层）排列的运行时层。 */
 	UPROPERTY(Transient) TArray<FCC_UIRuntimeLayer> RuntimeLayers;
+	/** 最底视觉层：世界空间投影的血条与飘字，自身和子控件均不参与命中测试。 */
+	UPROPERTY(Transient) TObjectPtr<UOverlay> WorldOverlayLayer;
+	UPROPERTY(Transient) TObjectPtr<UCC_BatchedHealthBarWidget> HealthBarLayer;
+	UPROPERTY(Transient) TObjectPtr<UCC_DamageTextWidget> DamageTextLayer;
 	/** 最上视觉层：提示，其自身和子控件均不参与命中测试。 */
 	UPROPERTY(Transient) TObjectPtr<UOverlay> NotificationLayer;
 	/** 动画期间拦截鼠标点击的透明全屏遮罩。 */

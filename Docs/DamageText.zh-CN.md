@@ -49,15 +49,13 @@
 
 新增 5 个源文件，其中 3 个是 UObject/UStruct（有 `.generated.h`），需要重新生成项目文件。
 
-### 2. 在 HUD 里放绘制层
+### 2. 绘制层（已由 UI 框架托管）
 
-打开你的玩家 HUD 蓝图（`CC_PlayerHUDWidget` 派生），在根 Overlay 里：
+绘制层现在由 `CC_RootLayout` 的**世界覆盖层**自动创建（根布局默认值 `Damage Text Layer Class`），
+位于所有页面层之下、不参与输入，随根布局一起挂载、切图和分屏；打开菜单时默认隐藏。
 
-1. 拖入一个 **Damage Text Widget**（Palette 分类 UI）。
-2. 放在**最上层**，确保它在其他 HUD 元素之上。
-3. 确认它的 Visibility 是 **Not Hit-Testable (Self & All Children)**——构造函数里已经设了，
-   但如果你在蓝图里改过就检查一下，否则会挡住所有 HUD 点击。
-4. 按需调字号：普通 28、暴击 40、上升高度 80。
+- **不需要**再往 HUD 蓝图里拖 Damage Text Widget。若之前拖过，请删除，否则飘字会画两遍（运行时会输出 Warning）。
+- 设为空即不创建飘字层。字号与上升高度目前使用 `CC_DamageTextWidget` 的 C++ 默认值（普通 28、暴击 40、上升 80）。
 
 这个控件不需要输入、不抢焦点，所以**不要**给它换成 `CommonUI` 的 ActivatableWidget。
 

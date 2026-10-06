@@ -74,6 +74,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="UI|Batched Health Bars") void ClearHealthBars();
 	/** 注册条目总数，包含隐藏、未就绪或超出显示距离的条目。 */
 	UFUNCTION(BlueprintPure, Category="UI|Batched Health Bars") int32 GetRegisteredCount() const { return Entries.Num(); }
+	/**
+	 * 绘制层构建/释放时登记，返回登记后的数量。同一本地玩家出现多个绘制层通常意味着
+	 * 旧的手动 Add to Player Screen 与根布局托管的血条层同时存在，血条会被画两遍。
+	 */
+	int32 AddDrawLayer() { return ++DrawLayerCount; }
+	void RemoveDrawLayer() { DrawLayerCount = FMath::Max(0, DrawLayerCount - 1); }
 	/** 绘制层只读访问；不要跨注册、移除或 Tick 保存数组元素的引用。 */
 	const TArray<FCC_HealthBarEntry>& GetEntries() const { return Entries; }
 	/** 集中完成存活检查、低频 GAS 重绑和每帧血量插值。 */
@@ -89,6 +95,8 @@ public:
 private:
 	/** 所有角色共用的数据列表，不保存逐角色的 UI 对象。 */
 	TArray<FCC_HealthBarEntry> Entries;
+	/** 当前已构建的绘制层数量，仅用于重复挂载诊断。 */
+	int32 DrawLayerCount = 0;
 	/** GAS 数据源检查计时器；每 0.25 秒检查一次，不逐帧读取属性。 */
 	float BindingTimer = 0;
 	/** 按角色查找当前条目；返回指针只适合本次操作内使用。 */

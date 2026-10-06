@@ -3,6 +3,9 @@
 
 #include "UI/DamageText/SCC_DamageTextLayer.h"
 #include "GameFramework/PlayerController.h"
+#include "UI/DamageText/CC_DamageTextSubsystem.h"
+#include "Engine/World.h"
+#include "GAS_Demo.h"
 
 // 设置不参与命中测试，保证飘字画布不会拦截 HUD 上的鼠标输入。
 UCC_DamageTextWidget::UCC_DamageTextWidget(const FObjectInitializer& ObjectInitializer)
@@ -17,6 +20,11 @@ UCC_DamageTextWidget::UCC_DamageTextWidget(const FObjectInitializer& ObjectIniti
 void UCC_DamageTextWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
+
+	if (APlayerController* Player = RegisteredPlayer.Get())
+		if (UCC_DamageTextSubsystem* Subsystem = Player->GetWorld() ? Player->GetWorld()->GetSubsystem<UCC_DamageTextSubsystem>() : nullptr)
+			Subsystem->RemoveDrawLayer(Player);
+	RegisteredPlayer.Reset();
 
 	// 必须置空，否则 Slate 重建（例如关卡切换、DPI 变化）后会持有已销毁的控件。
 	DamageTextLayer.Reset();
@@ -35,6 +43,19 @@ TSharedRef<SWidget> UCC_DamageTextWidget::RebuildWidget()
 		.RiseHeight(TAttribute<float>::Create(
 			TAttribute<float>::FGetter::CreateUObject(this, &UCC_DamageTextWidget::GetRiseHeightValue)))
 		.PlayerController(GetOwningPlayer());
+
+	// 只在游戏世界登记，设计器预览没有本地玩家。
+	APlayerController* Player = GetOwningPlayer();
+	if (Player && !RegisteredPlayer.IsValid())
+		if (UCC_DamageTextSubsystem* Subsystem = Player->GetWorld() ? Player->GetWorld()->GetSubsystem<UCC_DamageTextSubsystem>() : nullptr)
+		{
+			RegisteredPlayer = Player;
+			if (Subsystem->AddDrawLayer(Player) > 1)
+			{
+				UE_LOG(LogGAS_Demo, Warning, TEXT("同一本地玩家存在多个伤害飘字绘制层（%s），飘字会被重复绘制。")
+					TEXT("根布局已自动创建飘字层，请删除 HUD 蓝图里旧的 Damage Text Widget。"), *GetPathName());
+			}
+		}
 
 	return DamageTextLayer.ToSharedRef();
 }

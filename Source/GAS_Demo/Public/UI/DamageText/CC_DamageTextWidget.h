@@ -12,12 +12,9 @@
  * 而不需要在 C++ 里手动构造 Slate 并 AddToViewport。
  *
  * 使用方式：
- *   1. 打开你的玩家 HUD 蓝图（CC_PlayerHUDWidget 派生）。
- *   2. 往 Overlay 里拖一个 Damage Text Widget，放在最上层。
- *   3. 确保它的 Slot 不参与命中测试（Visibility = Not Hit-Testable）。
- *   4. 字号和上升高度可以在这里直接调。
- *   5. Overlay Slot 设置水平/垂直 Fill，或 Canvas Slot 全屏拉伸；Owning Player 必须是本地玩家。
- *   此控件不会自动加入 HUD，也不会挂载在每个受击角色上。
+ *   默认由 CC_RootLayout 的世界覆盖层自动创建（见 DamageTextLayerClass），不需要再往 HUD 蓝图里拖。
+ *   若 HUD 蓝图中仍有旧的 Damage Text Widget，请删除，否则飘字会画两遍（运行时会输出警告）。
+ *   不经过根布局、单独使用时：放进 Overlay 并全屏拉伸，保持 Not Hit-Testable，Owning Player 必须是本地玩家。
  *
  * 注意：这是普通 UWidget，不是 CommonUI 的 ActivatableWidget。
  * 它不需要输入路由，也不该抢焦点——用 ActivatableWidget 反而会引入多余的焦点副作用。
@@ -59,6 +56,8 @@ private:
 	float GetCriticalFontSizeValue() const;
 	float GetRiseHeightValue() const;
 
+	/** 构建时登记的玩家，释放时撤销同一份登记。 */
+	TWeakObjectPtr<APlayerController> RegisteredPlayer;
 	/** 实际绘制用的 Slate 控件。 */
 	TSharedPtr<class SCC_DamageTextLayer> DamageTextLayer;
 };

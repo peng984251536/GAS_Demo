@@ -1,5 +1,6 @@
 // 飘字管理流程：ReportHit 提交或合并命中 → Tick 老化数据 → HUD 的 OnPaint 读取活动列表。
 #include "UI/DamageText/CC_DamageTextSubsystem.h"
+#include "GameFramework/PlayerController.h"
 
 #include "Engine/World.h"
 
@@ -163,4 +164,16 @@ void UCC_DamageTextSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	AgeEntries(DeltaTime);
+}
+
+// 绘制层按玩家计数；同一玩家超过一个即为重复挂载。
+int32 UCC_DamageTextSubsystem::AddDrawLayer(const APlayerController* Player)
+{
+	return ++DrawLayerCounts.FindOrAdd(Player);
+}
+
+void UCC_DamageTextSubsystem::RemoveDrawLayer(const APlayerController* Player)
+{
+	if (int32* Count = DrawLayerCounts.Find(Player))
+		if (--*Count <= 0) DrawLayerCounts.Remove(Player);
 }
