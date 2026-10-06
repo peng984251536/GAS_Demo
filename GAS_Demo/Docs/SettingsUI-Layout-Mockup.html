@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>设置界面布局结构图</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 24px;
+    background: #eef0f4;
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #1c1f26;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub { font-size: 13px; color: #6b7280; margin: 0 0 32px; }
+
+  .stage {
+    position: relative;
+    background: #1a1d24;
+    border-radius: 10px;
+    padding: 28px 24px;
+    margin-bottom: 40px;
+  }
+  .reslabel {
+    position: absolute; top: 10px; left: 24px;
+    font-size: 11px; color: #7b8494; letter-spacing: 0.06em;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .screen {
+    width: 1000px; height: 660px; margin: 0 auto;
+    background: #262a33;
+    border: 1px solid #3a4050;
+    border-radius: 8px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .zone { position: relative; }
+  .zone-label {
+    position: absolute; right: 8px; top: 6px;
+    font-size: 10px; font-family: ui-monospace, Menlo, monospace;
+    color: #5d6675; letter-spacing: 0.04em;
+  }
+
+  .header {
+    height: 62px; flex: none;
+    display: flex; align-items: center;
+    padding: 0 26px;
+    border-bottom: 1px solid #343a47;
+    background: #2b303a;
+  }
+  .header .title { font-size: 17px; font-weight: 600; color: #e8ebf0; }
+  .header .spacer { flex: 1; }
+  .closebtn {
+    width: 30px; height: 30px; border-radius: 5px;
+    background: #3a4150; color: #b8c0cd;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+
+  .body { flex: 1; display: flex; min-height: 0; }
+
+  .nav {
+    width: 218px; flex: none;
+    border-right: 1px solid #343a47;
+    padding: 14px 12px;
+    background: #23272f;
+  }
+  .navitem {
+    height: 42px; border-radius: 6px;
+    display: flex; align-items: center;
+    padding: 0 14px; margin-bottom: 4px;
+    font-size: 13.5px; color: #98a1b0;
+  }
+  .navitem.active {
+    background: #37404f;
+    color: #e8ebf0; font-weight: 500;
+    box-shadow: inset 2px 0 0 #5b8def;
+  }
+  .navitem.ghost { color: #5d6675; font-size: 12.5px; font-style: italic; }
+
+  .content { flex: 1; overflow: hidden; padding: 20px 26px; min-width: 0; }
+
+  .sectiontitle {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.05em;
+    color: #7b8494; margin: 0 0 10px 2px;
+  }
+  .section { margin-bottom: 26px; }
+
+  .row {
+    height: 52px; display: flex; align-items: center;
+    border-bottom: 1px solid #2e3440;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .lab {
+    width: 200px; flex: none; font-size: 13px; color: #c5ccd8;
+  }
+  .row .ctl { width: 260px; flex: none; }
+
+  .fake-select {
+    height: 32px; border-radius: 5px; background: #333a47;
+    border: 1px solid #434b5c; color: #d3d9e3;
+    font-size: 12.5px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 12px;
+  }
+  .fake-select span:last-child { color: #7b8494; font-size: 10px; }
+
+  .fake-slider { position: relative; height: 32px; display: flex; align-items: center; }
+  .track { width: 100%; height: 4px; border-radius: 2px; background: #3d4453; }
+  .fillbar { position: absolute; left: 0; width: 62%; height: 4px; border-radius: 2px; background: #5b8def; }
+  .knob {
+    position: absolute; left: 62%; width: 14px; height: 14px;
+    margin-left: -7px; border-radius: 50%; background: #e8ebf0;
+    box-shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
+
+  .fake-toggle {
+    width: 44px; height: 24px; border-radius: 12px;
+    background: #5b8def; position: relative;
+  }
+  .fake-toggle.off { background: #434b5c; }
+  .fake-toggle::after {
+    content: ''; position: absolute; top: 3px; left: 23px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; transition: none;
+  }
+  .fake-toggle.off::after { left: 3px; }
+
+  .footer {
+    height: 66px; flex: none;
+    display: flex; align-items: center;
+    padding: 0 26px; gap: 10px;
+    border-top: 1px solid #343a47;
+    background: #2b303a;
+  }
+  .btn {
+    height: 36px; padding: 0 20px; border-radius: 6px;
+    font-size: 13px; display: flex; align-items: center;
+    background: #3a4150; color: #c5ccd8;
+  }
+  .btn.primary { background: #5b8def; color: #fff; font-weight: 500; }
+  .footer .spacer { flex: 1; }
+
+  /* 标注 */
+  .dim {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    background: #fff; border: 1px solid #dfe3ea;
+    border-radius: 8px; padding: 20px 24px;
+  }
+  .dimcol { flex: 1; min-width: 240px; }
+  .dimcol h3 {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.05em;
+    color: #6b7280; margin: 0 0 12px; text-transform: uppercase;
+  }
+  .dimrow {
+    display: flex; justify-content: space-between;
+    font-size: 12.5px; padding: 5px 0;
+    border-bottom: 1px dashed #eceff4;
+  }
+  .dimrow:last-child { border-bottom: none; }
+  .dimrow .k { color: #4b5563; }
+  .dimrow .v {
+    font-family: ui-monospace, Menlo, monospace;
+    color: #1f2937; font-weight: 500;
+  }
+  .note {
+    margin-top: 28px; font-size: 12.5px; color: #6b7280;
+    line-height: 1.7; border-left: 3px solid #5b8def; padding-left: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>设置界面布局结构图</h1>
+  <p class="sub">设计分辨率 1920×1080 · DPI Scale Rule = Shortest Side · 下图按比例缩放展示</p>
+
+  <div class="stage">
+    <div class="reslabel">SCREEN 1100 × 720 (MAX)</div>
+    <div class="screen">
+
+      <div class="header zone">
+        <span class="zone-label">HEADER · 64</span>
+        <div class="title">设置</div>
+        <div class="spacer"></div>
+        <div class="closebtn">✕</div>
+      </div>
+
+      <div class="body">
+        <div class="nav zone">
+          <span class="zone-label">NAV · 240</span>
+          <div class="navitem active">玩法</div>
+          <div class="navitem ghost">画面</div>
+          <div class="navitem ghost">声音</div>
+        </div>
+
+        <div class="content zone">
+          <span class="zone-label">CONTENT · SWITCHER</span>
+
+          <div class="section">
+            <div class="sectiontitle">难度</div>
+            <div class="row">
+              <div class="lab">游戏难度</div>
+              <div class="ctl">
+                <div class="fake-select"><span>普通</span><span>▼</span></div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="lab">敌人攻击性</div>
+              <div class="ctl">
+                <div class="fake-slider">
+                  <div class="track"></div>
+                  <div class="fillbar"></div>
+                  <div class="knob"></div>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="lab">自动存档</div>
+              <div class="ctl"><div class="fake-toggle"></div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="sectiontitle">界面</div>
+            <div class="row">
+              <div class="lab">语言</div>
+              <div class="ctl">
+                <div class="fake-select"><span>简体中文</span><span>▼</span></div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="lab">显示字幕</div>
+              <div class="ctl"><div class="fake-toggle off"></div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="footer zone">
+        <span class="zone-label">FOOTER · 72</span>
+        <div class="btn">恢复默认</div>
+        <div class="spacer"></div>
+        <div class="btn">取消</div>
+        <div class="btn primary">应用</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="dim">
+    <div class="dimcol">
+      <h3>外层结构</h3>
+      <div class="dimrow"><span class="k">屏幕本体最大宽</span><span class="v">1100</span></div>
+      <div class="dimrow"><span class="k">屏幕本体最大高</span><span class="v">720</span></div>
+      <div class="dimrow"><span class="k">页面内边距</span><span class="v">32</span></div>
+      <div class="dimrow"><span class="k">Header 高</span><span class="v">64</span></div>
+      <div class="dimrow"><span class="k">Footer 高</span><span class="v">72</span></div>
+      <div class="dimrow"><span class="k">侧边导航宽</span><span class="v">240</span></div>
+    </div>
+    <div class="dimcol">
+      <h3>内容区</h3>
+      <div class="dimrow"><span class="k">设置行高</span><span class="v">56</span></div>
+      <div class="dimrow"><span class="k">标签列宽（固定）</span><span class="v">280</span></div>
+      <div class="dimrow"><span class="k">控件列宽（固定）</span><span class="v">320</span></div>
+      <div class="dimrow"><span class="k">分类内首行间距</span><span class="v">16</span></div>
+      <div class="dimrow"><span class="k">分类之间间距</span><span class="v">32</span></div>
+      <div class="dimrow"><span class="k">导航条目高</span><span class="v">44</span></div>
+    </div>
+    <div class="dimcol">
+      <h3>控件继承关系</h3>
+      <div class="dimrow"><span class="k">W_SettingsScreen</span><span class="v">CommonActivatableWidget</span></div>
+      <div class="dimrow"><span class="k">W_GameplayPage</span><span class="v">CommonActivatableWidget</span></div>
+      <div class="dimrow"><span class="k">W_SettingsRow</span><span class="v">CommonUserWidget</span></div>
+      <div class="dimrow"><span class="k">W_SettingsNav / 条目</span><span class="v">CommonButtonBase</span></div>
+      <div class="dimrow"><span class="k">页面容器</span><span class="v">ActivatableWidgetSwitcher</span></div>
+    </div>
+  </div>
+
+  <p class="note">
+    内容区所有行都用固定宽度的标签列和控件列，是为了保证纵向对齐——如果让列宽随内容自适应，每个控件
+    的起始位置会跟着标签文字长短漂移，整页看起来是歪的。<br>
+    页面切换容器必须是 <b>CommonActivatableWidgetSwitcher</b> 而不是普通 WidgetSwitcher：前者会把非当前页真正失活，
+    输入只会落在当前页；后者只切可见性，隐藏页的控件仍然参与焦点系统。
+  </p>
+</div>
+</body>
+</html>

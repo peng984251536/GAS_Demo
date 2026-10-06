@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>弓箭手小兵 · AnimGraph 结构图</title>
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #F6F7FA;
+    --card: #FFFFFF;
+    --ink: #171B22;
+    --ink-soft: #5C6674;
+    --ink-faint: #98A2B0;
+    --rule: #D7DCE5;
+    --teal: #2C6E6A;
+    --violet: #6B4FA0;
+    --brick: #A63D38;
+    --amber: #A9761B;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 56px 40px 96px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  code.m {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: #EFF1F6;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  header.doc { margin-bottom: 64px; }
+  header.doc h1 {
+    font-size: 38px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    margin: 0 0 16px;
+    font-weight: 650;
+  }
+  header.doc p { margin: 0; max-width: 68ch; color: var(--ink-soft); }
+
+  section { margin-bottom: 76px; }
+  section > h2 {
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+    padding-top: 28px;
+    border-top: 1px solid var(--rule);
+  }
+  section > p { margin: 0 0 26px; max-width: 72ch; color: var(--ink-soft); }
+
+  .canvas {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 24px 20px 14px;
+    overflow-x: auto;
+  }
+  .canvas svg { display: block; width: 100%; height: auto; min-width: 620px; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 26px;
+    padding: 18px 4px 6px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+  .note {
+    margin: 16px 0 0;
+    padding: 14px 18px;
+    border-left: 3px solid var(--amber);
+    background: #FDF9F0;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #4A4029;
+    max-width: 78ch;
+  }
+  .note strong { font-weight: 650; }
+  .note code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: #F3EBD8;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* ---- SVG 通用（都用 CSS 类，不用表现属性里的 CSS 变量） ---- */
+  .nbox  { fill: var(--card); stroke: var(--rule); stroke-width: 1.5; }
+  .nhead { fill: currentColor; }
+  .ntitle { fill: #fff; font-family: var(--sans); font-size: 12.5px; font-weight: 650; }
+  .nbody  { fill: var(--ink); font-family: var(--mono); font-size: 12px; }
+  .nsub   { fill: var(--ink-faint); font-family: var(--sans); font-size: 11px; }
+  .wire   { fill: none; stroke: #9AA5B5; stroke-width: 2; stroke-linejoin: round; }
+  .wire-d { fill: none; stroke: var(--amber); stroke-width: 1.8; stroke-dasharray: 6 5; }
+  .pin    { fill: #fff; stroke-width: 2; }
+  .lbl    { fill: var(--ink-soft); font-family: var(--sans); font-size: 11.5px; }
+  .lbl-s  { fill: var(--ink-faint); font-family: var(--sans); font-size: 10.5px; }
+  .lbl-b  { font-family: var(--sans); font-size: 13px; font-weight: 600; }
+  .t-mono { font-family: var(--mono); font-size: 12.5px; }
+  .sm-node { fill: var(--card); stroke: #B9C2CF; stroke-width: 1.5; }
+  .sm-text { fill: var(--ink); font-family: var(--mono); font-size: 14px; }
+
+  @media (max-width: 720px) {
+    body { padding: 32px 18px 64px; }
+    header.doc h1 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>弓箭手小兵 · AnimGraph 结构图</h1>
+  <p>召唤类 AI 小兵的动画蓝图节点拓扑。核心是把「决策」和「混合」分开：状态机只管 locomotion，所有一次性动作——拉弓、放箭、受击、击退——都通过 Slot 从外部注入。</p>
+</header>
+
+<!-- ==================== 1. 主图 ==================== -->
+<section>
+  <h2>AnimGraph 主图</h2>
+  <p>姿态自上而下流入 <code class="m">Output Pose</code>。两个 Slot 是 montage 的注入点，中间的分层节点决定上半身归谁管。</p>
+
+  <div class="canvas">
+    <svg viewBox="0 0 1160 700" role="img" aria-label="AnimGraph 节点拓扑图">
+
+      <!-- ---------- 普通连线 ---------- -->
+      <path class="wire" d="M 230,108 L 230,150"/>
+      <path class="wire" d="M 230,236 L 230,258 L 170,258 L 170,294"/>
+      <path class="wire" d="M 360,197 L 552,197"/>
+      <path class="wire" d="M 690,236 L 690,272 L 300,272 L 300,294"/>
+      <path class="wire" d="M 230,392 L 230,444"/>
+      <path class="wire" d="M 230,528 L 230,572"/>
+
+      <g fill="#9AA5B5">
+        <path d="M 230,158 m -5,-7 l 5,7 l 5,-7 z"/>
+        <path d="M 170,300 m -5,-7 l 5,7 l 5,-7 z"/>
+        <path d="M 300,300 m -5,-7 l 5,7 l 5,-7 z"/>
+        <path d="M 560,197 m -7,-5 l 7,5 l -7,5 z"/>
+        <path d="M 230,450 m -5,-7 l 5,7 l 5,-7 z"/>
+        <path d="M 230,578 m -5,-7 l 5,7 l 5,-7 z"/>
+      </g>
+
+      <!-- ---------- montage 注入（虚线，自右向左） ---------- -->
+      <path class="wire-d" d="M 880,197 L 828,197"/>
+      <path class="wire-d" d="M 880,489 L 368,489"/>
+      <g fill="#A9761B">
+        <path d="M 826,197 m 8,-5 l -8,5 l 8,5 z"/>
+        <path d="M 366,489 m 8,-5 l -8,5 l 8,5 z"/>
+      </g>
+
+      <rect x="880" y="168" width="260" height="58" rx="7" fill="none" stroke="#A9761B" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text class="t-mono" x="898" y="191" fill="#A9761B">AM_Archer_Shot</text>
+      <text class="lbl-s" x="898" y="209">注入 Slot: UpperBody</text>
+
+      <rect x="880" y="460" width="260" height="58" rx="7" fill="none" stroke="#A9761B" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text class="t-mono" x="898" y="483" fill="#A9761B">AM_Archer_Knockback</text>
+      <text class="lbl-s" x="898" y="501">注入 Slot: FullBody</text>
+
+      <!-- ---------- State Machine ---------- -->
+      <g color="#2C6E6A">
+        <rect class="nbox" x="100" y="30" width="260" height="78" rx="7"/>
+        <path class="nhead" d="M 100,56 L 100,37 Q 100,30 107,30 L 353,30 Q 360,30 360,37 L 360,56 Z"/>
+      </g>
+      <text class="ntitle" x="114" y="48">State Machine</text>
+      <text class="nbody" x="114" y="79">SM_ArcherLocomotion</text>
+      <circle class="pin" cx="230" cy="108" r="4" stroke="#9AA5B5"/>
+
+      <!-- ---------- Cache Pose ---------- -->
+      <g color="#6E7A8A">
+        <rect class="nbox" x="100" y="158" width="260" height="78" rx="7"/>
+        <path class="nhead" d="M 100,184 L 100,165 Q 100,158 107,158 L 353,158 Q 360,158 360,165 L 360,184 Z"/>
+      </g>
+      <text class="ntitle" x="114" y="176">Cache Pose</text>
+      <text class="nbody" x="114" y="207">LocoPose</text>
+      <text class="lbl-s" x="114" y="226">被复用两次</text>
+      <circle class="pin" cx="230" cy="158" r="4" stroke="#9AA5B5"/>
+      <circle class="pin" cx="230" cy="236" r="4" stroke="#9AA5B5"/>
+      <circle class="pin" cx="360" cy="197" r="4" stroke="#9AA5B5"/>
+
+      <!-- ---------- Slot: UpperBody ---------- -->
+      <g color="#A9761B">
+        <rect class="nbox" x="560" y="158" width="260" height="78" rx="7"/>
+        <path class="nhead" d="M 560,184 L 560,165 Q 560,158 567,158 L 813,158 Q 820,158 820,165 L 820,184 Z"/>
+      </g>
+      <text class="ntitle" x="574" y="176">Slot</text>
+      <text class="nbody" x="574" y="207">UpperBody</text>
+      <text class="nsub" x="574" y="225">拉弓 / 放箭 / 轻受击</text>
+      <circle class="pin" cx="560" cy="197" r="4" stroke="#A9761B"/>
+      <circle class="pin" cx="690" cy="236" r="4" stroke="#A9761B"/>
+      <circle class="pin" cx="820" cy="197" r="4" stroke="#A9761B"/>
+
+      <!-- ---------- Layered Blend Per Bone ---------- -->
+      <g color="#6B4FA0">
+        <rect class="nbox" x="100" y="300" width="260" height="92" rx="7"/>
+        <path class="nhead" d="M 100,326 L 100,307 Q 100,300 107,300 L 353,300 Q 360,300 360,307 L 360,326 Z"/>
+      </g>
+      <text class="ntitle" x="114" y="318">Layered Blend Per Bone</text>
+      <text class="nbody" x="114" y="352">spine_01</text>
+      <text class="nsub" x="114" y="371">Branch Filter · 深度见文档 §3</text>
+      <circle class="pin" cx="170" cy="300" r="4" stroke="#9AA5B5"/>
+      <circle class="pin" cx="300" cy="300" r="4" stroke="#6B4FA0"/>
+      <circle class="pin" cx="230" cy="392" r="4" stroke="#6B4FA0"/>
+      <text class="lbl-s" x="180" y="292">Base Pose</text>
+      <text class="lbl-s" x="308" y="292">Blend Pose 0</text>
+
+      <!-- ---------- Slot: FullBody ---------- -->
+      <g color="#A63D38">
+        <rect class="nbox" x="100" y="450" width="260" height="78" rx="7"/>
+        <path class="nhead" d="M 100,476 L 100,457 Q 100,450 107,450 L 353,450 Q 360,450 360,457 L 360,476 Z"/>
+      </g>
+      <text class="ntitle" x="114" y="468">Slot</text>
+      <text class="nbody" x="114" y="499">FullBody</text>
+      <text class="nsub" x="114" y="517">击退 / 重受击 / 入场</text>
+      <circle class="pin" cx="230" cy="450" r="4" stroke="#9AA5B5"/>
+      <circle class="pin" cx="230" cy="528" r="4" stroke="#A63D38"/>
+      <circle class="pin" cx="360" cy="489" r="4" stroke="#A63D38"/>
+
+      <!-- ---------- Output Pose ---------- -->
+      <g color="#3A4250">
+        <rect class="nbox" x="100" y="578" width="260" height="78" rx="7"/>
+        <path class="nhead" d="M 100,604 L 100,585 Q 100,578 107,578 L 353,578 Q 360,578 360,585 L 360,604 Z"/>
+      </g>
+      <text class="ntitle" x="114" y="596">Output Pose</text>
+      <circle class="pin" cx="230" cy="578" r="4" stroke="#9AA5B5"/>
+    </svg>
+
+    <div class="legend">
+      <span><i class="swatch" style="background:#2C6E6A"></i>locomotion 状态机</span>
+      <span><i class="swatch" style="background:#6E7A8A"></i>姿态缓存</span>
+      <span><i class="swatch" style="background:#A9761B"></i>上半身注入点</span>
+      <span><i class="swatch" style="background:#6B4FA0"></i>上半身分层</span>
+      <span><i class="swatch" style="background:#A63D38"></i>全身覆盖</span>
+    </div>
+  </div>
+
+  <p class="note"><strong>全身槽必须在分层之后。</strong>求值顺序是分层节点先算完整个角色，再由最外层的 <code>Slot: FullBody</code> 整体覆盖。如果把它挪进 <code>Base Pose</code>，因为 <code>Blend Pose 0</code> 的权重是 1.0，上半身永远由它决定——播死亡动画会变成「只死下半身」。</p>
+  <p class="note"><strong>上半身槽的 Input 一定要接。</strong>空着不接的话，没播 montage 时该槽会落到参考姿势，上半身直接散架。图上那两条从 <code>LocoPose</code> 出发的线就是干这个的。</p>
+</section>
+
+<!-- ==================== 2. 骨架分界 ==================== -->
+<section>
+  <h2>分界骨为什么是 spine_01</h2>
+  <p>分支根决定分层节点从哪根骨头开始接管。它必须落在 <code class="m">spine_01</code> 上，不能落在 <code class="m">pelvis</code> 上。</p>
+
+  <div class="canvas">
+    <svg viewBox="0 0 640 460" role="img" aria-label="骨架上下半身分界示意">
+      <!-- 上半身 -->
+      <g stroke="#6B4FA0" stroke-width="3.5" stroke-linecap="round" fill="none">
+        <circle cx="260" cy="52" r="28"/>
+        <path d="M 260,80 L 260,100"/>
+        <path d="M 200,112 L 320,112"/>
+        <path d="M 260,100 L 260,200"/>
+        <path d="M 200,112 L 152,170 L 124,232"/>
+        <path d="M 320,112 L 368,170 L 396,232"/>
+      </g>
+      <!-- 弓 -->
+      <path d="M 108,196 Q 76,232 108,268" stroke="#A9761B" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M 108,196 L 108,268" stroke="#A9761B" stroke-width="1.6" fill="none" opacity="0.5"/>
+      <!-- 下半身 -->
+      <g stroke="#2C6E6A" stroke-width="3.5" stroke-linecap="round" fill="none">
+        <path d="M 260,200 L 260,232"/>
+        <path d="M 202,232 L 318,232"/>
+        <path d="M 216,232 L 206,320 L 200,404"/>
+        <path d="M 304,232 L 314,320 L 320,404"/>
+      </g>
+      <!-- 分界线 -->
+      <path d="M 70,200 L 450,200" stroke="#6B4FA0" stroke-width="1.6" stroke-dasharray="7 6"/>
+      <!-- 标注 -->
+      <text class="lbl-b" x="470" y="126" fill="#6B4FA0">上半身层控制</text>
+      <text class="lbl-s" x="470" y="147">脊柱、双臂、头、手上的弓</text>
+      <text class="lbl-b" x="470" y="204" fill="#6B4FA0">spine_01</text>
+      <text class="lbl-s" x="470" y="224">分支根在这</text>
+      <text class="lbl-b" x="470" y="300" fill="#2C6E6A">下半身层控制</text>
+      <text class="lbl-s" x="470" y="321">pelvis、双腿</text>
+      <text class="lbl" x="70" y="432">骨盆归下半身，跑动的起伏和侧倾由它承担，不能被上半身层盖掉。</text>
+    </svg>
+  </div>
+
+  <p class="note">如果分支根选成 <code>pelvis</code>，跑动时会变成下半身纹丝不动、整个人飘着射箭。这是最典型的一种「搭完了但看着不对」。</p>
+</section>
+
+<!-- ==================== 3. 状态机 ==================== -->
+<section>
+  <h2>状态机：SM_ArcherLocomotion</h2>
+  <p>四个状态，其中两个按需保留。先只做 Idle 和 Move 跑通，再往上加。</p>
+
+  <div class="canvas">
+    <svg viewBox="0 0 900 540" role="img" aria-label="Locomotion 状态机">
+
+      <g class="wire">
+        <path d="M 280,72 L 412,72"/>
+        <path d="M 420,104 L 288,104"/>
+        <path d="M 300,250 C 285,200 235,162 192,134"/>
+        <path d="M 400,250 C 415,200 465,162 508,134"/>
+        <path d="M 350,390 L 350,332"/>
+        <path d="M 440,428 L 612,428"/>
+      </g>
+      <g fill="#9AA5B5">
+        <path d="M 420,72 m -7,-5 l 7,5 l -7,5 z"/>
+        <path d="M 280,104 m 7,-5 l -7,5 l 7,5 z"/>
+        <path d="M 190,126 m -5,7 l 5,-7 l 5,7 z"/>
+        <path d="M 510,126 m -5,7 l 5,-7 l 5,7 z"/>
+        <path d="M 350,330 m -5,7 l 5,-7 l 5,7 z"/>
+        <path d="M 620,428 m -7,-5 l 7,5 l -7,5 z"/>
+      </g>
+
+      <rect class="sm-node" x="100" y="50" width="180" height="76" rx="8"/>
+      <text class="sm-text" x="190" y="95" text-anchor="middle">Idle</text>
+
+      <rect class="sm-node" x="420" y="50" width="180" height="76" rx="8"/>
+      <text class="sm-text" x="510" y="95" text-anchor="middle">Move</text>
+
+      <rect class="sm-node" x="260" y="250" width="180" height="76" rx="8"/>
+      <text class="sm-text" x="350" y="295" text-anchor="middle">InAir</text>
+
+      <rect x="260" y="390" width="180" height="76" rx="8" fill="#FFFFFF" stroke="#A63D38" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text class="sm-text" x="350" y="435" text-anchor="middle" fill="#A63D38">Any State</text>
+
+      <rect x="616" y="386" width="188" height="84" rx="10" fill="none" stroke="#A63D38" stroke-width="1.4"/>
+      <rect class="sm-node" x="620" y="390" width="180" height="76" rx="7"/>
+      <text class="sm-text" x="710" y="435" text-anchor="middle">Dead</text>
+
+      <text class="lbl" x="348" y="62" text-anchor="middle">Speed &gt; 10</text>
+      <text class="lbl" x="348" y="124" text-anchor="middle">Speed ≤ 10</text>
+      <text class="lbl" x="350" y="204" text-anchor="middle">落地</text>
+      <text class="lbl" x="364" y="366">bIsFalling</text>
+      <text class="lbl" x="525" y="418" text-anchor="middle">bIsDead</text>
+      <text class="lbl-s" x="710" y="494" text-anchor="middle">终态 · 没有出口转换</text>
+    </svg>
+  </div>
+
+  <p class="note">用 <code>Any State → Dead</code> 且 Dead 不设出口，死亡就是真正的终态——既不依赖 montage 播完，也不用额外加锁。UE 的 Any State 不会转换到「当前已经处于」的状态，所以 Dead 也不会自己重入。</p>
+  <p class="note"><strong>InAir 可以砍掉。</strong>召唤兵如果不离地、不会被击飞，删掉这个状态能省一整条转换链。同理，如果 Idle/Move 在小兵互相推挤时来回抖，把进入阈值和退出阈值拉开（进 25 / 出 5）。</p>
+</section>
+
+<!-- ==================== 4. 射击时间线 ==================== -->
+<section>
+  <h2>一次射击：GA 与 montage 的配合</h2>
+  <p>拉弓和放箭放在同一个 montage 的两个 section 里，衔接发生在 montage 内部——这样蓄力时长才是可变的。</p>
+
+  <div class="canvas">
+    <svg viewBox="0 0 1000 300" role="img" aria-label="射击 montage 时间线">
+
+      <rect x="80" y="120" width="340" height="76" rx="8" fill="#FFFFFF" stroke="#A9761B" stroke-width="1.6"/>
+      <text class="t-mono" x="96" y="151" fill="#A9761B">Section: Draw</text>
+      <text class="lbl" x="96" y="173">循环拉弓 · 蓄力时长可变</text>
+
+      <rect x="430" y="120" width="340" height="76" rx="8" fill="#FFFFFF" stroke="#A63D38" stroke-width="1.6"/>
+      <text class="t-mono" x="446" y="151" fill="#A63D38">Section: Release</text>
+      <text class="lbl" x="446" y="173">放箭 + 收势 · 播完自动 blend out</text>
+
+      <path d="M 425,112 L 425,200" stroke="#C3CAD5" stroke-width="1.4" stroke-dasharray="5 4"/>
+
+      <!-- 循环回环 -->
+      <path d="M 416,126 C 372,80 132,80 86,126" stroke="#A9761B" stroke-width="1.6" fill="none" stroke-dasharray="6 5"/>
+      <path d="M 84,128 m 8,-5 l -8,5 l 8,5 z" fill="#A9761B"/>
+      <text class="lbl" x="250" y="74" text-anchor="middle" fill="#A9761B">循环</text>
+
+      <!-- AnimNotify -->
+      <path d="M 600,120 L 594,106 L 606,106 Z" fill="#A63D38"/>
+      <text class="lbl-b" x="600" y="96" text-anchor="middle" fill="#A63D38">AnimNotify 放箭</text>
+      <text class="lbl-s" x="600" y="80" text-anchor="middle">这一帧生成箭矢 Actor</text>
+
+      <!-- GA 跳转 -->
+      <path d="M 425,262 L 425,208" stroke="#6B4FA0" stroke-width="1.8" fill="none"/>
+      <path d="M 425,202 m -5,7 l 5,-7 l 5,7 z" fill="#6B4FA0"/>
+      <text class="t-mono" x="425" y="284" text-anchor="middle" fill="#6B4FA0">MontageJumpToSection("Release")</text>
+
+      <!-- 结束 -->
+      <path d="M 770,158 L 798,158" stroke="#9AA5B5" stroke-width="1.6"/>
+      <text class="lbl" x="804" y="162">OnCompleted</text>
+      <text class="lbl-s" x="946" y="238" text-anchor="end">按时间 →</text>
+    </svg>
+  </div>
+
+  <p class="note"><strong>停在循环段上，任务永远不会完成。</strong><code>PlayMontageAndWait</code> 只在 montage 正常播放结束时广播 <code>OnCompleted</code>。循环拉弓时它一直不回来，所以必须靠 <code>MontageJumpToSection("Release")</code> 走到收尾段，或者在被打断时显式结束技能——别写成「等这个任务完成再放箭」。</p>
+</section>
+
+</div>
+</body>
+</html>

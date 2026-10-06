@@ -1,0 +1,41 @@
+# Unreal generated files
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+/Build/*/FileOpenOrder/
+/Plugins/**/Intermediate/
+/Plugins/**/Saved/
+# IDE and local build caches
+/.vs/
+/.idea/
+/.dotnet/
+*.sln
+*.suo
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+*.DotSettings.user
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+# Local configuration and Python caches
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+
+# Generated .NET tool output
+/Tools/**/bin/
+/Tools/**/obj/
+
+# This repository contains source code, configuration and documentation only.
+/Content/
+/SourceArt/
+# Local inspection probes and unrelated preview artifact
+/.probe_*.py
+/pelican-bike.html

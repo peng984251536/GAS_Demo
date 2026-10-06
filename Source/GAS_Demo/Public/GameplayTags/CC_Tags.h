@@ -1,0 +1,45 @@
+#pragma once
+
+#include "NativeGameplayTags.h"
+
+namespace CCTags
+{
+	// UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Attack);
+	// UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Primary);
+	// 负责能力的枚举
+	namespace CCAbilities
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Primary);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Move);
+		
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(ActivateOnGiven);
+
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Projectile);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(MeleeAttack);
+	}
+
+	namespace CCAbilityTrigger
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(FindPlayerTarget);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(FindRangedTarget);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(AttackAction);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(KeepDistance);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BowShoot);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(FollowTarget);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(DodgeAction);
+
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
+	}
+
+	namespace Status
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Invincible);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(SuperArmor);
+		
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
+	}
+	
+}
