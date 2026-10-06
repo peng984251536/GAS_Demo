@@ -6,14 +6,15 @@
 - 原头顶血条：`UCC_WidgetComponent` 在各角色上创建属性控件。
 - 玩家 HUD 左上角自身血蓝条：`UCC_PlayerHUDWidget`，可继续保留。
 
-## 新血条的蓝图接入
+## 接入方式（已由 UI 框架托管）
 
-1. 新建 Widget Blueprint，父类选 `CC_BatchedHealthBarWidget`，例如 `WBP_BatchedHealthBars`。设计器可保持空白；C++ 直接绘制血条。
-2. 在本地 PlayerController 创建一次该 Widget，Owning Player 传本地 Controller，调用 **Add to Player Screen**。默认全屏。若嵌入现有 HUD，请设置全屏拉伸且不要套 Retainer Box；可视性保持 Not Hit-Testable。
-3. 调用 **Get Health Bar Manager**，传相同本地 PlayerController。存储返回的管理器。
-4. 对需要显示血条的角色调用管理器的 **Register Health Bar**：Actor 传该角色，Options 用 **Make CC Health Bar Options** 构造。默认 `Use GAS=true` 自动获取该角色 ASC 的 `CC_AttributeSet.Health / MaxHealth`。
-5. 动态生成敌人时同样注册；多人游戏在每个需要显示它的本地客户端注册。不要使用服务器 `GetPlayerController(0)` 代替客户端注册。注册不通过网络复制。
-6. 删除敌人蓝图中的旧 `CC_WidgetComponent / BP_CC_WidgetComponent` 头顶血条组件，避免重复显示。现有蓝图资产没有被自动修改；先在一个敌人蓝图上完成接入再批量迁移。
+绘制层现在由 `CC_RootLayout` 的**世界覆盖层**自动创建：位于所有页面层之下、铺满视口、不参与输入，随根布局一起挂载、切图和分屏。打开菜单/弹窗时默认隐藏（根布局的 `Hide World Overlay When Menu Open`），隐藏期间不执行绘制。
+
+1. **不需要**再在 PlayerController 里 Create Widget + Add to Player Screen。若之前这样做过，请删除这些节点，否则血条会画两遍（运行时会输出 Warning 提示）。
+2. 想改背景色、边框或屏幕偏移：新建父类为 `CC_BatchedHealthBarWidget` 的蓝图，在根布局蓝图默认值里把 `Health Bar Layer Class` 指向它。设为空则不创建血条层。
+3. `CC_EnemyCharacter` 会在 BeginPlay 后的下一帧为每个本地玩家自动注册，配置项在敌人类默认值的 `UI|Health Bar` 分类：`Show Overhead Health Bar` 与 `Overhead Health Bar Options`；EndPlay 时自动移除。
+4. **迁移保护**：仍挂着旧 `CC_WidgetComponent` 的敌人蓝图会跳过自动注册（输出一次 Log），不会出现双血条。删掉旧组件后即自动切换到新血条。现有蓝图资产没有被自动修改，建议先在一个敌人蓝图上验证。
+5. 非敌人角色（Boss、NPC、可破坏物等）仍可手动调用 **Get Health Bar Manager → Register Health Bar**；多人游戏在每个需要显示它的本地客户端注册，注册不通过网络复制。
 
 同一个 Actor 重复注册只更新配置，不会产生第二条血条。GAS 延迟创建、属性集延迟到达或 ASC 被替换，会在最多约 0.25 秒后重试/重绑。属性变化通过 GAS 委托更新，不逐帧读取属性。
 

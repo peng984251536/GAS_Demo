@@ -7,6 +7,7 @@
 #include "Rendering/DrawElements.h"
 #include "SceneView.h"
 #include "Styling/CoreStyle.h"
+#include "GAS_Demo.h"
 
 UCC_BatchedHealthBarWidget::UCC_BatchedHealthBarWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -15,6 +16,27 @@ UCC_BatchedHealthBarWidget::UCC_BatchedHealthBarWidget(const FObjectInitializer&
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	// 角色和相机移动不一定触发 UMG 属性变化；设为易变控件，避免失效缓存导致血条位置停住。
 	ForceVolatile(true);
+}
+
+void UCC_BatchedHealthBarWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	if (UCC_BatchedHealthBarSubsystem* Manager = UCC_BatchedHealthBarSubsystem::GetHealthBarManager(GetOwningPlayer()))
+	{
+		RegisteredManager = Manager;
+		if (Manager->AddDrawLayer() > 1)
+		{
+			UE_LOG(LogGAS_Demo, Warning, TEXT("同一本地玩家存在多个头顶血条绘制层（%s），血条会被重复绘制。")
+				TEXT("根布局已自动创建血条层，请删除 PlayerController 等处手动 Add to Player Screen 的血条控件。"), *GetPathName());
+		}
+	}
+}
+
+void UCC_BatchedHealthBarWidget::NativeDestruct()
+{
+	if (UCC_BatchedHealthBarSubsystem* Manager = RegisteredManager.Get()) Manager->RemoveDrawLayer();
+	RegisteredManager.Reset();
+	Super::NativeDestruct();
 }
 
 int32 UCC_BatchedHealthBarWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geometry,
