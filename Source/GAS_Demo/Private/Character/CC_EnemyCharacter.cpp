@@ -2,6 +2,11 @@
 
 
 #include "Character/CC_EnemyCharacter.h"
+#include "UI/CC_WidgetComponent.h"
+#include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
+#include "TimerManager.h"
+#include "GAS_Demo.h"
 
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
@@ -60,6 +65,10 @@ void ACC_EnemyCharacter::BeginPlay()
 	OnASCInitialized.Broadcast(
 	GetAbilitySystemComponent(),
 	GetAttributeSet());
+
+	// 头顶血条是纯本地表现，客户端和监听服务器各自注册；推迟一帧，
+	// 确保关卡加载期间生成的敌人注册时本地玩家已经切换到当前世界。
+	GetWorldTimerManager().SetTimerForNextTick(this, &ThisClass::RegisterOverheadHealthBar);
 
 	//-----后续是服务器相关的初始化----//
 	if(!HasAuthority()) return;
@@ -232,6 +241,37 @@ void ACC_EnemyCharacter::HandleDeath()
 	{
 		EnemyController->StopMovement();
 	}
+}
+
+void ACC_EnemyCharacter::RegisterOverheadHealthBar()
+{
+	if (!bShowOverheadHealthBar || !IsValid(this) || IsActorBeingDestroyed()) return;
+	// 迁移保护：旧的逐角色 WidgetComponent 血条还在时不再注册，避免双血条。
+	if (FindComponentByClass<UCC_WidgetComponent>())
+	{
+		static TSet<TWeakObjectPtr<UClass>> LoggedClasses;
+		if (!LoggedClasses.Contains(GetClass()))
+		{
+			LoggedClasses.Add(GetClass());
+			UE_LOG(LogGAS_Demo, Log, TEXT("%s 仍挂着旧 CC_WidgetComponent 血条，跳过集中血条注册；删除该组件即可切换到新血条。"), *GetClass()->GetName());
+		}
+		return;
+	}
+	const UGameInstance* GameInstance = GetGameInstance();
+	if (!GameInstance) return;
+	for (ULocalPlayer* Player : GameInstance->GetLocalPlayers())
+		if (UCC_BatchedHealthBarSubsystem* Manager = Player ? Player->GetSubsystem<UCC_BatchedHealthBarSubsystem>() : nullptr)
+			Manager->RegisterHealthBar(this, OverheadHealthBarOptions);
+}
+
+void ACC_EnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 管理器也会在 Tick 中清理失效角色，这里主动移除以立即解绑属性委托。
+	if (const UGameInstance* GameInstance = GetGameInstance())
+		for (ULocalPlayer* Player : GameInstance->GetLocalPlayers())
+			if (UCC_BatchedHealthBarSubsystem* Manager = Player ? Player->GetSubsystem<UCC_BatchedHealthBarSubsystem>() : nullptr)
+				Manager->UnregisterHealthBar(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACC_EnemyCharacter::HandleRespawn()
