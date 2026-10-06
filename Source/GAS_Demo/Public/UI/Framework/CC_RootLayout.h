@@ -20,6 +20,42 @@ public:
 	void Configure(ECommonSwitcherTransition Type, float Duration);
 };
 
+/** 层的行为类型：决定过渡动画、是否暂停世界、是否阻挡下层点击。 */
+UENUM(BlueprintType)
+enum class ECC_UILayerKind : uint8
+{
+	Game,  // HUD：即时切换，不暂停，不阻挡下层。
+	Menu,  // 菜单：使用 MenuTransition，有页面时暂停单机世界并阻挡下层点击。
+	Modal  // 弹窗：使用 ModalTransition，其余同 Menu。
+};
+
+/** 根布局的一层配置；数组顺序即视觉顺序（下标 0 在最底层）。 */
+USTRUCT(BlueprintType)
+struct FCC_UILayerConfig
+{
+	GENERATED_BODY()
+	FCC_UILayerConfig() = default;
+	FCC_UILayerConfig(FGameplayTag InTag, ECC_UILayerKind InKind) : Tag(InTag), Kind(InKind) {}
+	/** 层标签，ShowScreen 按它查找容器；同一标签只能出现一次。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(Categories="UI.Layer"))
+	FGameplayTag Tag;
+	/** 该层的行为类型。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	ECC_UILayerKind Kind = ECC_UILayerKind::Menu;
+};
+
+/** 运行时的一层：标签、类型与对应的官方栈。 */
+USTRUCT()
+struct FCC_UIRuntimeLayer
+{
+	GENERATED_BODY()
+	FGameplayTag Tag;
+	ECC_UILayerKind Kind = ECC_UILayerKind::Menu;
+	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> Stack;
+	/** 菜单与弹窗层有页面时暂停世界并阻挡下层点击。 */
+	bool IsMenuLike() const { return Kind != ECC_UILayerKind::Game; }
+};
+
 /** 某层的当前显示页面变化时广播；Screen 为空表示该层没有页面。 */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCC_UILayerChanged, FGameplayTag, Layer, UCommonActivatableWidget*, Screen);
 
@@ -43,7 +79,7 @@ public:
 	/** 关闭最上层且允许关闭的页面；退场动画和下页恢复由官方栈完成。 */
 	UFUNCTION(BlueprintCallable, Category="UI")
 	bool CloseScreen(UCC_ActivatableWidget* Screen);
-	/** 按 Modal → Menu → GameMenu → Game 顺序请求关闭栈顶。 */
+	/** 从最高层往下找到当前显示页面并请求关闭。 */
 	UFUNCTION(BlueprintCallable, Category="UI")
 	bool CloseTopScreen();
 	/** 返回层级最高的当前显示页面；过渡期间可能仍是退出中的旧页面。 */
@@ -86,7 +122,7 @@ public:
 	void DismissNotification(UUserWidget* Widget);
 	/** 玩家退出或 GameInstance 结束时永久清理；切图应使用 ResetWorldContent。 */
 	void Shutdown();
-	/** 精确按 Layer 标签查找四个独立栈，无效标签返回空。 */
+	/** 精确按 Layer 标签查找对应的栈，未配置的标签返回空。 */
 	UCommonActivatableWidgetContainerBase* GetLayer(FGameplayTag Layer) const;
 	/** 外部订阅此事件响应页面变化，不需要每帧轮询。 */
 	UPROPERTY(BlueprintAssignable, Category="UI")
@@ -106,6 +142,16 @@ protected:
 	/** 弹窗层默认淡入淡出。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|Transition")
 	ECommonSwitcherTransition ModalTransition = ECommonSwitcherTransition::FadeOnly;
+	/**
+	 * 层级表，下标 0 在最底层。留空时使用内置四层：
+	 * UI.Layer.Game(Game) → UI.Layer.GameMenu(Menu) → UI.Layer.Menu(Menu) → UI.Layer.Modal(Modal)。
+	 * 新增一层只需在根布局蓝图默认值里加一行，并在 DefaultGameplayTags.ini 注册对应标签。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="UI|Layers", meta=(TitleProperty="Tag"))
+	TArray<FCC_UILayerConfig> Layers;
+	/** 用 SafeZone 包住全部层，避免主机/移动端的 HUD 和菜单被屏幕边缘裁切；PC 上通常无影响。 */
+	UPROPERTY(EditDefaultsOnly, Category="UI|Layers")
+	bool bApplySafeZone = true;
 	/** 单机打开菜单/弹窗时是否暂停世界；需要实时背包时可关闭。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|Input")
 	bool bPauseGameWhileMenuOpen = true;
@@ -120,14 +166,11 @@ private:
 	/** 解除仅由本布局持有的全部输入过滤。 */
 	void ReleaseInputTokens();
 
-	/** 最底层：玩家 HUD。 */
-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> GameStack;
-	/** 玩法内背包/记分板，与主菜单和设置独立。 */
-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> GameMenuStack;
-	/** 中间层：主菜单、暂停、背包、设置，同层仅显示栈顶。 */
-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> MenuStack;
-	/** 高层：确认弹窗，阻止点击下层菜单。 */
-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> ModalStack;
+	/** 该类型层的过渡时长：Game 层即时切换，其余使用 TransitionDuration。 */
+	float GetLayerDuration(ECC_UILayerKind Kind) const { return Kind == ECC_UILayerKind::Game ? 0.f : TransitionDuration; }
+
+	/** 按视觉顺序（下标 0 最底层）排列的运行时层。 */
+	UPROPERTY(Transient) TArray<FCC_UIRuntimeLayer> RuntimeLayers;
 	/** 最上视觉层：提示，其自身和子控件均不参与命中测试。 */
 	UPROPERTY(Transient) TObjectPtr<UOverlay> NotificationLayer;
 	/** 动画期间拦截鼠标点击的透明全屏遮罩。 */

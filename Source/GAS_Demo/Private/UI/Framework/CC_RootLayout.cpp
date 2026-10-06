@@ -7,6 +7,7 @@
 #include "Components/Border.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/SafeZone.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "TimerManager.h"
@@ -65,46 +66,74 @@ UWorld* UCC_RootLayout::GetWorld() const
 	return Instance ? Instance->GetWorld() : Super::GetWorld();
 }
 
-// 按视觉顺序构建页面容器、动画遮罩及不抢输入的提示层。
+// 按层级表的视觉顺序构建页面容器、动画遮罩及不抢输入的提示层。
 void UCC_RootLayout::NativeOnInitialized()
 {
+	// Outer 铺满整个视口（放过渡遮罩），Root 承载各层和提示；开启 SafeZone 时 Root 被安全区内缩。
+	UOverlay* Outer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Outer"));
+	WidgetTree->RootWidget = Outer;
+	Outer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
-	WidgetTree->RootWidget = Root;
-	GameStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("Game"));
-	GameMenuStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("GameMenu"));
-	MenuStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("Menu"));
-	ModalStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("Modal"));
-	GameStack->Configure(ECommonSwitcherTransition::FadeOnly, 0.f);
-	GameMenuStack->Configure(MenuTransition, TransitionDuration);
-	MenuStack->Configure(MenuTransition, TransitionDuration);
-	ModalStack->Configure(ModalTransition, TransitionDuration);
-	for (UCC_UIStack* Stack : {GameStack.Get(), GameMenuStack.Get(), MenuStack.Get(), ModalStack.Get()})
+	if (bApplySafeZone)
 	{
+		USafeZone* SafeZone = WidgetTree->ConstructWidget<USafeZone>(USafeZone::StaticClass(), TEXT("SafeZone"));
+		SafeZone->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		SafeZone->AddChild(Root);
+		Fill(Outer, SafeZone);
+	}
+	else
+	{
+		Fill(Outer, Root);
+	}
+
+	// 层级表留空时使用内置四层；放在这里而不是构造函数，避免 CDO 构造早于原生标签注册。
+	TArray<FCC_UILayerConfig> Configs = Layers;
+	if (Configs.IsEmpty())
+	{
+		Configs = {
+			{CCTags::UILayer::Game, ECC_UILayerKind::Game},
+			{CCTags::UILayer::GameMenu, ECC_UILayerKind::Menu},
+			{CCTags::UILayer::Menu, ECC_UILayerKind::Menu},
+			{CCTags::UILayer::Modal, ECC_UILayerKind::Modal}};
+	}
+	RuntimeLayers.Reset();
+	for (const FCC_UILayerConfig& Config : Configs)
+	{
+		if (!Config.Tag.IsValid() || GetLayer(Config.Tag))
+		{
+			UE_LOG(LogGAS_Demo, Warning, TEXT("RootLayout: 忽略无效或重复的层标签 %s"), *Config.Tag.ToString());
+			continue;
+		}
+		const FName StackName(*FString::Printf(TEXT("Layer_%s"), *Config.Tag.GetTagName().ToString().Replace(TEXT("."), TEXT("_"))));
+		UCC_UIStack* Stack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), StackName);
+		const ECommonSwitcherTransition Transition = Config.Kind == ECC_UILayerKind::Modal ? ModalTransition :
+			(Config.Kind == ECC_UILayerKind::Menu ? MenuTransition : ECommonSwitcherTransition::FadeOnly);
+		Stack->Configure(Transition, GetLayerDuration(Config.Kind));
 		Fill(Root, Stack);
 		Stack->OnTransitioningChanged.AddUObject(this, &ThisClass::HandleTransition);
+		Stack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, Config.Tag);
+		FCC_UIRuntimeLayer& Layer = RuntimeLayers.AddDefaulted_GetRef();
+		Layer.Tag = Config.Tag;
+		Layer.Kind = Config.Kind;
+		Layer.Stack = Stack;
 	}
-	GameStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Game);
-	GameMenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::GameMenu);
-	MenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Menu);
-	ModalStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Modal);
 	UBorder* Shield = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TransitionInputShield"));
 	Shield->SetBrushColor(FLinearColor::Transparent);
 	Shield->SetVisibility(ESlateVisibility::Collapsed);
-	Fill(Root, Shield);
-	InputShield = Shield;
 	NotificationLayer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Notifications"));
 	NotificationLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Fill(Root, NotificationLayer);
+	// 遮罩放在 Outer 最上层，过渡期间连安全区外的边缘也拦截点击。
+	Fill(Outer, Shield);
+	InputShield = Shield;
 	Super::NativeOnInitialized();
 }
 
-// GameMenu 和 Menu 是不同的物理栈；打开设置不会替换背包所在栈。
+// 每个标签对应一个独立的物理栈；例如打开设置不会替换背包所在栈。
 UCommonActivatableWidgetContainerBase* UCC_RootLayout::GetLayer(FGameplayTag Layer) const
 {
-	if (Layer == CCTags::UILayer::Game) return GameStack;
-	if (Layer == CCTags::UILayer::GameMenu) return GameMenuStack;
-	if (Layer == CCTags::UILayer::Menu) return MenuStack;
-	if (Layer == CCTags::UILayer::Modal) return ModalStack;
+	for (const FCC_UIRuntimeLayer& Entry : RuntimeLayers)
+		if (Entry.Tag == Layer) return Entry.Stack;
 	return nullptr;
 }
 
@@ -151,18 +180,20 @@ bool UCC_RootLayout::CloseScreen(UCC_ActivatableWidget* Screen)
 
 // 对当前最高页面应用统一关闭规则。
 bool UCC_RootLayout::CloseTopScreen() { return CloseScreen(Cast<UCC_ActivatableWidget>(GetTopScreen())); }
-// 按 Modal、Menu、GameMenu、Game 的视觉顺序寻找当前显示页面。
+// 从最高层往下寻找当前显示页面。
 UCommonActivatableWidget* UCC_RootLayout::GetTopScreen() const
 {
-	if (ModalStack && ModalStack->GetActiveWidget()) return ModalStack->GetActiveWidget();
-	if (MenuStack && MenuStack->GetActiveWidget()) return MenuStack->GetActiveWidget();
-	if (GameMenuStack && GameMenuStack->GetActiveWidget()) return GameMenuStack->GetActiveWidget();
-	return GameStack ? GameStack->GetActiveWidget() : nullptr;
+	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
+		if (UCC_UIStack* Stack = RuntimeLayers[Index].Stack)
+			if (UCommonActivatableWidget* Active = Stack->GetActiveWidget()) return Active;
+	return nullptr;
 }
-// 按栈内容判断是否有菜单，入场和退场中的实例也计算在内。
+// 按栈内容判断是否有菜单/弹窗，入场和退场中的实例也计算在内。
 bool UCC_RootLayout::HasMenu() const
 {
-	return (GameMenuStack && GameMenuStack->GetNumWidgets() > 0) || (MenuStack && MenuStack->GetNumWidgets() > 0) || (ModalStack && ModalStack->GetNumWidgets() > 0);
+	for (const FCC_UIRuntimeLayer& Entry : RuntimeLayers)
+		if (Entry.IsMenuLike() && Entry.Stack && Entry.Stack->GetNumWidgets() > 0) return true;
+	return false;
 }
 
 // 动画开始登记输入令牌，结束解除相同令牌并刷新焦点。
@@ -197,23 +228,27 @@ void UCC_RootLayout::HandleDisplayed(UCommonActivatableWidget* Screen, FGameplay
 // 阻止下层被点击，并同步动画遮罩与单机暂停状态。
 void UCC_RootLayout::UpdateInteraction()
 {
-	if (!GameStack || !GameMenuStack || !MenuStack || !ModalStack) return;
-	// 鼠标命中与输入路由分开处理：保留下层画面，但禁止它被点击。
-	const bool bModal = ModalStack->GetNumWidgets() > 0;
-	const bool bMenu = MenuStack->GetNumWidgets() > 0;
-	const bool bGameMenu = GameMenuStack->GetNumWidgets() > 0;
+	if (RuntimeLayers.IsEmpty()) return;
+	const bool bAnyMenu = HasMenu();
 	if (bPauseGameWhileMenuOpen && GetWorld() && GetWorld()->GetNetMode() == NM_Standalone)
 	{
-		if ((bGameMenu || bMenu || bModal) && !UGameplayStatics::IsGamePaused(this)) bPausedWorld = UGameplayStatics::SetGamePaused(this, true);
-		else if (!bGameMenu && !bMenu && !bModal && !IsTransitioning() && bPausedWorld)
+		if (bAnyMenu && !UGameplayStatics::IsGamePaused(this)) bPausedWorld = UGameplayStatics::SetGamePaused(this, true);
+		else if (!bAnyMenu && !IsTransitioning() && bPausedWorld)
 		{
 			UGameplayStatics::SetGamePaused(this, false);
 			bPausedWorld = false;
 		}
 	}
-	if (GameStack->GetActiveWidget()) GameStack->SetVisibility(bModal || bMenu || bGameMenu ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
-	if (GameMenuStack->GetActiveWidget()) GameMenuStack->SetVisibility(bModal || bMenu ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
-	if (MenuStack->GetActiveWidget()) MenuStack->SetVisibility(bModal ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
+	// 鼠标命中与输入路由分开处理：保留下层画面，但只要上方有菜单/弹窗层持有页面，就禁止下层被点击。
+	bool bBlockedByAbove = false;
+	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
+	{
+		const FCC_UIRuntimeLayer& Entry = RuntimeLayers[Index];
+		if (!Entry.Stack) continue;
+		if (Entry.Stack->GetActiveWidget())
+			Entry.Stack->SetVisibility(bBlockedByAbove ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
+		if (Entry.IsMenuLike() && Entry.Stack->GetNumWidgets() > 0) bBlockedByAbove = true;
+	}
 	if (InputShield) InputShield->SetVisibility(IsInputBlocked() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
@@ -286,8 +321,10 @@ void UCC_RootLayout::ResetWorldContent()
 	if (GetWorld()) for (auto& Pair : NotificationTimers) GetWorld()->GetTimerManager().ClearTimer(Pair.Value);
 	NotificationTimers.Reset();
 	if (NotificationLayer) NotificationLayer->ClearChildren();
-	for (UCC_UIStack* Stack : {ModalStack.Get(), MenuStack.Get(), GameMenuStack.Get(), GameStack.Get()})
+	// 从最高层往下清空，与正常关闭顺序一致。
+	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
 	{
+		UCC_UIStack* Stack = RuntimeLayers[Index].Stack;
 		if (!Stack) continue;
 		Stack->SetTransitionDuration(0.f);
 		// 拷贝列表，避免失活回调修改容器时使遍历失效。
@@ -295,7 +332,7 @@ void UCC_RootLayout::ResetWorldContent()
 		for (UCommonActivatableWidget* Screen : Screens)
 			if (IsValid(Screen) && Screen->IsActivated()) Screen->DeactivateWidget();
 		Stack->ClearWidgets();
-		Stack->SetTransitionDuration(Stack == GameStack ? 0.f : TransitionDuration);
+		Stack->SetTransitionDuration(GetLayerDuration(RuntimeLayers[Index].Kind));
 	}
 	DeactivateWidget();
 }
