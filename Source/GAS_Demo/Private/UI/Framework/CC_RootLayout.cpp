@@ -1,5 +1,6 @@
 #include "UI/Framework/CC_RootLayout.h"
 #include "UI/Framework/CC_ActivatableWidget.h"
+#include "GameplayTags/CC_Tags.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
 #include "Components/Border.h"
@@ -12,8 +13,6 @@
 
 namespace
 {
-	// 将配置中已有的标签名称转换成 GameplayTag。
-	FGameplayTag LayerTag(const TCHAR* Name) { return FGameplayTag::RequestGameplayTag(FName(Name)); }
 	// 把控件铺满 Overlay 插槽，层级由添加顺序决定。
 	void Fill(UOverlay* Overlay, UWidget* Widget)
 	{
@@ -83,10 +82,10 @@ void UCC_RootLayout::NativeOnInitialized()
 		Fill(Root, Stack);
 		Stack->OnTransitioningChanged.AddUObject(this, &ThisClass::HandleTransition);
 	}
-	GameStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.Game")));
-	GameMenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.GameMenu")));
-	MenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.Menu")));
-	ModalStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.Modal")));
+	GameStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Game);
+	GameMenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::GameMenu);
+	MenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Menu);
+	ModalStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Modal);
 	UBorder* Shield = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TransitionInputShield"));
 	Shield->SetBrushColor(FLinearColor::Transparent);
 	Shield->SetVisibility(ESlateVisibility::Collapsed);
@@ -101,10 +100,10 @@ void UCC_RootLayout::NativeOnInitialized()
 // GameMenu 和 Menu 是不同的物理栈；打开设置不会替换背包所在栈。
 UCommonActivatableWidgetContainerBase* UCC_RootLayout::GetLayer(FGameplayTag Layer) const
 {
-	if (Layer == LayerTag(TEXT("UI.Layer.Game"))) return GameStack;
-	if (Layer == LayerTag(TEXT("UI.Layer.GameMenu"))) return GameMenuStack;
-	if (Layer == LayerTag(TEXT("UI.Layer.Menu"))) return MenuStack;
-	if (Layer == LayerTag(TEXT("UI.Layer.Modal"))) return ModalStack;
+	if (Layer == CCTags::UILayer::Game) return GameStack;
+	if (Layer == CCTags::UILayer::GameMenu) return GameMenuStack;
+	if (Layer == CCTags::UILayer::Menu) return MenuStack;
+	if (Layer == CCTags::UILayer::Modal) return ModalStack;
 	return nullptr;
 }
 

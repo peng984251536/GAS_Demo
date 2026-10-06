@@ -1,4 +1,5 @@
 #include "UI/MainMenu/CC_MainMenuController.h"
+#include "GameplayTags/CC_Tags.h"
 
 #include "UI/Framework/CC_RootLayout.h"
 #include "UI/Framework/CC_DemoScreens.h"
@@ -104,7 +105,7 @@ bool UCC_MainMenuController::FindRooms(
 	// Keep the service locally: showing the next page deactivates this controller.
 	UCC_OnlineRoomSubsystem* Service = RoomService.Get();
 	UCC_RootLayout* Root = GetRootLayout();
-	if (Root && Root->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Menu")), RoomListScreenClass))
+	if (Root && Root->ShowScreen(CCTags::UILayer::Menu, RoomListScreenClass))
 		return Service->FindRooms(Request);
 	SetActionError(NSLOCTEXT("CCUI", "RoomListUnavailable", "The room list screen could not be opened."));
 	return false;
@@ -152,7 +153,7 @@ bool UCC_MainMenuController::OpenSettings()
 	if (!CanStartAction()) return false;
 	if (UCC_RootLayout* Root = GetRootLayout())
 	{
-		if (Root->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Menu")), SettingsScreenClass)) return true;
+		if (Root->ShowScreen(CCTags::UILayer::Menu, SettingsScreenClass)) return true;
 	}
 	SetActionError(NSLOCTEXT("CCUI", "SettingsUnavailable", "The settings screen could not be opened. Check its configured class."));
 	return false;
@@ -164,7 +165,7 @@ bool UCC_MainMenuController::RequestQuit()
 	if (!CanStartAction()) return false;
 	if (UCC_RootLayout* Root = GetRootLayout())
 	{
-		if (Root->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Modal")), QuitScreenClass)) return true;
+		if (Root->ShowScreen(CCTags::UILayer::Modal, QuitScreenClass)) return true;
 	}
 	SetActionError(NSLOCTEXT("CCUI", "QuitUnavailable", "The quit confirmation screen could not be opened."));
 	return false;

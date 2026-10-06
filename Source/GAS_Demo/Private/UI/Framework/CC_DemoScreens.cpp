@@ -1,4 +1,5 @@
 #include "UI/Framework/CC_DemoScreens.h"
+#include "GameplayTags/CC_Tags.h"
 #include "UI/Framework/CC_RootLayout.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -115,7 +116,7 @@ UCC_QuitDialogWidget::UCC_QuitDialogWidget(const FObjectInitializer& ObjectIniti
 
 bool UCC_PauseMenuController::RequestQuit()
 {
-	return CanHandleActions() && GetRootLayout()->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Modal")), UCC_QuitDialogWidget::StaticClass()) != nullptr;
+	return CanHandleActions() && GetRootLayout()->ShowScreen(CCTags::UILayer::Modal, UCC_QuitDialogWidget::StaticClass()) != nullptr;
 }
 
 void UCC_QuitDialogController::ConfirmQuit()
