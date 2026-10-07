@@ -2,11 +2,9 @@
 
 
 #include "Character/CC_EnemyCharacter.h"
-#include "UI/CC_WidgetComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "TimerManager.h"
-#include "GAS_Demo.h"
 
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
@@ -246,17 +244,6 @@ void ACC_EnemyCharacter::HandleDeath()
 void ACC_EnemyCharacter::RegisterOverheadHealthBar()
 {
 	if (!bShowOverheadHealthBar || !IsValid(this) || IsActorBeingDestroyed()) return;
-	// 迁移保护：旧的逐角色 WidgetComponent 血条还在时不再注册，避免双血条。
-	if (FindComponentByClass<UCC_WidgetComponent>())
-	{
-		static TSet<TWeakObjectPtr<UClass>> LoggedClasses;
-		if (!LoggedClasses.Contains(GetClass()))
-		{
-			LoggedClasses.Add(GetClass());
-			UE_LOG(LogGAS_Demo, Log, TEXT("%s 仍挂着旧 CC_WidgetComponent 血条，跳过集中血条注册；删除该组件即可切换到新血条。"), *GetClass()->GetName());
-		}
-		return;
-	}
 	const UGameInstance* GameInstance = GetGameInstance();
 	if (!GameInstance) return;
 	for (ULocalPlayer* Player : GameInstance->GetLocalPlayers())

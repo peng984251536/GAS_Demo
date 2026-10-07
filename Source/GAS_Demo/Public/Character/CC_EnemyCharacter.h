@@ -42,7 +42,6 @@ public:
 
 	/**
 	 * 是否在每个本地玩家的集中血条层显示头顶血条（由 UI 根布局的世界覆盖层绘制）。
-	 * 仍挂着旧 CC_WidgetComponent 的蓝图会自动跳过，避免出现两条血条。
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI|Health Bar")
 	bool bShowOverheadHealthBar = true;

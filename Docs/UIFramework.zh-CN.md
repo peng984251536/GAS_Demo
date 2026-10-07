@@ -23,7 +23,6 @@
 | `UCC_UIController / UCC_UIModel` | 页面业务协调器与展示模型基类，随页面自动绑定/解绑 |
 | `UCC_MainMenuController / UCC_MainMenuModel` | 主界面统一操作入口和展示状态，已接房间子系统，开始/继续提供存档业务扩展点 |
 | `UCC_MenuButton / UCC_PauseMenuWidget / UCC_QuitDialogWidget` | 原生交互示例，分别演示 CommonButton、菜单和确认框；可由自己的蓝图替换 |
-| `UCC_WidgetComponent / UCC_AttributeWidget` | 原有世界空间血条（逐角色 WidgetComponent），已由集中绘制血条取代；挂着它的敌人不会再自动注册新血条 |
 | 世界覆盖层 | RootLayout 自动创建的 `CC_BatchedHealthBarWidget` 与 `CC_DamageTextWidget`，位于所有页面层之下，不进页面栈 |
 
 UI 不要求特定 PlayerController 子类；项目控制器直接继承 APlayerController。
@@ -115,7 +114,7 @@ Get Owning Player → Get Root Layout For Player
 
 ## 数据更新与后续验证
 
-HUD 的更新链：Pawn 变化 → PlayerHUDController 绑定 ASC → 四项属性写入 PlayerHUDModel → Widget 收到模型通知 → On Vitals Changed。失活/重生时控制器精确解绑旧句柄；世界空间血条也同时监听当前值与最大值，避免只改 MaxHealth 时界面不刷新。
+HUD 的更新链：Pawn 变化 → PlayerHUDController 绑定 ASC → 四项属性写入 PlayerHUDModel → Widget 收到模型通知 → On Vitals Changed。失活/重生时控制器精确解绑旧句柄；头顶血条管理器同样监听当前值与最大值，避免只改 MaxHealth 时界面不刷新。
 
 编译后建议实际验证：打开暂停 → 退出确认 → 取消 → 返回游戏；手柄焦点是否恢复；连续点击是否重复入栈；血量和最大血量变化；重生换 Pawn；菜单动画途中切图；再次进入关卡没有重复 HUD。键盘 Esc 在 PIE 中可能优先触发编辑器停止运行，请在独立游戏窗口验证完整返回流程。
 

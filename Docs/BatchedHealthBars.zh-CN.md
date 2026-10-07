@@ -3,7 +3,6 @@
 ## 已有功能
 
 - 伤害飘字：`UCC_DamageTextSubsystem` 管理列表，`SCC_DamageTextLayer` 集中绘制；已有 `ShowDamageText` 等蓝图入口。
-- 原头顶血条：`UCC_WidgetComponent` 在各角色上创建属性控件。
 - 玩家 HUD 左上角自身血蓝条：`UCC_PlayerHUDWidget`，可继续保留。
 
 ## 接入方式（已由 UI 框架托管）
@@ -13,7 +12,7 @@
 1. **不需要**再在 PlayerController 里 Create Widget + Add to Player Screen。若之前这样做过，请删除这些节点，否则血条会画两遍（运行时会输出 Warning 提示）。
 2. 想改背景色、边框或屏幕偏移：新建父类为 `CC_BatchedHealthBarWidget` 的蓝图，在根布局蓝图默认值里把 `Health Bar Layer Class` 指向它。设为空则不创建血条层。
 3. `CC_EnemyCharacter` 会在 BeginPlay 后的下一帧为每个本地玩家自动注册，配置项在敌人类默认值的 `UI|Health Bar` 分类：`Show Overhead Health Bar` 与 `Overhead Health Bar Options`；EndPlay 时自动移除。
-4. **迁移保护**：仍挂着旧 `CC_WidgetComponent` 的敌人蓝图会跳过自动注册（输出一次 Log），不会出现双血条。删掉旧组件后即自动切换到新血条。现有蓝图资产没有被自动修改，建议先在一个敌人蓝图上验证。
+4. 旧的逐角色血条 `CC_WidgetComponent / CC_AttributeWidget` 已删除。曾挂载它们的蓝图在编辑器里会显示组件失效，删除失效组件后重新保存即可。
 5. 非敌人角色（Boss、NPC、可破坏物等）仍可手动调用 **Get Health Bar Manager → Register Health Bar**；多人游戏在每个需要显示它的本地客户端注册，注册不通过网络复制。
 
 同一个 Actor 重复注册只更新配置，不会产生第二条血条。GAS 延迟创建、属性集延迟到达或 ASC 被替换，会在最多约 0.25 秒后重试/重绑。属性变化通过 GAS 委托更新，不逐帧读取属性。
