@@ -37,6 +37,7 @@ bool UCC_BatchedHealthBarSubsystem::RegisterHealthBar(AActor* Actor, const FCC_H
 	Entry->Options.MaxDistance = FMath::Max(0.f, Options.MaxDistance);
 	Entry->bReady = false;
 	if (Options.bUseGAS) Bind(*Entry);
+	OnEntriesUpdated.Broadcast();
 	return true;
 }
 
@@ -109,6 +110,7 @@ bool UCC_BatchedHealthBarSubsystem::UpdateHealthBar(AActor* Actor, float Health,
 	Entry->MaxHealth = FMath::Max(0.f, MaxHealth);
 	if (!Entry->bReady) Entry->DisplayedFraction = Entry->MaxHealth > 0 ? FMath::Clamp(Health / Entry->MaxHealth, 0.f, 1.f) : 0.f;
 	Entry->bReady = true;
+	OnEntriesUpdated.Broadcast();
 	return true;
 }
 
@@ -116,18 +118,26 @@ bool UCC_BatchedHealthBarSubsystem::UpdateHealthBar(AActor* Actor, float Health,
 void UCC_BatchedHealthBarSubsystem::UnregisterHealthBar(AActor* Actor)
 {
 	if (!Actor) return;
+	bool bRemoved = false;
 	for (int32 Index = Entries.Num() - 1; Index >= 0; --Index)
 		if (Entries[Index].Actor == Actor)
 		{
 			Unbind(Entries[Index]);
 			Entries.RemoveAtSwap(Index);
+			bRemoved = true;
 		}
+	// 移除最后一个条目后子系统停止 Tick，必须在这里通知，避免界面保留旧快照。
+	if (bRemoved) OnEntriesUpdated.Broadcast();
 }
 
 // 显隐只修改显示标记；恢复显示时可以立即使用一直在更新的血量。
 void UCC_BatchedHealthBarSubsystem::SetHealthBarVisible(AActor* Actor, bool bVisible)
 {
-	if (IsValid(Actor)) if (FCC_HealthBarEntry* Entry = Find(Actor)) Entry->bVisible = bVisible;
+	if (IsValid(Actor)) if (FCC_HealthBarEntry* Entry = Find(Actor))
+	{
+		Entry->bVisible = bVisible;
+		OnEntriesUpdated.Broadcast();
+	}
 }
 
 // 释放全部监听后清空列表，下次注册从初始绑定检查开始。
@@ -136,6 +146,7 @@ void UCC_BatchedHealthBarSubsystem::ClearHealthBars()
 	for (FCC_HealthBarEntry& Entry : Entries) Unbind(Entry);
 	Entries.Reset();
 	BindingTimer = 0;
+	OnEntriesUpdated.Broadcast();
 }
 
 // 子系统结束前主动解除监听，避免存活的 ASC 留下不再使用的订阅。
@@ -178,4 +189,6 @@ void UCC_BatchedHealthBarSubsystem::Tick(float DeltaTime)
 		const float Fraction = Entry.MaxHealth > 0 ? FMath::Clamp(Entry.Health / Entry.MaxHealth, 0.f, 1.f) : 0.f;
 		Entry.DisplayedFraction = FMath::FInterpTo(Entry.DisplayedFraction, Fraction, DeltaTime, 12.f);
 	}
+	// 本帧移除了最后一个条目时也会广播一次空列表；之后子系统停止 Tick。
+	OnEntriesUpdated.Broadcast();
 }

@@ -50,6 +50,7 @@ struct FCC_HealthBarEntry
 
 /**
  * 每个本地玩家一份血条数据管理器，负责 GAS 订阅、条目清理和血量插值，不负责绘制。
+ * 界面侧由 CC_HealthBarOverlayController 订阅 OnEntriesUpdated，转换为展示模型后交给绘制层。
  * 分屏玩家的数据相互独立；联机时需在各本地客户端注册，注册操作不进行网络复制。
  * 子系统由引擎随 LocalPlayer 创建，但不会自动创建 HUD Widget，也不会扫描场景中的敌人。
  */
@@ -75,12 +76,17 @@ public:
 	/** 注册条目总数，包含隐藏、未就绪或超出显示距离的条目。 */
 	UFUNCTION(BlueprintPure, Category="UI|Batched Health Bars") int32 GetRegisteredCount() const { return Entries.Num(); }
 	/**
-	 * 绘制层构建/释放时登记，返回登记后的数量。同一本地玩家出现多个绘制层通常意味着
+	 * 血条控制器激活/失活时登记，返回登记后的数量。同一本地玩家出现多个绘制层通常意味着
 	 * 旧的手动 Add to Player Screen 与根布局托管的血条层同时存在，血条会被画两遍。
 	 */
 	int32 AddDrawLayer() { return ++DrawLayerCount; }
 	void RemoveDrawLayer() { DrawLayerCount = FMath::Max(0, DrawLayerCount - 1); }
-	/** 绘制层只读访问；不要跨注册、移除或 Tick 保存数组元素的引用。 */
+	/**
+	 * 条目更新通知：每次 Tick 完成插值与清理后、以及注册/移除/显隐/手动推送后广播。
+	 * 只供界面控制器把条目转换为展示快照，回调中不要再注册或移除条目。
+	 */
+	FSimpleMulticastDelegate OnEntriesUpdated;
+	/** 控制器只读访问；不要跨注册、移除或 Tick 保存数组元素的引用。 */
 	const TArray<FCC_HealthBarEntry>& GetEntries() const { return Entries; }
 	/** 集中完成存活检查、低频 GAS 重绑和每帧血量插值。 */
 	virtual void Tick(float DeltaTime) override;

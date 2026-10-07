@@ -3,6 +3,7 @@
 #include "UI/Framework/CC_ActivatableWidget.h"
 #include "UI/Framework/CC_RootLayout.h"
 #include "UI/Framework/CC_UIManagerSubsystem.h"
+#include "Components/Widget.h"
 
 UCC_UIController::UCC_UIController() { ModelClass = UCC_UIModel::StaticClass(); }
 
@@ -11,13 +12,23 @@ UWorld* UCC_UIController::GetWorld() const
 	return !HasAnyFlags(RF_ClassDefaultObject) && View.IsValid() ? View->GetWorld() : nullptr;
 }
 
-void UCC_UIController::Initialize(UCC_ActivatableWidget* InView, UObject* InContext)
+void UCC_UIController::Initialize(UWidget* InView, UObject* InContext)
 {
 	if (View.IsValid() || !InView) return;
 	View = InView;
 	Context = InContext;
 	if (ModelClass && !ModelClass->HasAnyClassFlags(CLASS_Abstract)) Model = NewObject<UCC_UIModel>(this, ModelClass);
 }
+
+UCC_UIController* UCC_UIController::CreateForView(UWidget* InView, TSubclassOf<UCC_UIController> ControllerClass, UObject* InContext)
+{
+	if (!InView || !ControllerClass || ControllerClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
+	UCC_UIController* Controller = NewObject<UCC_UIController>(InView, ControllerClass);
+	Controller->Initialize(InView, InContext);
+	return Controller;
+}
+
+UCC_ActivatableWidget* UCC_UIController::GetScreenView() const { return Cast<UCC_ActivatableWidget>(View.Get()); }
 
 void UCC_UIController::Activate()
 {
@@ -59,10 +70,12 @@ UCC_RootLayout* UCC_UIController::GetRootLayout() const
 
 bool UCC_UIController::CanHandleActions() const
 {
+	// 只有入栈页面有"栈顶可交互"的概念；世界覆盖层等常驻视图不处理用户操作。
+	const UCC_ActivatableWidget* Screen = GetScreenView();
 	const UCC_RootLayout* Root = GetRootLayout();
-	return bActive && View.IsValid() && View->IsActivated() && Root && !Root->IsShuttingDown() && !Root->IsInputBlocked() && Root->GetTopScreen() == View.Get();
+	return bActive && Screen && Screen->IsActivated() && Root && !Root->IsShuttingDown() && !Root->IsInputBlocked() && Root->GetTopScreen() == Screen;
 }
 
-bool UCC_UIController::RequestClose() { return CanHandleActions() && View->CloseScreen(); }
+bool UCC_UIController::RequestClose() { return CanHandleActions() && GetScreenView()->CloseScreen(); }
 void UCC_UIController::OnActivated() { ReceiveActivated(); }
 void UCC_UIController::OnDeactivated() { ReceiveDeactivated(); }

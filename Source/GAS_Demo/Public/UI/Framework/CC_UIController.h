@@ -5,12 +5,17 @@
 #include "CC_UIController.generated.h"
 
 class UCC_ActivatableWidget;
+class UWidget;
 class UCC_UIModel;
 class UCC_RootLayout;
 class APlayerController;
 class UWorld;
 
-/** 页面业务协调器：管理订阅、用户意图和系统调用；由页面持有，不跨地图保存。 */
+/**
+ * 界面业务协调器：管理订阅、用户意图和系统调用；由所属视图持有，不跨地图保存。
+ * 视图通常是入栈页面（CC_ActivatableWidget），也可以是世界覆盖层这类不进页面栈的常驻控件；
+ * 后者没有焦点和关闭语义，CanHandleActions / RequestClose 对它们始终返回 false。
+ */
 UCLASS(BlueprintType, Blueprintable)
 class GAS_DEMO_API UCC_UIController : public UObject
 {
@@ -18,10 +23,15 @@ class GAS_DEMO_API UCC_UIController : public UObject
 public:
 	/** 默认使用轻量模型，功能控制器在构造函数中指定专用模型类。 */
 	UCC_UIController();
-	/** 返回页面所属世界，支持控制器蓝图调用世界上下文接口。 */
+	/** 返回视图所属世界，支持控制器蓝图调用世界上下文接口。 */
 	virtual UWorld* GetWorld() const override;
-	/** 页面内部调用一次：创建展示模型并记录所属页面。 */
-	void Initialize(UCC_ActivatableWidget* InView, UObject* InContext);
+	/** 视图内部调用一次：创建展示模型并记录所属视图。 */
+	void Initialize(UWidget* InView, UObject* InContext);
+	/**
+	 * 不进页面栈的视图（如世界覆盖层）用它创建并初始化自己的控制器；类无效或为抽象类时返回空。
+	 * 由视图持有返回值，在 Slate 构建时 Activate、释放时 Release。
+	 */
+	static UCC_UIController* CreateForView(UWidget* InView, TSubclassOf<UCC_UIController> ControllerClass, UObject* InContext = nullptr);
 	/** 页面激活时绑定业务事件；重复调用不会重复订阅。 */
 	void Activate();
 	/** 页面失活时先作废会话令牌，再解除业务订阅。 */
@@ -42,7 +52,7 @@ public:
 	/** 当前仍在展示期间，不代表它是最高层可交互页面。 */
 	UFUNCTION(BlueprintPure, Category="UI|Controller")
 	bool IsActive() const { return bActive; }
-	/** 拒绝失活、被覆盖或处于过渡中的页面发起用户操作。 */
+	/** 拒绝失活、被覆盖或处于过渡中的页面发起用户操作；非页面视图始终返回 false。 */
 	UFUNCTION(BlueprintPure, Category="UI|Controller")
 	bool CanHandleActions() const;
 	/** 当前激活会话标识；异步请求必须保存此值并在回调中校验。 */
@@ -72,8 +82,10 @@ protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category="UI|Controller")
 	TObjectPtr<UObject> Context;
 protected:
-	/** 页面只由外层框架持有，控制器的反向引用不延长页面生命。 */
-	TWeakObjectPtr<UCC_ActivatableWidget> View;
+	/** 页面（或常驻控件）只由外层框架持有，控制器的反向引用不延长视图生命。 */
+	TWeakObjectPtr<UWidget> View;
+	/** 视图是页面时返回它，否则为空；用于焦点、栈顶和关闭判断。 */
+	UCC_ActivatableWidget* GetScreenView() const;
 	/** 强引用展示模型，使它在页面被同层覆盖期间仍保留界面状态。 */
 	UPROPERTY(Transient)
 	TObjectPtr<UCC_UIModel> Model;
