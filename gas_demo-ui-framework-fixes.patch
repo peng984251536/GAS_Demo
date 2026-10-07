@@ -1,0 +1,796 @@
+From 6ded5ab3a15f2e994fb127c109ee9449c2e77901 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 6 Oct 2026 17:41:56 +0800
+Subject: [PATCH 1/3] =?UTF-8?q?refactor(ui):=20=E7=94=A8=E5=8E=9F=E7=94=9F?=
+ =?UTF-8?q?=20GameplayTag=20=E6=9B=BF=E6=8D=A2=20UI=20=E5=B1=82=E7=BA=A7?=
+ =?UTF-8?q?=E5=AD=97=E7=AC=A6=E4=B8=B2?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+UI.Layer.* 原先以字符串形式散落在 RootLayout、MainMenuController、
+DemoScreens 和测试中，GetLayer 每次调用都会 RequestGameplayTag，
+一旦拼错只会在运行时静默返回空层。
+
+- 在 CC_Tags 中新增 CCTags::UILayer::{Game, GameMenu, Menu, Modal}
+- 所有 C++ 调用点改为引用原生标签，删除 RootLayout 内的 LayerTag 辅助函数
+- DefaultGameplayTags.ini 中的同名条目保留（蓝图下拉框与 DevComment 仍可用），
+  原生定义与 ini 同名不会冲突
+
+蓝图中选择的 UI.Layer.* 标签不受影响。
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Kvm9iSk2JZASgoanPjjpXK
+---
+ .../GAS_Demo/Private/GameplayTags/CC_Tags.cpp |  8 ++++++++
+ .../Private/Tests/CC_UILifecycleTests.cpp     |  9 +++++----
+ .../Private/UI/Framework/CC_DemoScreens.cpp   |  3 ++-
+ .../Private/UI/Framework/CC_RootLayout.cpp    | 19 +++++++++----------
+ .../UI/MainMenu/CC_MainMenuController.cpp     |  7 ++++---
+ Source/GAS_Demo/Public/GameplayTags/CC_Tags.h | 11 ++++++++++-
+ 6 files changed, 38 insertions(+), 19 deletions(-)
+
+diff --git a/Source/GAS_Demo/Private/GameplayTags/CC_Tags.cpp b/Source/GAS_Demo/Private/GameplayTags/CC_Tags.cpp
+index 2e448b1..1bbd5dd 100644
+--- a/Source/GAS_Demo/Private/GameplayTags/CC_Tags.cpp
++++ b/Source/GAS_Demo/Private/GameplayTags/CC_Tags.cpp
+@@ -102,4 +102,12 @@ namespace CCTags
+ 			"角色处于受击状态"
+ 		);
+ 	}
++
++	namespace UILayer
++	{
++		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Game, "UI.Layer.Game", "HUD 层：不响应返回，不抢焦点");
++		UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameMenu, "UI.Layer.GameMenu", "玩法内菜单层：背包、记分板");
++		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Menu, "UI.Layer.Menu", "菜单层：主菜单、暂停、设置");
++		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Modal, "UI.Layer.Modal", "弹窗层：确认框");
++	}
+ }
+diff --git a/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp b/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp
+index b7a0c20..daa2a39 100644
+--- a/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp
++++ b/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp
+@@ -1,6 +1,7 @@
+ #if WITH_DEV_AUTOMATION_TESTS
+ 
+ #include "Misc/AutomationTest.h"
++#include "GameplayTags/CC_Tags.h"
+ #include "UI/Framework/CC_DemoScreens.h"
+ #include "UI/Framework/CC_UIController.h"
+ #include "UI/Framework/CC_UIModel.h"
+@@ -99,10 +100,10 @@ bool FCCUIRootLifecycleTest::RunTest(const FString& Parameters)
+ 	UCC_RootLayout* Root = CreateWidget<UCC_RootLayout>(PC);
+ 	if (!TestNotNull(TEXT("Root"), Root)) return false;
+ 	Root->ResumeLayout(); // 此独立根用于无窗口容器测试，显式模拟 Policy 完成挂载。
+-	const FGameplayTag Game = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Game"));
+-	const FGameplayTag GameMenu = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.GameMenu"));
+-	const FGameplayTag Menu = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Menu"));
+-	const FGameplayTag Modal = FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Modal"));
++	const FGameplayTag Game = CCTags::UILayer::Game;
++	const FGameplayTag GameMenu = CCTags::UILayer::GameMenu;
++	const FGameplayTag Menu = CCTags::UILayer::Menu;
++	const FGameplayTag Modal = CCTags::UILayer::Modal;
+ 	TestNotNull(TEXT("Game layer"), Root->GetLayer(Game));
+ 	TestNotNull(TEXT("GameMenu layer"), Root->GetLayer(GameMenu));
+ 	TestNotNull(TEXT("Menu layer"), Root->GetLayer(Menu));
+diff --git a/Source/GAS_Demo/Private/UI/Framework/CC_DemoScreens.cpp b/Source/GAS_Demo/Private/UI/Framework/CC_DemoScreens.cpp
+index 60f63e1..b4f256d 100644
+--- a/Source/GAS_Demo/Private/UI/Framework/CC_DemoScreens.cpp
++++ b/Source/GAS_Demo/Private/UI/Framework/CC_DemoScreens.cpp
+@@ -1,4 +1,5 @@
+ #include "UI/Framework/CC_DemoScreens.h"
++#include "GameplayTags/CC_Tags.h"
+ #include "UI/Framework/CC_RootLayout.h"
+ #include "Blueprint/WidgetTree.h"
+ #include "Components/Border.h"
+@@ -115,7 +116,7 @@ UCC_QuitDialogWidget::UCC_QuitDialogWidget(const FObjectInitializer& ObjectIniti
+ 
+ bool UCC_PauseMenuController::RequestQuit()
+ {
+-	return CanHandleActions() && GetRootLayout()->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Modal")), UCC_QuitDialogWidget::StaticClass()) != nullptr;
++	return CanHandleActions() && GetRootLayout()->ShowScreen(CCTags::UILayer::Modal, UCC_QuitDialogWidget::StaticClass()) != nullptr;
+ }
+ 
+ void UCC_QuitDialogController::ConfirmQuit()
+diff --git a/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp b/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
+index dae33bc..fccbcac 100644
+--- a/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
++++ b/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
+@@ -1,5 +1,6 @@
+ #include "UI/Framework/CC_RootLayout.h"
+ #include "UI/Framework/CC_ActivatableWidget.h"
++#include "GameplayTags/CC_Tags.h"
+ #include "Blueprint/WidgetTree.h"
+ #include "CommonInputSubsystem.h"
+ #include "Components/Border.h"
+@@ -12,8 +13,6 @@
+ 
+ namespace
+ {
+-	// 将配置中已有的标签名称转换成 GameplayTag。
+-	FGameplayTag LayerTag(const TCHAR* Name) { return FGameplayTag::RequestGameplayTag(FName(Name)); }
+ 	// 把控件铺满 Overlay 插槽，层级由添加顺序决定。
+ 	void Fill(UOverlay* Overlay, UWidget* Widget)
+ 	{
+@@ -83,10 +82,10 @@ void UCC_RootLayout::NativeOnInitialized()
+ 		Fill(Root, Stack);
+ 		Stack->OnTransitioningChanged.AddUObject(this, &ThisClass::HandleTransition);
+ 	}
+-	GameStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.Game")));
+-	GameMenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.GameMenu")));
+-	MenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.Menu")));
+-	ModalStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, LayerTag(TEXT("UI.Layer.Modal")));
++	GameStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Game);
++	GameMenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::GameMenu);
++	MenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Menu);
++	ModalStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Modal);
+ 	UBorder* Shield = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TransitionInputShield"));
+ 	Shield->SetBrushColor(FLinearColor::Transparent);
+ 	Shield->SetVisibility(ESlateVisibility::Collapsed);
+@@ -101,10 +100,10 @@ void UCC_RootLayout::NativeOnInitialized()
+ // GameMenu 和 Menu 是不同的物理栈；打开设置不会替换背包所在栈。
+ UCommonActivatableWidgetContainerBase* UCC_RootLayout::GetLayer(FGameplayTag Layer) const
+ {
+-	if (Layer == LayerTag(TEXT("UI.Layer.Game"))) return GameStack;
+-	if (Layer == LayerTag(TEXT("UI.Layer.GameMenu"))) return GameMenuStack;
+-	if (Layer == LayerTag(TEXT("UI.Layer.Menu"))) return MenuStack;
+-	if (Layer == LayerTag(TEXT("UI.Layer.Modal"))) return ModalStack;
++	if (Layer == CCTags::UILayer::Game) return GameStack;
++	if (Layer == CCTags::UILayer::GameMenu) return GameMenuStack;
++	if (Layer == CCTags::UILayer::Menu) return MenuStack;
++	if (Layer == CCTags::UILayer::Modal) return ModalStack;
+ 	return nullptr;
+ }
+ 
+diff --git a/Source/GAS_Demo/Private/UI/MainMenu/CC_MainMenuController.cpp b/Source/GAS_Demo/Private/UI/MainMenu/CC_MainMenuController.cpp
+index e894863..eef966a 100644
+--- a/Source/GAS_Demo/Private/UI/MainMenu/CC_MainMenuController.cpp
++++ b/Source/GAS_Demo/Private/UI/MainMenu/CC_MainMenuController.cpp
+@@ -1,4 +1,5 @@
+ #include "UI/MainMenu/CC_MainMenuController.h"
++#include "GameplayTags/CC_Tags.h"
+ 
+ #include "UI/Framework/CC_RootLayout.h"
+ #include "UI/Framework/CC_DemoScreens.h"
+@@ -104,7 +105,7 @@ bool UCC_MainMenuController::FindRooms(
+ 	// Keep the service locally: showing the next page deactivates this controller.
+ 	UCC_OnlineRoomSubsystem* Service = RoomService.Get();
+ 	UCC_RootLayout* Root = GetRootLayout();
+-	if (Root && Root->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Menu")), RoomListScreenClass))
++	if (Root && Root->ShowScreen(CCTags::UILayer::Menu, RoomListScreenClass))
+ 		return Service->FindRooms(Request);
+ 	SetActionError(NSLOCTEXT("CCUI", "RoomListUnavailable", "The room list screen could not be opened."));
+ 	return false;
+@@ -152,7 +153,7 @@ bool UCC_MainMenuController::OpenSettings()
+ 	if (!CanStartAction()) return false;
+ 	if (UCC_RootLayout* Root = GetRootLayout())
+ 	{
+-		if (Root->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Menu")), SettingsScreenClass)) return true;
++		if (Root->ShowScreen(CCTags::UILayer::Menu, SettingsScreenClass)) return true;
+ 	}
+ 	SetActionError(NSLOCTEXT("CCUI", "SettingsUnavailable", "The settings screen could not be opened. Check its configured class."));
+ 	return false;
+@@ -164,7 +165,7 @@ bool UCC_MainMenuController::RequestQuit()
+ 	if (!CanStartAction()) return false;
+ 	if (UCC_RootLayout* Root = GetRootLayout())
+ 	{
+-		if (Root->ShowScreen(FGameplayTag::RequestGameplayTag(TEXT("UI.Layer.Modal")), QuitScreenClass)) return true;
++		if (Root->ShowScreen(CCTags::UILayer::Modal, QuitScreenClass)) return true;
+ 	}
+ 	SetActionError(NSLOCTEXT("CCUI", "QuitUnavailable", "The quit confirmation screen could not be opened."));
+ 	return false;
+diff --git a/Source/GAS_Demo/Public/GameplayTags/CC_Tags.h b/Source/GAS_Demo/Public/GameplayTags/CC_Tags.h
+index 8409450..57d1e57 100644
+--- a/Source/GAS_Demo/Public/GameplayTags/CC_Tags.h
++++ b/Source/GAS_Demo/Public/GameplayTags/CC_Tags.h
+@@ -41,5 +41,14 @@ namespace CCTags
+ 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
+ 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
+ 	}
+-	
++
++	// UI 根布局的四个页面层。名称与 DefaultGameplayTags.ini 中的 UI.Layer.* 保持一致，
++	// C++ 一律引用这里的原生标签，避免字符串拼写错误在运行时静默返回空层。
++	namespace UILayer
++	{
++		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Game);
++		UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameMenu);
++		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Menu);
++		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Modal);
++	}
+ }
+-- 
+2.43.0
+
+
+From d6c6cae5f5ce2aa4f53ee67c13de5e56e88d7b91 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 6 Oct 2026 17:42:54 +0800
+Subject: [PATCH 2/3] =?UTF-8?q?fix(ui):=20ShowScreen=20=E5=A4=8D=E7=94=A8?=
+ =?UTF-8?q?=E5=90=8C=E5=B1=82=E5=90=8C=E7=B1=BB=E9=A1=B5=E9=9D=A2=E6=97=B6?=
+ =?UTF-8?q?=E6=B3=A8=E5=85=A5=E6=96=B0=E7=9A=84=20Context?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+原先 ShowScreen 发现栈中已有同类页面就直接返回旧实例，不再调用
+PrepareForDisplay，导致新传入的 Context 被静默丢弃：用另一个物品
+打开已开着的详情页，界面仍显示旧物品，而调用方拿到非空返回值、
+误以为打开成功。
+
+- 新增 UCC_ActivatableWidget::ReuseWithContext：替换 ScreenContext，
+  再次触发 On Screen Opened；Context 为空或与原值相同时不做任何事
+- 新增 UCC_UIController::UpdateContext：页面激活中会重启会话
+  （旧 ActivationToken 失效、OnActivated 重新读取快照），模型实例保留；
+  被覆盖的页面只记录 Context，恢复激活时自然读取
+- 复用期间持有 bChangingStack，On Screen Opened 中仍禁止同步导航
+- 返回被同层其他页面覆盖的实例时输出 Warning，便于发现"点了没反应"
+- 补充自动化测试覆盖会话重启与覆盖状态下的行为
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Kvm9iSk2JZASgoanPjjpXK
+---
+ .../Private/Tests/CC_UILifecycleTests.cpp      | 15 +++++++++++++++
+ .../UI/Framework/CC_ActivatableWidget.cpp      |  8 ++++++++
+ .../Private/UI/Framework/CC_RootLayout.cpp     | 18 +++++++++++++++++-
+ .../Private/UI/Framework/CC_UIController.cpp   |  8 ++++++++
+ .../Public/UI/Framework/CC_ActivatableWidget.h |  5 +++++
+ .../Public/UI/Framework/CC_RootLayout.h        |  6 +++++-
+ .../Public/UI/Framework/CC_UIController.h      |  2 ++
+ 7 files changed, 60 insertions(+), 2 deletions(-)
+
+diff --git a/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp b/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp
+index daa2a39..c597b39 100644
+--- a/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp
++++ b/Source/GAS_Demo/Private/Tests/CC_UILifecycleTests.cpp
+@@ -52,6 +52,21 @@ bool FCCUIControllerLifecycleTest::RunTest(const FString& Parameters)
+ 	TestFalse(TEXT("New opening rejects the previous controller token"), ReopenedController->IsActivationCurrent(FirstToken));
+ 	ReopenedController->Release();
+ 
++	// 同层同类页面被再次 ShowScreen：注入新 Context 时重启激活会话，旧异步回调失效，模型保留。
++	UCC_UIController* ReusedController = NewObject<UCC_UIController>(View);
++	ReusedController->Initialize(View, nullptr);
++	ReusedController->Activate();
++	const FGuid BeforeReuseToken = ReusedController->GetActivationToken();
++	UCC_UIModel* ReusedModel = ReusedController->GetModel();
++	ReusedController->UpdateContext(NewObject<UCC_UIModel>());
++	TestTrue(TEXT("Context update keeps the page active"), ReusedController->IsActive());
++	TestFalse(TEXT("Context update invalidates the previous session token"), ReusedController->IsActivationCurrent(BeforeReuseToken));
++	TestTrue(TEXT("Context update keeps the same model"), ReusedController->GetModel() == ReusedModel);
++	ReusedController->Deactivate();
++	ReusedController->UpdateContext(NewObject<UCC_UIModel>());
++	TestFalse(TEXT("Covered page is not activated by a context update"), ReusedController->IsActive());
++	ReusedController->Release();
++
+ 	// 模拟同一池化 Widget 重新入栈，验证无需等待 NativeDestruct 才清理旧会话。
+ 	View->PrepareForDisplay(nullptr);
+ 	UCC_UIController* PreviousController = View->GetScreenController();
+diff --git a/Source/GAS_Demo/Private/UI/Framework/CC_ActivatableWidget.cpp b/Source/GAS_Demo/Private/UI/Framework/CC_ActivatableWidget.cpp
+index 2c38e40..cfda9a7 100644
+--- a/Source/GAS_Demo/Private/UI/Framework/CC_ActivatableWidget.cpp
++++ b/Source/GAS_Demo/Private/UI/Framework/CC_ActivatableWidget.cpp
+@@ -75,6 +75,14 @@ void UCC_ActivatableWidget::PrepareForDisplay(UObject* InContext)
+ 	BP_OnScreenOpened(InContext);
+ }
+ 
++// 复用已在栈中的实例：只换数据，不重建会话对象，避免模型状态（如滚动位置之外的业务快照）被无谓清空。
++void UCC_ActivatableWidget::ReuseWithContext(UObject* InContext)
++{
++	if (!InContext || InContext == ScreenContext) return;
++	ScreenContext = InContext;
++	if (ScreenController) ScreenController->UpdateContext(InContext);
++	BP_OnScreenOpened(InContext);
++}
+ // 控件释放 Slate 时清除上下文，避免对象池继续持有旧业务对象。
+ void UCC_ActivatableWidget::NativeDestruct()
+ {
+diff --git a/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp b/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
+index fccbcac..ad25f23 100644
+--- a/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
++++ b/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
+@@ -1,6 +1,7 @@
+ #include "UI/Framework/CC_RootLayout.h"
+ #include "UI/Framework/CC_ActivatableWidget.h"
+ #include "GameplayTags/CC_Tags.h"
++#include "GAS_Demo.h"
+ #include "Blueprint/WidgetTree.h"
+ #include "CommonInputSubsystem.h"
+ #include "Components/Border.h"
+@@ -113,8 +114,23 @@ UCC_ActivatableWidget* UCC_RootLayout::ShowScreen(FGameplayTag Layer, TSubclassO
+ 	UCommonActivatableWidgetContainerBase* Stack = GetLayer(Layer);
+ 	if (bShuttingDown || bDetached || bChangingStack || !Stack || !ScreenClass || ScreenClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
+ 	// 同层同类只保留一个实例；已被覆盖的旧页面不会被悄悄移到栈顶。
++	// 复用时注入新的 Context，否则用不同数据（例如另一个物品）打开详情页会继续显示旧数据。
+ 	for (UCommonActivatableWidget* Existing : Stack->GetWidgetList())
+-		if (Existing->GetClass() == ScreenClass) return Cast<UCC_ActivatableWidget>(Existing);
++	{
++		if (Existing->GetClass() != ScreenClass) continue;
++		UCC_ActivatableWidget* Screen = Cast<UCC_ActivatableWidget>(Existing);
++		if (Screen)
++		{
++			TGuardValue<bool> ChangingStack(bChangingStack, true); // On Screen Opened 中不允许同步导航。
++			Screen->ReuseWithContext(Context);
++		}
++		if (Existing != Stack->GetActiveWidget())
++		{
++			UE_LOG(LogGAS_Demo, Warning, TEXT("ShowScreen: %s 已在 %s 层栈中但被同层其他页面覆盖，返回已有实例且不会移到栈顶。"),
++				*GetNameSafe(ScreenClass), *Layer.ToString());
++		}
++		return Screen;
++	}
+ 	if (IsTransitioning()) return nullptr;
+ 	// 作用域结束自动解除重入锁，保证提前返回也不会卡住后续操作。
+ 	TGuardValue<bool> ChangingStack(bChangingStack, true);
+diff --git a/Source/GAS_Demo/Private/UI/Framework/CC_UIController.cpp b/Source/GAS_Demo/Private/UI/Framework/CC_UIController.cpp
+index 06834fe..72357dc 100644
+--- a/Source/GAS_Demo/Private/UI/Framework/CC_UIController.cpp
++++ b/Source/GAS_Demo/Private/UI/Framework/CC_UIController.cpp
+@@ -35,6 +35,14 @@ void UCC_UIController::Deactivate()
+ 	OnDeactivated();
+ }
+ 
++void UCC_UIController::UpdateContext(UObject* InContext)
++{
++	Context = InContext;
++	if (!bActive) return; // 被覆盖的页面在恢复激活时自然读取新 Context。
++	// 结束旧会话：旧 ActivationToken 失效，迟到的异步结果会被拒绝。
++	Deactivate();
++	Activate();
++}
+ void UCC_UIController::Release()
+ {
+ 	Deactivate();
+diff --git a/Source/GAS_Demo/Public/UI/Framework/CC_ActivatableWidget.h b/Source/GAS_Demo/Public/UI/Framework/CC_ActivatableWidget.h
+index 2d7db6a..0403e80 100644
+--- a/Source/GAS_Demo/Public/UI/Framework/CC_ActivatableWidget.h
++++ b/Source/GAS_Demo/Public/UI/Framework/CC_ActivatableWidget.h
+@@ -36,6 +36,11 @@ public:
+ 	void RefreshNavigationFocus() { RequestRefreshFocus(); }
+ 	/** 每次入栈前注入数据并重置旧焦点；对象池复用也执行。 */
+ 	void PrepareForDisplay(UObject* InContext);
++	/**
++	 * 同层同类页面已在栈中、再次 ShowScreen 时调用：不新建控制器/模型，只替换 Context，
++	 * 触发 On Screen Opened，并在页面激活时重启控制器会话。InContext 为空时保持原上下文。
++	 */
++	void ReuseWithContext(UObject* InContext);
+ 	/** 获取本页独立的业务控制器；未配置或入栈前可能为空。 */
+ 	UFUNCTION(BlueprintPure, Category="UI|Architecture")
+ 	UCC_UIController* GetScreenController() const { return ScreenController; }
+diff --git a/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h b/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h
+index 06ade02..0805ba1 100644
+--- a/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h
++++ b/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h
+@@ -33,7 +33,11 @@ public:
+ 	UCC_RootLayout(const FObjectInitializer& ObjectInitializer);
+ 	/** 最后一个菜单关闭后，恢复 Game 模式和鼠标行为。 */
+ 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
+-	/** 打开页面并传数据；同层同类返回已有实例，过渡/重入/无效请求返回空。 */
++	/**
++	 * 打开页面并传数据；过渡/重入/无效请求返回空。
++	 * 同层同类页面已存在时返回该实例：传入非空 Context 会替换旧上下文并再次触发 On Screen Opened，
++	 * 但被同层其他页面覆盖的实例不会移到栈顶（会输出警告）。
++	 */
+ 	UFUNCTION(BlueprintCallable, Category="UI", meta=(DeterminesOutputType="ScreenClass", Categories="UI.Layer"))
+ 	UCC_ActivatableWidget* ShowScreen(FGameplayTag Layer, TSubclassOf<UCC_ActivatableWidget> ScreenClass, UObject* Context = nullptr);
+ 	/** 关闭最上层且允许关闭的页面；退场动画和下页恢复由官方栈完成。 */
+diff --git a/Source/GAS_Demo/Public/UI/Framework/CC_UIController.h b/Source/GAS_Demo/Public/UI/Framework/CC_UIController.h
+index 9ed7c70..1ff02b6 100644
+--- a/Source/GAS_Demo/Public/UI/Framework/CC_UIController.h
++++ b/Source/GAS_Demo/Public/UI/Framework/CC_UIController.h
+@@ -28,6 +28,8 @@ public:
+ 	void Deactivate();
+ 	/** 页面释放 Slate 时清理上下文和所有者，不能再用于旧页面。 */
+ 	void Release();
++	/** 已打开页面被再次 ShowScreen 时注入新上下文；激活中则重启会话，让 OnActivated 重新读取快照。 */
++	void UpdateContext(UObject* InContext);
+ 	/** 只读访问展示模型；Widget 通过具体模型的 Getter 读取快照。 */
+ 	UFUNCTION(BlueprintPure, Category="UI|Controller")
+ 	UCC_UIModel* GetModel() const { return Model; }
+-- 
+2.43.0
+
+
+From a68f12808ff34261e2070ad99a586c0dab5d89d6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 6 Oct 2026 17:45:00 +0800
+Subject: [PATCH 3/3] =?UTF-8?q?refactor(ui):=20RootLayout=20=E6=94=B9?=
+ =?UTF-8?q?=E4=B8=BA=E5=8F=AF=E9=85=8D=E7=BD=AE=E5=B1=82=E7=BA=A7=E8=A1=A8?=
+ =?UTF-8?q?=EF=BC=8C=E5=B9=B6=E5=8A=A0=E5=85=A5=20SafeZone?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+原先四层（Game/GameMenu/Menu/Modal）以四个成员变量写死，新增一层要
+同时改 GetLayer、GetTopScreen、HasMenu、UpdateInteraction、
+ResetWorldContent 等六处；代码构建的根树也没有安全区，主机/移动端
+HUD 可能被屏幕边缘裁切。
+
+- 新增 FCC_UILayerConfig { Tag, Kind } 与 ECC_UILayerKind { Game, Menu, Modal }，
+  根布局类默认值中的 Layers 数组即层级表（下标 0 最底层）
+- Layers 留空时使用内置四层，行为与原实现一致；默认值在 NativeOnInitialized
+  中填充，避免 CDO 构造早于原生标签注册
+- 所有按层逻辑改为遍历 RuntimeLayers：Menu/Modal 类型有页面时暂停单机世界，
+  并让其下方各层不可点击，规则与原先的逐层判断等价
+- 无效或重复标签会被忽略并输出 Warning
+- 新增 bApplySafeZone（默认开启）：各层与通知放在 SafeZone 内，
+  过渡输入遮罩挂在最外层 Overlay，仍覆盖整个视口
+- MenuTransition / ModalTransition / TransitionDuration 等已有默认值保持不变，
+  已派生的根布局蓝图无需改动
+- 更新 UIFramework / UIArchitecture 文档：原生层级标签、层级表、SafeZone，
+  以及上一提交中 ShowScreen 复用时的 Context 规则
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Kvm9iSk2JZASgoanPjjpXK
+---
+ Docs/UIArchitecture.zh-CN.md                  |   2 +-
+ Docs/UIFramework.zh-CN.md                     |  19 ++-
+ .../Private/UI/Framework/CC_RootLayout.cpp    | 119 ++++++++++++------
+ .../Public/UI/Framework/CC_RootLayout.h       |  63 ++++++++--
+ 4 files changed, 148 insertions(+), 55 deletions(-)
+
+diff --git a/Docs/UIArchitecture.zh-CN.md b/Docs/UIArchitecture.zh-CN.md
+index 65bf1b5..114a3da 100644
+--- a/Docs/UIArchitecture.zh-CN.md
++++ b/Docs/UIArchitecture.zh-CN.md
+@@ -6,7 +6,7 @@
+ 
+ | 层 | 项目类 | 职责 |
+ | --- | --- | --- |
+-| 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、四层栈、输入、焦点和动画 |
++| 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、可配置层级栈、输入、焦点和动画 |
+ | View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_PlayerHUDWidget | 布局、展示、动画；把操作转发给 Controller |
+ | Controller | CC_UIController 及功能子类 | 订阅业务系统、协调请求、导航、转换展示数据 |
+ | 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel | 保存 UI 快照，通过 OnChanged 通知界面 |
+diff --git a/Docs/UIFramework.zh-CN.md b/Docs/UIFramework.zh-CN.md
+index 0b0091f..727a344 100644
+--- a/Docs/UIFramework.zh-CN.md
++++ b/Docs/UIFramework.zh-CN.md
+@@ -14,7 +14,7 @@
+ | --- | --- |
+ | `UCC_UIManagerSubsystem` | GameInstance 级服务，创建 Policy 并转发本地玩家和世界生命周期 |
+ | `UCC_UIPolicy` | 按 LocalPlayer 持有根布局，选择布局类型并挂载玩家视口 |
+-| `UCC_RootLayout` | Game/GameMenu/Menu/Modal 四层官方栈、通知层、层级事件、暂停及输入保护 |
++| `UCC_RootLayout` | 按层级表构建官方栈（默认 Game/GameMenu/Menu/Modal 四层）、SafeZone、通知层、层级事件、暂停及输入保护 |
+ | `UCC_AsyncShowScreen` | 软引用异步打开页面，等待动画结束，支持取消与切图清理 |
+ | `UCC_UIStack` | 对官方 CommonActivatableWidgetStack 的薄封装，设置动画和对象池策略 |
+ | `UCC_ActivatableWidget` | 页面基类：输入模式、返回策略、默认焦点、上下文注入、统一关闭 |
+@@ -37,6 +37,19 @@ UI 不要求特定 PlayerController 子类；项目控制器直接继承 APlayer
+ 4. `UI.Layer.Modal`：确认框。显示时下层仍可见，但不能被鼠标点击；输入和焦点由 CommonUI 交给顶层页面。
+ 5. 通知容器：只显示普通 UserWidget，自身和子控件都不参与命中测试，不抢输入。
+ 
++C++ 中引用层级一律使用原生标签 `CCTags::UILayer::Game / GameMenu / Menu / Modal`（定义在 `CC_Tags`），不要再写 `RequestGameplayTag(TEXT("UI.Layer.xxx"))` 字符串。
++
++### 自定义层级
++
++根布局类默认值里的 `Layers` 数组就是层级表，下标 0 在最底层。留空时使用上面的内置四层。每一行有两个字段：
++
++- `Tag`：层标签，ShowScreen 按它找容器，不能重复。
++- `Kind`：`Game`（即时切换、不暂停、不挡下层）、`Menu`（MenuTransition，有页面时暂停单机世界并挡住下层点击）、`Modal`（ModalTransition，其余同 Menu）。
++
++新增一层只需在 `DefaultGameplayTags.ini` 注册标签，再在根布局蓝图的 `Layers` 中按顺序填完整的表（填了就不再使用内置四层），不需要改 C++。
++
++`Apply Safe Zone`（默认开启）用 SafeZone 包住全部层和通知，避免主机、移动端的 HUD 被屏幕边缘裁掉；过渡遮罩在安全区之外，仍覆盖整个视口。
++
+ `UI.Layer.GameMenu` 现在拥有独立栈，不再是 Menu 别名。不同层的下层页面不必失活；例如 HUD 可继续接收数据事件。
+ 
+ 根布局默认在单机打开 GameMenu/Menu/Modal 时暂停世界，在最后一个菜单退出并结束过渡后恢复。仅撤销本 UI 自己施加的暂停。实时背包项目可在根布局类默认值关闭 `Pause Game While Menu Open`。输入模式与世界暂停是两件事；关闭自动暂停后仍可通过页面的 Menu 输入配置阻止角色操作。
+@@ -47,7 +60,7 @@ UI 不要求特定 PlayerController 子类；项目控制器直接继承 APlayer
+ 2. 根布局只由 UIPolicy 配置，地图初始页面由独立装配入口打开，不再读取 Controller 的 HUD/初始菜单属性。
+ 3. 新建主菜单使用 `CC_MainMenuWidget`；背包、设置和确认框使用 `CC_ActivatableWidget`，复杂页面通过 ControllerClass 配置独立控制器。已经接入 CC 框架的页面无需重新改父类；旧框架页面应先核对绑定，再逐项迁移导航，不要批量删除业务节点。
+ 4. 自定义玩家 HUD 的父类改为 `CC_PlayerHUDWidget`，实现 `On Vitals Changed` 更新自己的血蓝条。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。
+-5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
++5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画、层级表或 SafeZone，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
+ 6. 通知使用普通 `UserWidget`，世界空间血条仍使用原来的 `CC_AttributeWidget` 和 `CC_WidgetComponent`。
+ 
+ 通用页面打开：
+@@ -62,7 +75,7 @@ Get Owning Player → Get Root Layout For Player
+ 
+ 页面关闭：调用页面自身的 `Close Screen`。需要从外部关闭时：`Get Root Layout For Player → Close Top Screen`。栈内页面不要使用 AddToViewport、RemoveFromParent 或自己修改 ZOrder/InputMode。
+ 
+-同层同类页面不重复创建，返回已有实例，也不自动把被覆盖页面移到最前面。过渡或同步栈修改期间的新打开请求返回空，关闭返回 false；不排队，需要调用方处理返回值。正常按钮在过渡期间被输入过滤和遮罩保护。
++同层同类页面不重复创建，返回已有实例，也不自动把被覆盖页面移到最前面（这种情况会输出 Warning）。复用时若传入非空且不同的 Context，会替换页面的 ScreenContext、再次触发 On Screen Opened；页面激活中则重启控制器会话（旧 ActivationToken 失效，OnActivated 重新读取快照，模型实例保留）。传空 Context 表示沿用原数据。过渡或同步栈修改期间的新打开请求返回空，关闭返回 false；不排队，需要调用方处理返回值。正常按钮在过渡期间被输入过滤和遮罩保护。
+ 
+ 异步打开使用 `Show Screen Async`：RootLayout 接 Get Root Layout For Player，ScreenClass 传软类引用，Context 是可选上下文，默认 SuspendInput=true。Completed 输出已入栈的 Screen（不保证入场动画已结束）；Failed 表示无效层、类或加载失败。保存 AsyncAction 输出可以调用 Cancel；取消不发成功/失败事件。根布局 Shutdown 会立即取消挂起请求。加载完成遇到过渡时会等待，多个请求按就绪顺序处理，不保证发起顺序。关闭仍统一使用 CloseScreen，由 CommonUI 管理退出动画。
+ 
+diff --git a/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp b/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
+index ad25f23..a1102f7 100644
+--- a/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
++++ b/Source/GAS_Demo/Private/UI/Framework/CC_RootLayout.cpp
+@@ -7,6 +7,7 @@
+ #include "Components/Border.h"
+ #include "Components/Overlay.h"
+ #include "Components/OverlaySlot.h"
++#include "Components/SafeZone.h"
+ #include "Engine/World.h"
+ #include "Engine/GameInstance.h"
+ #include "TimerManager.h"
+@@ -65,46 +66,74 @@ UWorld* UCC_RootLayout::GetWorld() const
+ 	return Instance ? Instance->GetWorld() : Super::GetWorld();
+ }
+ 
+-// 按视觉顺序构建页面容器、动画遮罩及不抢输入的提示层。
++// 按层级表的视觉顺序构建页面容器、动画遮罩及不抢输入的提示层。
+ void UCC_RootLayout::NativeOnInitialized()
+ {
++	// Outer 铺满整个视口（放过渡遮罩），Root 承载各层和提示；开启 SafeZone 时 Root 被安全区内缩。
++	UOverlay* Outer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Outer"));
++	WidgetTree->RootWidget = Outer;
++	Outer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+ 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
+-	WidgetTree->RootWidget = Root;
+-	GameStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("Game"));
+-	GameMenuStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("GameMenu"));
+-	MenuStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("Menu"));
+-	ModalStack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), TEXT("Modal"));
+-	GameStack->Configure(ECommonSwitcherTransition::FadeOnly, 0.f);
+-	GameMenuStack->Configure(MenuTransition, TransitionDuration);
+-	MenuStack->Configure(MenuTransition, TransitionDuration);
+-	ModalStack->Configure(ModalTransition, TransitionDuration);
+-	for (UCC_UIStack* Stack : {GameStack.Get(), GameMenuStack.Get(), MenuStack.Get(), ModalStack.Get()})
++	if (bApplySafeZone)
+ 	{
++		USafeZone* SafeZone = WidgetTree->ConstructWidget<USafeZone>(USafeZone::StaticClass(), TEXT("SafeZone"));
++		SafeZone->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
++		SafeZone->AddChild(Root);
++		Fill(Outer, SafeZone);
++	}
++	else
++	{
++		Fill(Outer, Root);
++	}
++
++	// 层级表留空时使用内置四层；放在这里而不是构造函数，避免 CDO 构造早于原生标签注册。
++	TArray<FCC_UILayerConfig> Configs = Layers;
++	if (Configs.IsEmpty())
++	{
++		Configs = {
++			{CCTags::UILayer::Game, ECC_UILayerKind::Game},
++			{CCTags::UILayer::GameMenu, ECC_UILayerKind::Menu},
++			{CCTags::UILayer::Menu, ECC_UILayerKind::Menu},
++			{CCTags::UILayer::Modal, ECC_UILayerKind::Modal}};
++	}
++	RuntimeLayers.Reset();
++	for (const FCC_UILayerConfig& Config : Configs)
++	{
++		if (!Config.Tag.IsValid() || GetLayer(Config.Tag))
++		{
++			UE_LOG(LogGAS_Demo, Warning, TEXT("RootLayout: 忽略无效或重复的层标签 %s"), *Config.Tag.ToString());
++			continue;
++		}
++		const FName StackName(*FString::Printf(TEXT("Layer_%s"), *Config.Tag.GetTagName().ToString().Replace(TEXT("."), TEXT("_"))));
++		UCC_UIStack* Stack = WidgetTree->ConstructWidget<UCC_UIStack>(UCC_UIStack::StaticClass(), StackName);
++		const ECommonSwitcherTransition Transition = Config.Kind == ECC_UILayerKind::Modal ? ModalTransition :
++			(Config.Kind == ECC_UILayerKind::Menu ? MenuTransition : ECommonSwitcherTransition::FadeOnly);
++		Stack->Configure(Transition, GetLayerDuration(Config.Kind));
+ 		Fill(Root, Stack);
+ 		Stack->OnTransitioningChanged.AddUObject(this, &ThisClass::HandleTransition);
++		Stack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, Config.Tag);
++		FCC_UIRuntimeLayer& Layer = RuntimeLayers.AddDefaulted_GetRef();
++		Layer.Tag = Config.Tag;
++		Layer.Kind = Config.Kind;
++		Layer.Stack = Stack;
+ 	}
+-	GameStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Game);
+-	GameMenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::GameMenu);
+-	MenuStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Menu);
+-	ModalStack->OnDisplayedWidgetChanged().AddUObject(this, &ThisClass::HandleDisplayed, CCTags::UILayer::Modal);
+ 	UBorder* Shield = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TransitionInputShield"));
+ 	Shield->SetBrushColor(FLinearColor::Transparent);
+ 	Shield->SetVisibility(ESlateVisibility::Collapsed);
+-	Fill(Root, Shield);
+-	InputShield = Shield;
+ 	NotificationLayer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Notifications"));
+ 	NotificationLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
+ 	Fill(Root, NotificationLayer);
++	// 遮罩放在 Outer 最上层，过渡期间连安全区外的边缘也拦截点击。
++	Fill(Outer, Shield);
++	InputShield = Shield;
+ 	Super::NativeOnInitialized();
+ }
+ 
+-// GameMenu 和 Menu 是不同的物理栈；打开设置不会替换背包所在栈。
++// 每个标签对应一个独立的物理栈；例如打开设置不会替换背包所在栈。
+ UCommonActivatableWidgetContainerBase* UCC_RootLayout::GetLayer(FGameplayTag Layer) const
+ {
+-	if (Layer == CCTags::UILayer::Game) return GameStack;
+-	if (Layer == CCTags::UILayer::GameMenu) return GameMenuStack;
+-	if (Layer == CCTags::UILayer::Menu) return MenuStack;
+-	if (Layer == CCTags::UILayer::Modal) return ModalStack;
++	for (const FCC_UIRuntimeLayer& Entry : RuntimeLayers)
++		if (Entry.Tag == Layer) return Entry.Stack;
+ 	return nullptr;
+ }
+ 
+@@ -151,18 +180,20 @@ bool UCC_RootLayout::CloseScreen(UCC_ActivatableWidget* Screen)
+ 
+ // 对当前最高页面应用统一关闭规则。
+ bool UCC_RootLayout::CloseTopScreen() { return CloseScreen(Cast<UCC_ActivatableWidget>(GetTopScreen())); }
+-// 按 Modal、Menu、GameMenu、Game 的视觉顺序寻找当前显示页面。
++// 从最高层往下寻找当前显示页面。
+ UCommonActivatableWidget* UCC_RootLayout::GetTopScreen() const
+ {
+-	if (ModalStack && ModalStack->GetActiveWidget()) return ModalStack->GetActiveWidget();
+-	if (MenuStack && MenuStack->GetActiveWidget()) return MenuStack->GetActiveWidget();
+-	if (GameMenuStack && GameMenuStack->GetActiveWidget()) return GameMenuStack->GetActiveWidget();
+-	return GameStack ? GameStack->GetActiveWidget() : nullptr;
++	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
++		if (UCC_UIStack* Stack = RuntimeLayers[Index].Stack)
++			if (UCommonActivatableWidget* Active = Stack->GetActiveWidget()) return Active;
++	return nullptr;
+ }
+-// 按栈内容判断是否有菜单，入场和退场中的实例也计算在内。
++// 按栈内容判断是否有菜单/弹窗，入场和退场中的实例也计算在内。
+ bool UCC_RootLayout::HasMenu() const
+ {
+-	return (GameMenuStack && GameMenuStack->GetNumWidgets() > 0) || (MenuStack && MenuStack->GetNumWidgets() > 0) || (ModalStack && ModalStack->GetNumWidgets() > 0);
++	for (const FCC_UIRuntimeLayer& Entry : RuntimeLayers)
++		if (Entry.IsMenuLike() && Entry.Stack && Entry.Stack->GetNumWidgets() > 0) return true;
++	return false;
+ }
+ 
+ // 动画开始登记输入令牌，结束解除相同令牌并刷新焦点。
+@@ -197,23 +228,27 @@ void UCC_RootLayout::HandleDisplayed(UCommonActivatableWidget* Screen, FGameplay
+ // 阻止下层被点击，并同步动画遮罩与单机暂停状态。
+ void UCC_RootLayout::UpdateInteraction()
+ {
+-	if (!GameStack || !GameMenuStack || !MenuStack || !ModalStack) return;
+-	// 鼠标命中与输入路由分开处理：保留下层画面，但禁止它被点击。
+-	const bool bModal = ModalStack->GetNumWidgets() > 0;
+-	const bool bMenu = MenuStack->GetNumWidgets() > 0;
+-	const bool bGameMenu = GameMenuStack->GetNumWidgets() > 0;
++	if (RuntimeLayers.IsEmpty()) return;
++	const bool bAnyMenu = HasMenu();
+ 	if (bPauseGameWhileMenuOpen && GetWorld() && GetWorld()->GetNetMode() == NM_Standalone)
+ 	{
+-		if ((bGameMenu || bMenu || bModal) && !UGameplayStatics::IsGamePaused(this)) bPausedWorld = UGameplayStatics::SetGamePaused(this, true);
+-		else if (!bGameMenu && !bMenu && !bModal && !IsTransitioning() && bPausedWorld)
++		if (bAnyMenu && !UGameplayStatics::IsGamePaused(this)) bPausedWorld = UGameplayStatics::SetGamePaused(this, true);
++		else if (!bAnyMenu && !IsTransitioning() && bPausedWorld)
+ 		{
+ 			UGameplayStatics::SetGamePaused(this, false);
+ 			bPausedWorld = false;
+ 		}
+ 	}
+-	if (GameStack->GetActiveWidget()) GameStack->SetVisibility(bModal || bMenu || bGameMenu ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
+-	if (GameMenuStack->GetActiveWidget()) GameMenuStack->SetVisibility(bModal || bMenu ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
+-	if (MenuStack->GetActiveWidget()) MenuStack->SetVisibility(bModal ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
++	// 鼠标命中与输入路由分开处理：保留下层画面，但只要上方有菜单/弹窗层持有页面，就禁止下层被点击。
++	bool bBlockedByAbove = false;
++	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
++	{
++		const FCC_UIRuntimeLayer& Entry = RuntimeLayers[Index];
++		if (!Entry.Stack) continue;
++		if (Entry.Stack->GetActiveWidget())
++			Entry.Stack->SetVisibility(bBlockedByAbove ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
++		if (Entry.IsMenuLike() && Entry.Stack->GetNumWidgets() > 0) bBlockedByAbove = true;
++	}
+ 	if (InputShield) InputShield->SetVisibility(IsInputBlocked() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+ }
+ 
+@@ -286,8 +321,10 @@ void UCC_RootLayout::ResetWorldContent()
+ 	if (GetWorld()) for (auto& Pair : NotificationTimers) GetWorld()->GetTimerManager().ClearTimer(Pair.Value);
+ 	NotificationTimers.Reset();
+ 	if (NotificationLayer) NotificationLayer->ClearChildren();
+-	for (UCC_UIStack* Stack : {ModalStack.Get(), MenuStack.Get(), GameMenuStack.Get(), GameStack.Get()})
++	// 从最高层往下清空，与正常关闭顺序一致。
++	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
+ 	{
++		UCC_UIStack* Stack = RuntimeLayers[Index].Stack;
+ 		if (!Stack) continue;
+ 		Stack->SetTransitionDuration(0.f);
+ 		// 拷贝列表，避免失活回调修改容器时使遍历失效。
+@@ -295,7 +332,7 @@ void UCC_RootLayout::ResetWorldContent()
+ 		for (UCommonActivatableWidget* Screen : Screens)
+ 			if (IsValid(Screen) && Screen->IsActivated()) Screen->DeactivateWidget();
+ 		Stack->ClearWidgets();
+-		Stack->SetTransitionDuration(Stack == GameStack ? 0.f : TransitionDuration);
++		Stack->SetTransitionDuration(GetLayerDuration(RuntimeLayers[Index].Kind));
+ 	}
+ 	DeactivateWidget();
+ }
+diff --git a/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h b/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h
+index 0805ba1..dade0ea 100644
+--- a/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h
++++ b/Source/GAS_Demo/Public/UI/Framework/CC_RootLayout.h
+@@ -20,6 +20,42 @@ public:
+ 	void Configure(ECommonSwitcherTransition Type, float Duration);
+ };
+ 
++/** 层的行为类型：决定过渡动画、是否暂停世界、是否阻挡下层点击。 */
++UENUM(BlueprintType)
++enum class ECC_UILayerKind : uint8
++{
++	Game,  // HUD：即时切换，不暂停，不阻挡下层。
++	Menu,  // 菜单：使用 MenuTransition，有页面时暂停单机世界并阻挡下层点击。
++	Modal  // 弹窗：使用 ModalTransition，其余同 Menu。
++};
++
++/** 根布局的一层配置；数组顺序即视觉顺序（下标 0 在最底层）。 */
++USTRUCT(BlueprintType)
++struct FCC_UILayerConfig
++{
++	GENERATED_BODY()
++	FCC_UILayerConfig() = default;
++	FCC_UILayerConfig(FGameplayTag InTag, ECC_UILayerKind InKind) : Tag(InTag), Kind(InKind) {}
++	/** 层标签，ShowScreen 按它查找容器；同一标签只能出现一次。 */
++	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(Categories="UI.Layer"))
++	FGameplayTag Tag;
++	/** 该层的行为类型。 */
++	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
++	ECC_UILayerKind Kind = ECC_UILayerKind::Menu;
++};
++
++/** 运行时的一层：标签、类型与对应的官方栈。 */
++USTRUCT()
++struct FCC_UIRuntimeLayer
++{
++	GENERATED_BODY()
++	FGameplayTag Tag;
++	ECC_UILayerKind Kind = ECC_UILayerKind::Menu;
++	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> Stack;
++	/** 菜单与弹窗层有页面时暂停世界并阻挡下层点击。 */
++	bool IsMenuLike() const { return Kind != ECC_UILayerKind::Game; }
++};
++
+ /** 某层的当前显示页面变化时广播；Screen 为空表示该层没有页面。 */
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCC_UILayerChanged, FGameplayTag, Layer, UCommonActivatableWidget*, Screen);
+ 
+@@ -43,7 +79,7 @@ public:
+ 	/** 关闭最上层且允许关闭的页面；退场动画和下页恢复由官方栈完成。 */
+ 	UFUNCTION(BlueprintCallable, Category="UI")
+ 	bool CloseScreen(UCC_ActivatableWidget* Screen);
+-	/** 按 Modal → Menu → GameMenu → Game 顺序请求关闭栈顶。 */
++	/** 从最高层往下找到当前显示页面并请求关闭。 */
+ 	UFUNCTION(BlueprintCallable, Category="UI")
+ 	bool CloseTopScreen();
+ 	/** 返回层级最高的当前显示页面；过渡期间可能仍是退出中的旧页面。 */
+@@ -86,7 +122,7 @@ public:
+ 	void DismissNotification(UUserWidget* Widget);
+ 	/** 玩家退出或 GameInstance 结束时永久清理；切图应使用 ResetWorldContent。 */
+ 	void Shutdown();
+-	/** 精确按 Layer 标签查找四个独立栈，无效标签返回空。 */
++	/** 精确按 Layer 标签查找对应的栈，未配置的标签返回空。 */
+ 	UCommonActivatableWidgetContainerBase* GetLayer(FGameplayTag Layer) const;
+ 	/** 外部订阅此事件响应页面变化，不需要每帧轮询。 */
+ 	UPROPERTY(BlueprintAssignable, Category="UI")
+@@ -106,6 +142,16 @@ protected:
+ 	/** 弹窗层默认淡入淡出。 */
+ 	UPROPERTY(EditDefaultsOnly, Category="UI|Transition")
+ 	ECommonSwitcherTransition ModalTransition = ECommonSwitcherTransition::FadeOnly;
++	/**
++	 * 层级表，下标 0 在最底层。留空时使用内置四层：
++	 * UI.Layer.Game(Game) → UI.Layer.GameMenu(Menu) → UI.Layer.Menu(Menu) → UI.Layer.Modal(Modal)。
++	 * 新增一层只需在根布局蓝图默认值里加一行，并在 DefaultGameplayTags.ini 注册对应标签。
++	 */
++	UPROPERTY(EditDefaultsOnly, Category="UI|Layers", meta=(TitleProperty="Tag"))
++	TArray<FCC_UILayerConfig> Layers;
++	/** 用 SafeZone 包住全部层，避免主机/移动端的 HUD 和菜单被屏幕边缘裁切；PC 上通常无影响。 */
++	UPROPERTY(EditDefaultsOnly, Category="UI|Layers")
++	bool bApplySafeZone = true;
+ 	/** 单机打开菜单/弹窗时是否暂停世界；需要实时背包时可关闭。 */
+ 	UPROPERTY(EditDefaultsOnly, Category="UI|Input")
+ 	bool bPauseGameWhileMenuOpen = true;
+@@ -120,14 +166,11 @@ private:
+ 	/** 解除仅由本布局持有的全部输入过滤。 */
+ 	void ReleaseInputTokens();
+ 
+-	/** 最底层：玩家 HUD。 */
+-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> GameStack;
+-	/** 玩法内背包/记分板，与主菜单和设置独立。 */
+-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> GameMenuStack;
+-	/** 中间层：主菜单、暂停、背包、设置，同层仅显示栈顶。 */
+-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> MenuStack;
+-	/** 高层：确认弹窗，阻止点击下层菜单。 */
+-	UPROPERTY(Transient) TObjectPtr<UCC_UIStack> ModalStack;
++	/** 该类型层的过渡时长：Game 层即时切换，其余使用 TransitionDuration。 */
++	float GetLayerDuration(ECC_UILayerKind Kind) const { return Kind == ECC_UILayerKind::Game ? 0.f : TransitionDuration; }
++
++	/** 按视觉顺序（下标 0 最底层）排列的运行时层。 */
++	UPROPERTY(Transient) TArray<FCC_UIRuntimeLayer> RuntimeLayers;
+ 	/** 最上视觉层：提示，其自身和子控件均不参与命中测试。 */
+ 	UPROPERTY(Transient) TObjectPtr<UOverlay> NotificationLayer;
+ 	/** 动画期间拦截鼠标点击的透明全屏遮罩。 */
+-- 
+2.43.0
+
