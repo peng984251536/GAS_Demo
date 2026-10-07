@@ -1,4 +1,4 @@
-// 飘字管理流程：ReportHit 提交或合并命中 → Tick 老化数据 → HUD 的 OnPaint 读取活动列表。
+// 飘字管理流程：ReportHit 提交或合并命中 → Tick 老化数据 → 广播 OnEntriesUpdated → 飘字控制器写入展示模型。
 #include "UI/DamageText/CC_DamageTextSubsystem.h"
 #include "GameFramework/PlayerController.h"
 
@@ -52,6 +52,7 @@ void UCC_DamageTextSubsystem::ReportHit(const FVector& WorldLocation, float Amou
 
 	if (TryMerge(WorldLocation, Amount, Style))
 	{
+		OnEntriesUpdated.Broadcast();
 		return;
 	}
 
@@ -65,6 +66,7 @@ void UCC_DamageTextSubsystem::ReportHit(const FVector& WorldLocation, float Amou
 
 	// 新飘字插到最前，绘制顺序上压住旧飘字，视觉上更符合"最新命中在上面"。
 	ActiveEntries.Insert(Entry, 0);
+	OnEntriesUpdated.Broadcast();
 }
 
 // 按锚点距离和距最后一次命中的时间匹配；不保存目标身份，也没有区分伤害与治疗的独立合并组。
@@ -159,14 +161,16 @@ FVector2D UCC_DamageTextSubsystem::NextStackOffset() const
 	return FVector2D(Direction * Ring * 18.0f, -Ring * 6.0f);
 }
 
-// 只更新存活时间与合并脉冲，不投影、不排版，也不修改 GAS 属性。
+// 只更新存活时间与合并脉冲并通知界面，不投影、不排版，也不修改 GAS 属性。
 void UCC_DamageTextSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	AgeEntries(DeltaTime);
+	// 最后一个飘字超时的那一帧仍会广播一次空列表；之后子系统停止 Tick。
+	OnEntriesUpdated.Broadcast();
 }
 
-// 绘制层按玩家计数；同一玩家超过一个即为重复挂载。
+// 飘字控制器按玩家计数；同一玩家超过一个即为重复挂载。
 int32 UCC_DamageTextSubsystem::AddDrawLayer(const APlayerController* Player)
 {
 	return ++DrawLayerCounts.FindOrAdd(Player);

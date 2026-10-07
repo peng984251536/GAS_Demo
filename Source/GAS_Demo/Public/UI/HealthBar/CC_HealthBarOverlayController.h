@@ -1,7 +1,7 @@
 // 头顶血条的 Controller / Model：血条子系统 → 控制器 → 展示模型 → CC_BatchedHealthBarWidget。
 #pragma once
 
-#include "UI/Framework/CC_UIController.h"
+#include "UI/WorldOverlay/CC_WorldOverlayController.h"
 #include "UI/Framework/CC_UIModel.h"
 #include "CC_HealthBarOverlayController.generated.h"
 
@@ -24,7 +24,7 @@ struct FCC_HealthBarDisplayItem
 
 /**
  * 头顶血条展示模型：保存本帧要画的血条快照，不持有角色、ASC 或控件。
- * 数据逐帧刷新，视图在 NativePaint 中直接读取；为避免每帧触发蓝图事件，这里不广播 OnChanged。
+ * 数据逐帧刷新，视图在 NativePaint 中直接读取，不广播 OnChanged（见 CC_WorldOverlayController）。
  */
 UCLASS()
 class GAS_DEMO_API UCC_HealthBarOverlayModel : public UCC_UIModel
@@ -46,7 +46,7 @@ private:
  * 注册、GAS 订阅与血量插值仍由子系统负责（敌人和蓝图通过它注册）；视图不再直接访问子系统。
  */
 UCLASS()
-class GAS_DEMO_API UCC_HealthBarOverlayController : public UCC_UIController
+class GAS_DEMO_API UCC_HealthBarOverlayController : public UCC_WorldOverlayController
 {
 	GENERATED_BODY()
 public:

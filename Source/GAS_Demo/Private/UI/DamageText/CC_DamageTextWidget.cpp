@@ -1,11 +1,8 @@
-// 只管理 Slate 层的创建、属性读取和释放；不持有伤害条目，也不负责伤害结算。
+// 只管理控制器会话与 Slate 层的创建、属性读取和释放；不持有伤害条目，也不访问子系统。
 #include "UI/DamageText/CC_DamageTextWidget.h"
 
 #include "UI/DamageText/SCC_DamageTextLayer.h"
-#include "GameFramework/PlayerController.h"
-#include "UI/DamageText/CC_DamageTextSubsystem.h"
-#include "Engine/World.h"
-#include "GAS_Demo.h"
+#include "UI/DamageText/CC_DamageTextController.h"
 
 // 设置不参与命中测试，保证飘字画布不会拦截 HUD 上的鼠标输入。
 UCC_DamageTextWidget::UCC_DamageTextWidget(const FObjectInitializer& ObjectInitializer)
@@ -14,25 +11,32 @@ UCC_DamageTextWidget::UCC_DamageTextWidget(const FObjectInitializer& ObjectIniti
 	// 飘字绝不能参与命中测试，否则会挡住 HUD 上的所有点击。
 	// 在构造里设一次，蓝图里也不必再改。
 	SetVisibility(ESlateVisibility::HitTestInvisible);
+	ControllerClass = UCC_DamageTextController::StaticClass();
 }
 
-// 释放包装层保存的 Slate 引用，供控件结束或重建时使用。
+// 释放 Slate 引用并结束控制器会话，供控件结束、切图或重建时使用。
 void UCC_DamageTextWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
 
-	if (APlayerController* Player = RegisteredPlayer.Get())
-		if (UCC_DamageTextSubsystem* Subsystem = Player->GetWorld() ? Player->GetWorld()->GetSubsystem<UCC_DamageTextSubsystem>() : nullptr)
-			Subsystem->RemoveDrawLayer(Player);
-	RegisteredPlayer.Reset();
+	if (OverlayController) OverlayController->Release();
+	OverlayController = nullptr;
 
 	// 必须置空，否则 Slate 重建（例如关卡切换、DPI 变化）后会持有已销毁的控件。
 	DamageTextLayer.Reset();
 }
 
-// 创建一个共享绘制层，绑定字号和上升高度，并提供 Owning Player 用于投影。
+// 先开始控制器会话，再创建共享绘制层：绑定字号和上升高度，传入模型与用于投影的 Owning Player。
 TSharedRef<SWidget> UCC_DamageTextWidget::RebuildWidget()
 {
+	// 设计器预览没有本地玩家，不创建控制器；绘制层拿到空模型时什么也不画。
+	if (!IsDesignTime() && !OverlayController)
+	{
+		OverlayController = UCC_UIController::CreateForView(this, ControllerClass);
+		if (OverlayController) OverlayController->Activate();
+	}
+	UCC_DamageTextModel* Model = OverlayController ? Cast<UCC_DamageTextModel>(OverlayController->GetModel()) : nullptr;
+
 	// 用 TAttribute 惰性绑定，编辑器里改字号/高度会立即生效，
 	// 不需要在 SynchronizeProperties 里重建 Slate 控件。
 	DamageTextLayer = SNew(SCC_DamageTextLayer)
@@ -42,20 +46,8 @@ TSharedRef<SWidget> UCC_DamageTextWidget::RebuildWidget()
 			TAttribute<float>::FGetter::CreateUObject(this, &UCC_DamageTextWidget::GetCriticalFontSizeValue)))
 		.RiseHeight(TAttribute<float>::Create(
 			TAttribute<float>::FGetter::CreateUObject(this, &UCC_DamageTextWidget::GetRiseHeightValue)))
-		.PlayerController(GetOwningPlayer());
-
-	// 只在游戏世界登记，设计器预览没有本地玩家。
-	APlayerController* Player = GetOwningPlayer();
-	if (Player && !RegisteredPlayer.IsValid())
-		if (UCC_DamageTextSubsystem* Subsystem = Player->GetWorld() ? Player->GetWorld()->GetSubsystem<UCC_DamageTextSubsystem>() : nullptr)
-		{
-			RegisteredPlayer = Player;
-			if (Subsystem->AddDrawLayer(Player) > 1)
-			{
-				UE_LOG(LogGAS_Demo, Warning, TEXT("同一本地玩家存在多个伤害飘字绘制层（%s），飘字会被重复绘制。")
-					TEXT("根布局已自动创建飘字层，请删除 HUD 蓝图里旧的 Damage Text Widget。"), *GetPathName());
-			}
-		}
+		.PlayerController(GetOwningPlayer())
+		.Model(Model);
 
 	return DamageTextLayer.ToSharedRef();
 }

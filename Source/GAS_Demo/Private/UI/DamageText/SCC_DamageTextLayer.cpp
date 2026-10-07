@@ -1,14 +1,11 @@
-// 绘制流程：读取世界子系统 → 共用视图投影 → 计算淡入淡出与上升 → 提交文字及描边绘制元素。
+// 绘制流程：读取飘字展示模型 → 共用视图投影 → 计算淡入淡出与上升 → 提交文字及描边绘制元素。
 #include "UI/DamageText/SCC_DamageTextLayer.h"
 
-#include "UI/DamageText/CC_DamageTextSubsystem.h"
-#include "Engine/LocalPlayer.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
-#include "Engine/World.h"
+#include "UI/DamageText/CC_DamageTextController.h"
+#include "UI/WorldOverlay/CC_WorldOverlayProjection.h"
 #include "GameFramework/PlayerController.h"
 #include "Rendering/DrawElements.h"
 #include "Rendering/SlateRenderer.h"
-#include "SceneView.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Styling/CoreStyle.h"
@@ -20,6 +17,7 @@ void SCC_DamageTextLayer::Construct(const FArguments& InArgs)
 	CriticalFontSize = InArgs._CritFontSize;
 	Rise = InArgs._RiseHeight;
 	CachedController = InArgs._PlayerController;
+	CachedModel = InArgs._Model;
 
 	// 叶子绘制层不参与命中测试，否则会挡住 HUD 上的按钮点击。
 	SetCanTick(false);
@@ -84,70 +82,26 @@ int32 SCC_DamageTextLayer::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 	const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
 	int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
 {
-	APlayerController* PC = CachedController.Get();
-	if (!PC)
-	{
-		return LayerId;
-	}
-
-	const UWorld* World = PC->GetWorld();
-	if (!World)
-	{
-		return LayerId;
-	}
-
-	const UCC_DamageTextSubsystem* Subsystem = World->GetSubsystem<UCC_DamageTextSubsystem>();
-	if (!Subsystem)
-	{
-		return LayerId;
-	}
-
-	const TArray<FCC_DamageTextEntry>& Entries = Subsystem->GetActiveEntries();
-	if (Entries.Num() == 0)
+	const UCC_DamageTextModel* Model = CachedModel.Get();
+	if (!Model || Model->GetEntries().Num() == 0)
 	{
 		// 空闲帧立即返回，不做任何投影和字体查询。
 		return LayerId;
 	}
+	const TArray<FCC_DamageTextEntry>& Entries = Model->GetEntries();
 
-	// -------------------------------------------------------------------
-	// 每帧只构建一次投影数据，整批飘字复用。
-	// 这是"批量绘制"相对"每个飘字一个控件、各自投影"的核心收益。
-	// -------------------------------------------------------------------
-	ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
-	if (!LocalPlayer || !LocalPlayer->ViewportClient || !LocalPlayer->ViewportClient->Viewport)
+	// 每帧只构建一次投影数据，整批飘字复用；换算细节见 FCC_WorldOverlayProjector。
+	FCC_WorldOverlayProjector Projector;
+	if (!Projector.Initialize(CachedController.Get(), AllottedGeometry))
 	{
 		return LayerId;
 	}
-
-	FSceneViewProjectionData ProjectionData;
-	// 注意参数顺序：出参 ProjectionData 在第二位，第三位是 StereoViewIndex。
-	// 省略第三个参数即使用默认的 INDEX_NONE（非立体渲染）。
-	if (!LocalPlayer->GetProjectionData(
-		LocalPlayer->ViewportClient->Viewport, ProjectionData))
-	{
-		return LayerId;
-	}
-
-	// ComputeViewProjectionMatrix() 内部已经乘了 FTranslationMatrix(-ViewOrigin)，
-	// 所以投影时直接用世界坐标，不要再自己减一次视点——否则整体会偏移一个摄像机位置。
-	const FMatrix ViewProjection = ProjectionData.ComputeViewProjectionMatrix();
-	const FIntRect ViewRect = ProjectionData.GetConstrainedViewRect();
-	// PlayerRect 为该玩家的视口范围（分屏时只是其中一块）；投影结果是视口像素，不是 Slate 绝对坐标。
-	const FIntRect PlayerRect = ProjectionData.GetViewRect();
-	if (ViewRect.Width() <= 0 || ViewRect.Height() <= 0 || PlayerRect.Width() <= 0 || PlayerRect.Height() <= 0)
-	{
-		return LayerId;
-	}
-	// 与头顶血条相同的换算：视口像素 → 本地玩家 HUD 布局坐标 → Slate 绝对坐标 → 本控件局部坐标。
-	// 这样窗口化/PIE 的窗口偏移、DPI 缩放、分屏和黑边都能正确处理。
-	const FGeometry PlayerGeometry = UWidgetLayoutLibrary::GetPlayerScreenWidgetGeometry(PC);
-	const FVector2D PixelToLocal = PlayerGeometry.GetLocalSize() / FVector2D(PlayerRect.Width(), PlayerRect.Height());
 
 	// 字体度量服务：只取一次，整批复用。
 	const TSharedRef<FSlateFontMeasure> FontMeasure =
 		FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 
-	const float Lifetime = FMath::Max(Subsystem->Lifetime, KINDA_SMALL_NUMBER);
+	const float Lifetime = FMath::Max(Model->GetLifetime(), KINDA_SMALL_NUMBER);
 
 	// 描边偏移。单色文字在明暗变化的场景上会糊掉，四向描边是低成本的解决办法。
 	static const FVector2D OutlineOffsets[4] = {
@@ -157,14 +111,11 @@ int32 SCC_DamageTextLayer::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 
 	for (const FCC_DamageTextEntry& Entry : Entries)
 	{
-		// --- 世界坐标 -> 屏幕坐标 ---
-		// 用引擎自带的 ProjectWorldToScreen：它内部处理了透视除法、
-		// 视图矩形映射，并在目标位于摄像机背后时返回 false。
-		FVector2D ScreenPos;
-		if (!FSceneView::ProjectWorldToScreen(
-			Entry.WorldLocation, ViewRect, ViewProjection, ScreenPos))
+		// --- 世界坐标 -> HUD 布局坐标 ---
+		// 飘字允许部分超出画面，只跳过位于摄像机背后的条目。
+		FVector2D AnchorLocal;
+		if (!Projector.ProjectToPlayerLocal(Entry.WorldLocation, AnchorLocal, false))
 		{
-			// 在摄像机背后，跳过绘制。
 			continue;
 		}
 
@@ -193,13 +144,11 @@ int32 SCC_DamageTextLayer::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 
 		const FVector2D TextSize = FontMeasure->Measure(Label, FontInfo);
 
-		// 视口像素先转换到本地玩家 HUD 布局坐标；错位偏移与上升高度都以 HUD 布局单位计算，
-		// 不随分辨率/DPI 变化。原实现把视口像素直接当作 Slate 绝对坐标，窗口化时会整体偏移。
+		// 错位偏移与上升高度都在 HUD 布局坐标里叠加，不随分辨率/DPI 变化。
 		const FVector2D PlayerLocal =
-			(ScreenPos - FVector2D(PlayerRect.Min.X, PlayerRect.Min.Y)) * PixelToLocal
-			- FVector2D(Entry.StackOffset.X, Entry.StackOffset.Y + RiseOffset);
+			AnchorLocal - FVector2D(Entry.StackOffset.X, Entry.StackOffset.Y + RiseOffset);
 
-		const FVector2D LocalPos = AllottedGeometry.AbsoluteToLocal(PlayerGeometry.LocalToAbsolute(PlayerLocal));
+		const FVector2D LocalPos = Projector.PlayerLocalToWidget(PlayerLocal);
 		const FVector2D DrawPos = LocalPos - TextSize * 0.5f;
 
 		// 治疗不加描边：本身颜色偏浅，描边反而显脏。

@@ -7,9 +7,9 @@
 | 层 | 项目类 | 职责 |
 | --- | --- | --- |
 | 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、可配置层级栈、输入、焦点和动画 |
-| View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_PlayerHUDWidget | 布局、展示、动画；把操作转发给 Controller |
-| Controller | CC_UIController 及功能子类 | 订阅业务系统、协调请求、导航、转换展示数据 |
-| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel | 保存 UI 快照，通过 OnChanged 通知界面 |
+| View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_PlayerHUDWidget；世界覆盖层的 CC_BatchedHealthBarWidget、CC_DamageTextWidget | 布局、展示、动画；把操作转发给 Controller |
+| Controller | CC_UIController 及功能子类；世界覆盖层基类 CC_WorldOverlayController（CC_HealthBarOverlayController、CC_DamageTextController） | 订阅业务系统、协调请求、导航、转换展示数据 |
+| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel、CC_HealthBarOverlayModel、CC_DamageTextModel | 保存 UI 快照；页面模型通过 OnChanged 通知界面，世界覆盖层模型由视图逐帧读取 |
 | 真实业务 | GAS、CC_OnlineRoomSubsystem 等 | 验证规则、保存真实数据、完成跨地图事务 |
 
 页面强引用 Controller，Controller 强引用 Model；Controller 只弱引用页面和业务系统。Model 不引用 Widget 或 Controller。主菜单和 HUD 模型的写入口只向各自 C++ Controller 开放；View 使用 Getter 获取快照。
@@ -57,7 +57,22 @@
 
 HUD 现在为 `GAS → CC_PlayerHUDController → CC_PlayerHUDModel → CC_PlayerHUDWidget`。Controller 管 Pawn 变化、ASC 就绪和四项属性委托，Model 管血蓝快照，Widget 只画进度和文字。原来的蓝图 OnVitalsChanged 继续保留。新增 HUD Controller 默认已由原生 Widget 指定，不需要手工实例化。
 
-暂停与退出确认的按钮也改为调用各自 Controller。普通按钮、通知和世界空间血条不强制增加控制器。未来背包可仿照 HUD 新建 InventoryController + InventoryModel，不在 RootLayout 中增加背包规则。
+暂停与退出确认的按钮也改为调用各自 Controller。普通按钮和通知不强制增加控制器。未来背包可仿照 HUD 新建 InventoryController + InventoryModel，不在 RootLayout 中增加背包规则。
+
+## 世界覆盖层（头顶血条、伤害飘字）
+
+两者都在 RootLayout 的世界覆盖层里，不是入栈页面，但同样走 View / Controller / Model：
+
+- 头顶血条：`CC_BatchedHealthBarSubsystem → CC_HealthBarOverlayController → CC_HealthBarOverlayModel → CC_BatchedHealthBarWidget`
+- 伤害飘字：`CC_DamageTextSubsystem → CC_DamageTextController → CC_DamageTextModel → CC_DamageTextWidget / SCC_DamageTextLayer`
+
+与页面的区别：
+
+1. 视图不是 `CC_ActivatableWidget`，用 `CC_UIController::CreateForView` 自己创建控制器：Slate 构建时 Activate，释放（含切图）时 Release。`CanHandleActions` / `RequestClose` 对这类控制器始终返回 false。
+2. 数据逐帧变化：子系统每次 Tick 或增删后广播 `OnEntriesUpdated`，控制器把条目转换为快照写入模型；视图在 Paint 时直接读取模型，模型不广播 OnChanged，避免每帧触发蓝图事件。
+3. 子系统仍是对外入口和数据源：敌人和蓝图通过 `Register Health Bar` 注册血条，GameplayCue 通过 `ReportHit` 提交飘字。显示规则（显隐、死亡/满血隐藏）在控制器里，投影和绘制在视图里，视图不再访问子系统。
+4. 两个功能各用一个控制器，不合并：数据来源（本地玩家 / 世界）和更新节奏不同。共用的部分是基类 `CC_WorldOverlayController`（重复挂载诊断）和投影工具 `FCC_WorldOverlayProjector`（世界坐标到控件坐标的换算）。
+5. 与 `CC_PlayerHUDWidget` 互相独立：HUD 是 Game 层的入栈页面，覆盖层由根布局直接托管，换 HUD 不影响血条和飘字。
 
 新增复杂页面时：定义展示模型 → 定义功能 Controller → 在页面设置 ControllerClass → View 转发操作并实现 OnUIModelChanged。功能控制器的 C++ OnActivated/OnDeactivated 覆盖应调用 Super，保证蓝图扩展事件执行。
 

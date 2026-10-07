@@ -32,6 +32,12 @@
 
 配置项：World Offset（世界厘米）、Size（HUD 单位）、Color、Max Distance（厘米，0=无限）、Hide When Full、Hide When Dead。绘制层可调背景、边框颜色、边框宽度和 Screen Offset。血量插值在 C++ 中进行，首次显示直接取初值。
 
+## 数据流
+
+`血条子系统（注册、GAS 订阅、插值）→ OnEntriesUpdated → CC_HealthBarOverlayController（显隐、死亡/满血规则）→ CC_HealthBarOverlayModel → CC_BatchedHealthBarWidget（距离剔除、投影、绘制）`
+
+绘制层只读模型，不访问子系统；控制器由绘制层在构建时创建、释放时销毁。想改显示规则，可派生 `CC_HealthBarOverlayController`，再在血条层蓝图默认值里设置 `Controller Class`。投影换算与伤害飘字共用 `FCC_WorldOverlayProjector`。
+
 ## 生命周期和性能
 
 每个本地玩家一份管理器和一个绘制层，每个角色只是一条结构体数据；不创建逐角色 Widget、WidgetComponent 或渲染目标。弱引用不延长角色生命周期；销毁、换世界及管理器关闭时清理数据/委托。没有注册条目时管理器停止 Tick。

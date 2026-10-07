@@ -1,4 +1,4 @@
-// 世界级数据管理器：维护活动飘字列表，处理近距离命中合并与超时淘汰；绘制由 HUD 层完成。
+// 世界级数据管理器：维护活动飘字列表，处理近距离命中合并与超时淘汰；界面由 CC_DamageTextController 订阅后交给绘制层。
 #pragma once
 
 #include "CoreMinimal.h"
@@ -12,7 +12,8 @@ class APlayerController;
  * 伤害飘字的数据与生命周期管理。
  *
  * 定位：只持有"还没播完的飘字"这一份活动列表，不做任何绘制。
- * 绘制在 SCC_DamageTextLayer 里一次性完成——这是性能上的关键分工。
+ * 数据流：ReportHit → 本子系统合并/老化 → OnEntriesUpdated → CC_DamageTextController
+ *        → CC_DamageTextModel → SCC_DamageTextLayer 一次性批量绘制。
  *
  * 为什么不用"每个数字一个 WidgetComponent"：
  *   每个 WidgetComponent 会创建独立的 Slate 控件并渲染到一张 DrawToRenderTarget 纹理上。
@@ -49,12 +50,18 @@ public:
 		ECC_DamageTextStyle Style = ECC_DamageTextStyle::Normal);
 
 	/**
-	 * 飘字绘制层构建/释放时登记，返回该玩家登记后的数量。同一玩家有多个绘制层通常意味着
+	 * 活动列表更新通知：每次 Tick 老化后、以及 ReportHit 新建或合并后广播。
+	 * 只供界面控制器复制快照，回调中不要再调用 ReportHit。
+	 */
+	FSimpleMulticastDelegate OnEntriesUpdated;
+
+	/**
+	 * 飘字控制器激活/失活时登记，返回该玩家登记后的数量。同一玩家有多个绘制层通常意味着
 	 * HUD 蓝图里仍拖着旧的 Damage Text Widget，而根布局也创建了一个，飘字会被画两遍。
 	 */
 	int32 AddDrawLayer(const APlayerController* Player);
 	void RemoveDrawLayer(const APlayerController* Player);
-	/** 当前活动飘字，仅供绘制层只读遍历。 */
+	/** 当前活动飘字，仅供控制器只读复制。 */
 	const TArray<FCC_DamageTextEntry>& GetActiveEntries() const { return ActiveEntries; }
 
 	/** 合并窗口（秒）。距上次命中不超过该时间且锚点接近的条目可以累加；当前不按 Actor 身份区分。 */

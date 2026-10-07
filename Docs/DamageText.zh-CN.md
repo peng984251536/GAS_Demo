@@ -33,9 +33,14 @@
 | 文件 | 职责 |
 |---|---|
 | `Public/UI/DamageText/CC_DamageTextTypes.h` | 飘字结构体与样式枚举。纯数据，不含 Slate/UMG 对象 |
-| `Public/UI/DamageText/CC_DamageTextSubsystem.h` + `.cpp` | 活动列表、连击合并、老化回收。不做绘制 |
-| `Public/UI/DamageText/SCC_DamageTextLayer.h` + `.cpp` | Slate 绘制层。批量投影 + 批量绘制 |
-| `Public/UI/DamageText/CC_DamageTextWidget.h` + `.cpp` | UMG 包装，让绘制层能拖进 HUD |
+| `Public/UI/DamageText/CC_DamageTextSubsystem.h` + `.cpp` | 活动列表、连击合并、老化回收；更新后广播 `OnEntriesUpdated`。不做绘制 |
+| `Public/UI/DamageText/CC_DamageTextController.h` + `.cpp` | Controller + Model：订阅子系统，把活动列表复制成展示快照 |
+| `Public/UI/DamageText/SCC_DamageTextLayer.h` + `.cpp` | Slate 绘制层。读取模型，批量投影 + 批量绘制 |
+| `Public/UI/DamageText/CC_DamageTextWidget.h` + `.cpp` | UMG 包装（View）：持有控制器，把模型交给 Slate 绘制层；由根布局世界覆盖层创建 |
+| `Public/UI/WorldOverlay/CC_WorldOverlayProjection.h` + `.cpp` | 与头顶血条共用的投影换算 |
+
+数据流：`ReportHit → 子系统 → OnEntriesUpdated → CC_DamageTextController → CC_DamageTextModel → SCC_DamageTextLayer`。
+绘制层与 UMG 包装都不直接访问子系统。
 | `Public/UI/DamageText/CC_DamageTextStatics.h` + `.cpp` | 技能侧调用入口：应用伤害 + 弹飘字 |
 
 **Build.cs 不需要改。** `Slate`、`SlateCore`、`UMG`、`GameplayAbilities` 已在
@@ -47,7 +52,7 @@
 
 ### 1. 编译 C++
 
-新增 5 个源文件，其中 3 个是 UObject/UStruct（有 `.generated.h`），需要重新生成项目文件。
+新增或删除源文件后需要重新生成项目文件（含 `.generated.h` 的 UObject/UStruct 头文件由 UHT 处理）。
 
 ### 2. 绘制层（已由 UI 框架托管）
 

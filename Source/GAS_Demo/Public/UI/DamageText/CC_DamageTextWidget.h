@@ -1,15 +1,19 @@
-// 供 UMG 设计器使用的包装控件：在玩家 HUD 放置一次并铺满绘制区域，无需挂在角色上。
+// 伤害飘字绘制层的 UMG 包装：由 CC_RootLayout 的世界覆盖层创建并铺满视口，不挂在角色上，也不属于玩家 HUD。
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Components/Widget.h"
 #include "CC_DamageTextWidget.generated.h"
 
+class UCC_UIController;
+class UCC_DamageTextController;
+
 /**
- * 伤害飘字绘制层的 UMG 包装。
+ * 伤害飘字绘制层的 UMG 包装（MVC 中的 View）。
  *
- * 作用：让 SCC_DamageTextLayer 能像普通控件一样拖进 UMG 设计器（放进 HUD 的 Overlay），
- * 而不需要在 C++ 里手动构造 Slate 并 AddToViewport。
+ * 数据流：飘字子系统 → CC_DamageTextController → CC_DamageTextModel → SCC_DamageTextLayer。
+ * 本控件持有控制器，把模型交给 Slate 绘制层；它和绘制层都不直接访问子系统。
+ * 与 CC_PlayerHUDWidget 是两个独立视图：HUD 是入栈页面，飘字是根布局世界覆盖层里的常驻控件。
  *
  * 使用方式：
  *   默认由 CC_RootLayout 的世界覆盖层自动创建（见 DamageTextLayerClass），不需要再往 HUD 蓝图里拖。
@@ -38,6 +42,10 @@ protected:
 	virtual const FText GetPaletteCategory() override;
 #endif
 
+	/** 控制器类，决定数据来源；一般无需修改。 */
+	UPROPERTY(EditDefaultsOnly, Category = "UI|Architecture")
+	TSubclassOf<UCC_DamageTextController> ControllerClass;
+
 	/** 普通伤害字号。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damage Text", meta = (ClampMin = "1.0"))
 	float FontSize = 28.0f;
@@ -56,8 +64,9 @@ private:
 	float GetCriticalFontSizeValue() const;
 	float GetRiseHeightValue() const;
 
-	/** 构建时登记的玩家，释放时撤销同一份登记。 */
-	TWeakObjectPtr<APlayerController> RegisteredPlayer;
+	/** Slate 存在期间持有的控制器；ReleaseSlateResources 时释放。 */
+	UPROPERTY(Transient)
+	TObjectPtr<UCC_UIController> OverlayController;
 	/** 实际绘制用的 Slate 控件。 */
 	TSharedPtr<class SCC_DamageTextLayer> DamageTextLayer;
 };

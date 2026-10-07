@@ -1,8 +1,6 @@
 #include "UI/HealthBar/CC_HealthBarOverlayController.h"
 #include "UI/HealthBar/CC_BatchedHealthBarSubsystem.h"
-#include "Components/Widget.h"
 #include "GameFramework/Actor.h"
-#include "GAS_Demo.h"
 
 UCC_HealthBarOverlayController::UCC_HealthBarOverlayController() { ModelClass = UCC_HealthBarOverlayModel::StaticClass(); }
 
@@ -13,11 +11,8 @@ void UCC_HealthBarOverlayController::OnActivated()
 	{
 		BoundManager = Manager;
 		UpdatedHandle = Manager->OnEntriesUpdated.AddUObject(this, &ThisClass::Refresh);
-		if (Manager->AddDrawLayer() > 1)
-		{
-			UE_LOG(LogGAS_Demo, Warning, TEXT("同一本地玩家存在多个头顶血条绘制层（%s），血条会被重复绘制。")
-				TEXT("根布局已自动创建血条层，请删除 PlayerController 等处手动 Add to Player Screen 的血条控件。"), *GetPathNameSafe(View.Get()));
-		}
+		WarnIfDuplicateLayer(Manager->AddDrawLayer(), TEXT("头顶血条"),
+			TEXT("根布局已自动创建血条层，请删除 PlayerController 等处手动 Add to Player Screen 的血条控件。"));
 	}
 	Refresh();
 	Super::OnActivated();

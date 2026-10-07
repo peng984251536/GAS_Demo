@@ -7,6 +7,7 @@
 #include "UI/DamageText/CC_DamageTextTypes.h"
 
 class APlayerController;
+class UCC_DamageTextModel;
 
 /**
  * 伤害飘字绘制层。
@@ -20,7 +21,8 @@ class APlayerController;
  *   - ComputeDesiredSize 返回 Zero，控件不占布局空间，纯粹作为绘制画布。
  *   - 没有活动飘字时 OnPaint 立即返回，不做任何投影。
  *
- * 构造时必须传入 PlayerController，用于取摄像机位置和视口尺寸。
+ * 数据只来自 CC_DamageTextModel（由 CC_DamageTextController 逐帧写入），本控件不访问子系统。
+ * 构造时必须传入 Model 和 PlayerController；后者只用于取摄像机与视口做投影。
  */
 class GAS_DEMO_API SCC_DamageTextLayer : public SLeafWidget
 {
@@ -38,6 +40,8 @@ public:
 		SLATE_ATTRIBUTE(float, RiseHeight)
 		/** 投影用的控制器。通常是本机玩家的 Controller。 */
 		SLATE_ARGUMENT(APlayerController*, PlayerController)
+		/** 飘字展示模型；为空时不绘制。 */
+		SLATE_ARGUMENT(UCC_DamageTextModel*, Model)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -61,6 +65,8 @@ private:
 
 	/** 弱引用，避免绘制层延长控制器生命周期。 */
 	TWeakObjectPtr<APlayerController> CachedController;
+	/** 弱引用，模型由控制器持有。 */
+	TWeakObjectPtr<UCC_DamageTextModel> CachedModel;
 
 	TAttribute<float> NormalFontSize;
 	TAttribute<float> CriticalFontSize;
