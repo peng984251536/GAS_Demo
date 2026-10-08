@@ -7,7 +7,6 @@
 #include "Attribute/CC_AttributeSet.h"
 #include "Components/ActionComponent.h"
 #include "Utils/CC_BlueprintLibrary.h"
-#include "UI/HealthBar/CC_BatchedHealthBarSubsystem.h"
 #include "CC_EnemyCharacter.generated.h"
 
 class UAbilitySystemComponent;
@@ -40,15 +39,6 @@ public:
 	virtual void HandleDeath() override;
 	virtual void HandleRespawn() override;
 
-	/**
-	 * 是否在每个本地玩家的集中血条层显示头顶血条（由 UI 根布局的世界覆盖层绘制）。
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI|Health Bar")
-	bool bShowOverheadHealthBar = true;
-	/** 头顶血条的偏移、尺寸、颜色与显示规则。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI|Health Bar", meta=(EditCondition="bShowOverheadHealthBar"))
-	FCC_HealthBarOptions OverheadHealthBarOptions;
-	
 protected:
 	/** 多个角色蓝图可引用同一份配置。当前只支持出生前在类默认值中指定。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crash|Data")
@@ -61,7 +51,7 @@ protected:
 	virtual void GiveStartupAbilities() override;
 	
 private:
-	/** 向本机每个本地玩家注册头顶血条；专用服务器没有本地玩家，自然不做任何事。 */
+	/** 按角色配置（Character|UI）向本机每个本地玩家注册头顶血条；专用服务器没有本地玩家，自然不做任何事。 */
 	void RegisterOverheadHealthBar();
 	/** 后撤决策的节流计时；只在服务器且目标进入 MinRange 后尝试激活能力。 */
 	float KeepDistanceCheckRemaining = 0.0f;

@@ -11,6 +11,7 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 #include "Character/Combat/CC_ArrowProjectile.h"
 #include "Data/CC_CharacterConfig.h"
+#include "UI/HealthBar/CC_BatchedHealthBarSubsystem.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "DrawDebugHelpers.h"
@@ -243,12 +244,16 @@ void ACC_EnemyCharacter::HandleDeath()
 
 void ACC_EnemyCharacter::RegisterOverheadHealthBar()
 {
-	if (!bShowOverheadHealthBar || !IsValid(this) || IsActorBeingDestroyed()) return;
+	if (!IsValid(this) || IsActorBeingDestroyed()) return;
+	// 外观与规则统一来自角色配置；未指定配置时按默认样式显示，避免漏配的敌人没有血条。
+	const UCC_CharacterConfig* Config = GetCharacterConfig();
+	if (Config && !Config->bShowOverheadHealthBar) return;
+	const FCC_HealthBarOptions Options = Config ? Config->OverheadHealthBar : FCC_HealthBarOptions();
 	const UGameInstance* GameInstance = GetGameInstance();
 	if (!GameInstance) return;
 	for (ULocalPlayer* Player : GameInstance->GetLocalPlayers())
 		if (UCC_BatchedHealthBarSubsystem* Manager = Player ? Player->GetSubsystem<UCC_BatchedHealthBarSubsystem>() : nullptr)
-			Manager->RegisterHealthBar(this, OverheadHealthBarOptions);
+			Manager->RegisterHealthBar(this, Options);
 }
 
 void ACC_EnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)

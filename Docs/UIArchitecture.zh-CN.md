@@ -9,7 +9,7 @@
 | 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、可配置层级栈、输入、焦点和动画 |
 | View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_PlayerHUDWidget；世界覆盖层的 CC_BatchedHealthBarWidget、CC_DamageTextWidget | 布局、展示、动画；把操作转发给 Controller |
 | Controller | CC_UIController 及功能子类；世界覆盖层基类 CC_WorldOverlayController（CC_HealthBarOverlayController、CC_DamageTextController） | 订阅业务系统、协调请求、导航、转换展示数据 |
-| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel、CC_HealthBarOverlayModel、CC_DamageTextModel | 保存 UI 快照；页面模型通过 OnChanged 通知界面，世界覆盖层模型由视图逐帧读取 |
+| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel、CC_HealthBarOverlayModel、CC_DamageTextModel | 保存 UI 快照；页面模型通过 OnChanged 通知界面，世界覆盖层模型由视图逐帧读取（血条在 Tick 中摆放单条 UMG 控件，飘字在 Paint 中批量绘制） |
 | 真实业务 | GAS、CC_OnlineRoomSubsystem 等 | 验证规则、保存真实数据、完成跨地图事务 |
 
 页面强引用 Controller，Controller 强引用 Model；Controller 只弱引用页面和业务系统。Model 不引用 Widget 或 Controller。主菜单和 HUD 模型的写入口只向各自 C++ Controller 开放；View 使用 Getter 获取快照。

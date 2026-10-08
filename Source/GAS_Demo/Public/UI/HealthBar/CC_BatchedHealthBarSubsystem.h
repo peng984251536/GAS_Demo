@@ -3,31 +3,11 @@
 #include "CoreMinimal.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Tickable.h"
+#include "UI/HealthBar/CC_HealthBarTypes.h"
 #include "CC_BatchedHealthBarSubsystem.generated.h"
 
 class UAbilitySystemComponent;
 class APlayerController;
-
-/** 蓝图可配置的血条样式与显示规则。每个角色只保存数据，不创建组件、UMG 实例或渲染目标。 */
-USTRUCT(BlueprintType)
-struct GAS_DEMO_API FCC_HealthBarOptions
-{
-	GENERATED_BODY()
-	/** 在角色位置上叠加的世界空间偏移，单位厘米；不随角色旋转，用于把锚点移到头顶。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") FVector WorldOffset = FVector(0, 0, 120);
-	/** 血条宽高，单位为 HUD 布局单位，不是世界厘米。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") FVector2D Size = FVector2D(90, 8);
-	/** 该角色的填充颜色；仅改变顶点颜色，所有血条仍共用同一个 Brush。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") FLinearColor Color = FLinearColor(0.25f, 0.8f, 0.3f);
-	/** 最远显示距离，单位为世界厘米；0 表示不按距离剔除。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar", meta=(ClampMin="0")) float MaxDistance = 5000;
-	/** 生命值达到最大值时隐藏，仍保留数据与订阅。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") bool bHideWhenFull = false;
-	/** 生命值小于等于 0 时隐藏；隐藏不等于移除条目。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") bool bHideWhenDead = true;
-	/** 开启后自动订阅角色 ASC 的 Health / MaxHealth；未就绪时定期重试。关闭后由蓝图手动推送数值。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") bool bUseGAS = true;
-};
 
 /** 运行时条目，仅供 C++ 管理器和绘制层使用，不承担复制或 UObject 所有权。 */
 struct FCC_HealthBarEntry

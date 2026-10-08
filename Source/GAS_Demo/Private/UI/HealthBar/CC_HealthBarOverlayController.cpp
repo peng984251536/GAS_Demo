@@ -47,10 +47,14 @@ void UCC_HealthBarOverlayController::Refresh()
 		if (Entry.Options.bHideWhenDead && Entry.Health <= 0) continue;
 		if (Entry.Options.bHideWhenFull && Entry.Health >= Entry.MaxHealth) continue;
 		FCC_HealthBarDisplayItem& Item = OverlayModel->Items.AddDefaulted_GetRef();
+		Item.Actor = Entry.Actor;
+		Item.ItemWidgetClass = Entry.Options.ItemWidgetClass;
 		Item.WorldAnchor = Actor->GetActorLocation() + Entry.Options.WorldOffset;
-		Item.Size = Entry.Options.Size;
-		Item.Color = Entry.Options.Color;
-		Item.Fraction = FMath::Clamp(Entry.DisplayedFraction, 0.f, 1.f);
 		Item.MaxDistance = Entry.Options.MaxDistance;
+		Item.Data.Fraction = FMath::Clamp(Entry.DisplayedFraction, 0.f, 1.f);
+		Item.Data.Health = Entry.Health;
+		Item.Data.MaxHealth = Entry.MaxHealth;
+		Item.Data.Size = Entry.Options.Size;
+		Item.Data.Color = Entry.Options.Color;
 	}
 }

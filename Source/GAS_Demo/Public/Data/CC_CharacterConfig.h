@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystem/Abilities/CC_GameplayAbilityBase.h"
 #include "Engine/DataAsset.h"
+#include "UI/HealthBar/CC_HealthBarTypes.h"
 #include "CC_CharacterConfig.generated.h"
 
 class UGameplayAbility;
@@ -80,6 +81,16 @@ public:
 	float ArrowSpeed = 1800.0f;
 	UPROPERTY(EditDefaultsOnly,BlueprintReadWrite,Category="Crash|AI")
 	float AttackDelay{1.0f};
+
+	/** 是否显示头顶血条（目前由敌人使用；玩家自身血量在 HUD 左上角显示）。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI")
+	bool bShowOverheadHealthBar = true;
+	/**
+	 * 头顶血条：Item Widget Class 选用哪个单条血条控件（任意实现 CC Health Bar Item 接口的 UserWidget），
+	 * 以及挂点偏移、显示距离、满血/死亡隐藏等规则。控件类留空则用血条层的默认控件。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI", meta = (EditCondition = "bShowOverheadHealthBar"))
+	FCC_HealthBarOptions OverheadHealthBar;
 	
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;

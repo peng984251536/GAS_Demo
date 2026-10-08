@@ -1,30 +1,31 @@
-// 头顶血条的 Controller / Model：血条子系统 → 控制器 → 展示模型 → CC_BatchedHealthBarWidget。
+// 头顶血条的 Controller / Model：血条子系统 → 控制器 → 展示模型 → CC_BatchedHealthBarWidget（摆放单条血条控件）。
 #pragma once
 
 #include "UI/WorldOverlay/CC_WorldOverlayController.h"
 #include "UI/Framework/CC_UIModel.h"
+#include "UI/HealthBar/CC_HealthBarTypes.h"
 #include "CC_HealthBarOverlayController.generated.h"
 
 class UCC_BatchedHealthBarSubsystem;
 
-/** 一条需要绘制的血条：已按显隐、就绪、死亡/满血规则过滤，只剩投影和距离剔除留给视图。 */
+/** 一条需要显示的血条：已按显隐、就绪、死亡/满血规则过滤，只剩投影和距离剔除留给视图。 */
 struct FCC_HealthBarDisplayItem
 {
+	/** 血条所属角色；视图按它复用单条控件，并在分配时传给控件。弱引用，不延长角色生命。 */
+	TWeakObjectPtr<AActor> Actor;
+	/** 单条控件类；为空时视图使用默认控件。 */
+	TSubclassOf<UUserWidget> ItemWidgetClass;
 	/** 世界锚点 = 角色位置 + Options.WorldOffset，单位厘米。 */
 	FVector WorldAnchor = FVector::ZeroVector;
-	/** 血条宽高，HUD 布局单位。 */
-	FVector2D Size = FVector2D::ZeroVector;
-	/** 填充颜色。 */
-	FLinearColor Color = FLinearColor::White;
-	/** 已插值的显示比例，0..1。 */
-	float Fraction = 0.f;
 	/** 最远显示距离，0 表示不剔除；需要相机位置，所以由视图判断。 */
 	float MaxDistance = 0.f;
+	/** 推送给单条控件的数据。 */
+	FCC_HealthBarItemData Data;
 };
 
 /**
- * 头顶血条展示模型：保存本帧要画的血条快照，不持有角色、ASC 或控件。
- * 数据逐帧刷新，视图在 NativePaint 中直接读取，不广播 OnChanged（见 CC_WorldOverlayController）。
+ * 头顶血条展示模型：保存本帧要显示的血条快照，不持有 ASC 或控件，角色只以弱引用作为身份。
+ * 数据逐帧刷新，视图在 NativeTick 中直接读取，不广播 OnChanged（见 CC_WorldOverlayController）。
  */
 UCLASS()
 class GAS_DEMO_API UCC_HealthBarOverlayModel : public UCC_UIModel

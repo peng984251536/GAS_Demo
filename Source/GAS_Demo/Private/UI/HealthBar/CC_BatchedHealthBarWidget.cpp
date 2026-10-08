@@ -1,17 +1,37 @@
 #include "UI/HealthBar/CC_BatchedHealthBarWidget.h"
+#include "UI/HealthBar/CC_HealthBarItem.h"
 #include "UI/HealthBar/CC_HealthBarOverlayController.h"
+#include "UI/HealthBar/CC_DefaultHealthBarItemWidget.h"
 #include "UI/WorldOverlay/CC_WorldOverlayProjection.h"
-#include "Rendering/DrawElements.h"
-#include "Styling/CoreStyle.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "GAS_Demo.h"
 
 UCC_BatchedHealthBarWidget::UCC_BatchedHealthBarWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// 全屏 UI 只负责显示，不阻挡鼠标点击或 HUD 按钮。
+	// 全屏层只负责摆放，不阻挡鼠标点击或 HUD 按钮。
 	SetVisibility(ESlateVisibility::HitTestInvisible);
-	// 角色和相机移动不一定触发 UMG 属性变化；设为易变控件，避免失效缓存导致血条位置停住。
-	ForceVolatile(true);
 	ControllerClass = UCC_HealthBarOverlayController::StaticClass();
+	DefaultItemWidgetClass = UCC_DefaultHealthBarItemWidget::StaticClass();
+}
+
+void UCC_BatchedHealthBarWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	if (ItemCanvas) return; // 蓝图里放了名为 ItemCanvas 的画布。
+	if (!WidgetTree->RootWidget)
+	{
+		ItemCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("ItemCanvas"));
+		WidgetTree->RootWidget = ItemCanvas;
+	}
+	else
+	{
+		ItemCanvas = Cast<UCanvasPanel>(WidgetTree->RootWidget);
+	}
+	if (ItemCanvas) ItemCanvas->SetVisibility(ESlateVisibility::HitTestInvisible);
+	else UE_LOG(LogGAS_Demo, Warning, TEXT("%s：找不到放血条的画布。请把根控件设为 Canvas Panel，或添加一个名为 ItemCanvas 的 Canvas Panel。"), *GetPathName());
 }
 
 // 每次 Slate 构建开始一次控制器会话；切图重新挂载时会得到新的会话。
@@ -25,49 +45,111 @@ void UCC_BatchedHealthBarWidget::NativeConstruct()
 
 void UCC_BatchedHealthBarWidget::NativeDestruct()
 {
+	ReleaseAllItems();
 	if (OverlayController) OverlayController->Release();
 	OverlayController = nullptr;
 	Super::NativeDestruct();
 }
 
-int32 UCC_BatchedHealthBarWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Geometry,
-	const FSlateRect& CullingRect, FSlateWindowElementList& DrawElements, int32 LayerId,
-	const FWidgetStyle& WidgetStyle, bool bParentEnabled) const
+UUserWidget* UCC_BatchedHealthBarWidget::AcquireItem(UClass* ItemClass)
 {
-	// 保留父类及蓝图已有内容的最高层级，血条从其上方继续绘制。
-	const int32 BaseLayer = Super::NativePaint(Args, Geometry, CullingRect, DrawElements, LayerId, WidgetStyle, bParentEnabled);
+	if (TArray<TWeakObjectPtr<UUserWidget>>* Pool = FreeItems.Find(ItemClass))
+	{
+		while (!Pool->IsEmpty())
+		{
+			if (UUserWidget* Pooled = Pool->Pop(EAllowShrinking::No).Get())
+			{
+				Pooled->SetVisibility(ESlateVisibility::HitTestInvisible);
+				return Pooled;
+			}
+		}
+	}
+	UUserWidget* Widget = CreateWidget<UUserWidget>(this, ItemClass);
+	if (!Widget) return nullptr;
+	if (!ItemClass->ImplementsInterface(UCC_HealthBarItem::StaticClass()))
+	{
+		UE_LOG(LogGAS_Demo, Warning, TEXT("头顶血条控件 %s 没有实现 CC Health Bar Item 接口，只会显示、不会收到血量更新。"), *GetNameSafe(ItemClass));
+	}
+	Widget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* Slot = ItemCanvas->AddChildToCanvas(Widget))
+	{
+		// 按控件自身期望尺寸显示，底边中点对齐头顶锚点。
+		Slot->SetAutoSize(true);
+		Slot->SetAlignment(FVector2D(0.5f, 1.f));
+	}
+	return Widget;
+}
+
+void UCC_BatchedHealthBarWidget::ReleaseItem(UUserWidget* Widget)
+{
+	if (!Widget) return;
+	if (Widget->GetClass()->ImplementsInterface(UCC_HealthBarItem::StaticClass())) ICC_HealthBarItem::Execute_OnHealthBarReleased(Widget);
+	Widget->SetVisibility(ESlateVisibility::Collapsed);
+	FreeItems.FindOrAdd(Widget->GetClass()).Add(Widget);
+}
+
+void UCC_BatchedHealthBarWidget::ReleaseAllItems()
+{
+	for (auto& Pair : ActiveItems) ReleaseItem(Pair.Value.Widget.Get());
+	ActiveItems.Reset();
+}
+
+void UCC_BatchedHealthBarWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
 	const UCC_HealthBarOverlayModel* Model = OverlayController ? Cast<UCC_HealthBarOverlayModel>(OverlayController->GetModel()) : nullptr;
-	if (!Model || Model->GetItems().IsEmpty()) return BaseLayer;
-	// 整批血条共用一份相机投影，不为每个角色单独构建投影数据。
 	FCC_WorldOverlayProjector Projector;
-	if (!Projector.Initialize(GetOwningPlayer(), Geometry)) return BaseLayer;
-	// 共用白色纹理资源，通过顶点颜色控制样式，避免逐角色材质打断合批。
-	const FSlateBrush* Brush = FCoreStyle::Get().GetBrush("WhiteBrush");
-	const FLinearColor Tint = WidgetStyle.GetColorAndOpacityTint();
-	const float Border = FMath::IsFinite(BorderWidth) ? FMath::Max(0.f, BorderWidth) : 0.f;
-	const FVector2D BorderVector(Border, Border);
-	bool bDrew = false;
+	if (!ItemCanvas || !Model || Model->GetItems().IsEmpty() || !Projector.Initialize(GetOwningPlayer(), MyGeometry))
+	{
+		ReleaseAllItems();
+		return;
+	}
+	for (auto& Pair : ActiveItems) Pair.Value.bSeenThisFrame = false;
+
 	for (const FCC_HealthBarDisplayItem& Item : Model->GetItems())
 	{
+		AActor* Actor = Item.Actor.Get();
+		if (!Actor) continue;
 		if (Item.MaxDistance > 0 && FVector::DistSquared(Projector.GetViewOrigin(), Item.WorldAnchor) > FMath::Square(Item.MaxDistance)) continue;
-		// 背后或锚点落在画面外时跳过；这里不做场景遮挡检测，默认允许透墙显示。
+		// 锚点在背后或画面外时不显示；不做场景遮挡检测，默认允许透墙显示。
 		FVector2D PlayerLocal;
 		if (!Projector.ProjectToPlayerLocal(Item.WorldAnchor, PlayerLocal, true)) continue;
-		const FVector2D Center = Projector.PlayerLocalToWidget(PlayerLocal) + ScreenOffset;
-		const FVector2D Size = Item.Size;
-		const FVector2D Position = Center - Size * 0.5f;
-		// 所有角色共用 Brush、裁剪状态及三个固定层级：边框 +1、背景 +2、填充 +3。
-		// 不逐角色递增层级，为 Slate 合批创造条件；实际批次数仍由资源、裁剪和其他 UI 决定。
-		if (Border > 0) FSlateDrawElement::MakeBox(DrawElements, BaseLayer + 1,
-			Geometry.ToPaintGeometry(Size + BorderVector * 2, FSlateLayoutTransform(Position - BorderVector)),
-			Brush, ESlateDrawEffect::None, BorderColor * Tint);
-		FSlateDrawElement::MakeBox(DrawElements, BaseLayer + 2,
-			Geometry.ToPaintGeometry(Size, FSlateLayoutTransform(Position)), Brush, ESlateDrawEffect::None, BackgroundColor * Tint);
-		if (Item.Fraction > 0) FSlateDrawElement::MakeBox(DrawElements, BaseLayer + 3,
-			Geometry.ToPaintGeometry(FVector2D(Size.X * Item.Fraction, Size.Y), FSlateLayoutTransform(Position)),
-			Brush, ESlateDrawEffect::None, Item.Color * Tint);
-		bDrew = true;
+		UClass* ItemClass = Item.ItemWidgetClass ? Item.ItemWidgetClass.Get() : DefaultItemWidgetClass.Get();
+		if (!ItemClass || ItemClass->HasAnyClassFlags(CLASS_Abstract)) continue;
+
+		FActiveItem* Active = ActiveItems.Find(Actor);
+		// 配置换了控件类（例如重新注册），旧控件回池，按新类重新分配。
+		if (Active && (!Active->Widget.IsValid() || Active->Widget->GetClass() != ItemClass))
+		{
+			ReleaseItem(Active->Widget.Get());
+			ActiveItems.Remove(Actor);
+			Active = nullptr;
+		}
+		if (!Active)
+		{
+			UUserWidget* Widget = AcquireItem(ItemClass);
+			if (!Widget) continue;
+			Active = &ActiveItems.Add(Actor);
+			Active->Widget = Widget;
+			if (ItemClass->ImplementsInterface(UCC_HealthBarItem::StaticClass())) ICC_HealthBarItem::Execute_OnHealthBarAssigned(Widget, Actor);
+		}
+		Active->bSeenThisFrame = true;
+		UUserWidget* Widget = Active->Widget.Get();
+		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Widget->Slot))
+			Slot->SetPosition(Projector.PlayerLocalToWidget(PlayerLocal) + ScreenOffset);
+		if ((!Active->bHasData || Active->LastData != Item.Data) && ItemClass->ImplementsInterface(UCC_HealthBarItem::StaticClass()))
+		{
+			ICC_HealthBarItem::Execute_OnHealthBarUpdated(Widget, Item.Data);
+			Active->LastData = Item.Data;
+			Active->bHasData = true;
+		}
 	}
-	// 无血条绘制时不占额外层级；有绘制则报告使用过的最高层级。
-	return bDrew ? BaseLayer + 3 : BaseLayer;
+
+	// 本帧没出现的（移除、隐藏、出画面、超距离）回池。
+	for (auto It = ActiveItems.CreateIterator(); It; ++It)
+	{
+		if (It.Value().bSeenThisFrame) continue;
+		ReleaseItem(It.Value().Widget.Get());
+		It.RemoveCurrent();
+	}
 }
