@@ -7,9 +7,9 @@
 | 层 | 项目类 | 职责 |
 | --- | --- | --- |
 | 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、可配置层级栈、输入、焦点和动画 |
-| View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_PlayerHUDWidget | 布局、展示、动画；把操作转发给 Controller |
+| View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_CombatMainWidget | 布局、展示、动画；把操作转发给 Controller |
 | Controller | CC_UIController 及功能子类 | 订阅业务系统、协调请求、导航、转换展示数据 |
-| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_PlayerHUDModel | 保存 UI 快照，通过 OnChanged 通知界面 |
+| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_CombatMainModel | 保存 UI 快照，通过 OnChanged 通知界面 |
 | 真实业务 | GAS、CC_OnlineRoomSubsystem 等 | 验证规则、保存真实数据、完成跨地图事务 |
 
 页面强引用 Controller，Controller 强引用 Model；Controller 只弱引用页面和业务系统。Model 不引用 Widget 或 Controller。主菜单和 HUD 模型的写入口只向各自 C++ Controller 开放；View 使用 Getter 获取快照。
@@ -55,7 +55,7 @@
 
 ## HUD 和示例页面
 
-HUD 现在为 `GAS → CC_PlayerHUDController → CC_PlayerHUDModel → CC_PlayerHUDWidget`。Controller 管 Pawn 变化、ASC 就绪和四项属性委托，Model 管血蓝快照，Widget 只画进度和文字。原来的蓝图 OnVitalsChanged 继续保留。新增 HUD Controller 默认已由原生 Widget 指定，不需要手工实例化。
+战斗主界面（原玩家 HUD）现在为 `GAS → CC_CombatMainController → CC_CombatMainModel → CC_CombatMainWidget → 子控件`。Controller 管 Pawn 变化、ASC 就绪和四项属性委托，Model 管战斗界面所需的快照，CC_CombatMainWidget 只负责布局并把数据分发给子控件；玩家血蓝条是子控件 `CC_PlayerVitalsWidget`（名为 PlayerVitals，自动绑定）。原来的蓝图 OnVitalsChanged 继续保留。Controller 默认已由原生 Widget 指定，不需要手工实例化。旧类名通过 DefaultEngine.ini 的 ClassRedirects 自动迁移。
 
 暂停与退出确认的按钮也改为调用各自 Controller。普通按钮、通知和世界空间血条不强制增加控制器。未来背包可仿照 HUD 新建 InventoryController + InventoryModel，不在 RootLayout 中增加背包规则。
 

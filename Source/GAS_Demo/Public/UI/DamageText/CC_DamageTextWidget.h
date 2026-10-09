@@ -12,7 +12,7 @@
  * 而不需要在 C++ 里手动构造 Slate 并 AddToViewport。
  *
  * 使用方式：
- *   1. 打开你的玩家 HUD 蓝图（CC_PlayerHUDWidget 派生）。
+ *   1. 打开你的战斗主界面蓝图（CC_CombatMainWidget 派生）。
  *   2. 往 Overlay 里拖一个 Damage Text Widget，放在最上层。
  *   3. 确保它的 Slot 不参与命中测试（Visibility = Not Hit-Testable）。
  *   4. 字号和上升高度可以在这里直接调。

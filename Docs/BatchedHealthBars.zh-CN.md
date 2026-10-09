@@ -4,7 +4,7 @@
 
 - 伤害飘字：`UCC_DamageTextSubsystem` 管理列表，`SCC_DamageTextLayer` 集中绘制；已有 `ShowDamageText` 等蓝图入口。
 - 原头顶血条：`UCC_WidgetComponent` 在各角色上创建属性控件。
-- 玩家 HUD 左上角自身血蓝条：`UCC_PlayerHUDWidget`，可继续保留。
+- 战斗主界面左上角的玩家自身血蓝条：`UCC_CombatMainWidget` 中的 `UCC_PlayerVitalsWidget` 子控件，与世界空间批量血条互不影响。
 
 ## 新血条的蓝图接入
 

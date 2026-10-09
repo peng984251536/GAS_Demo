@@ -51,7 +51,7 @@
 
 ### 2. 在 HUD 里放绘制层
 
-打开你的玩家 HUD 蓝图（`CC_PlayerHUDWidget` 派生），在根 Overlay 里：
+打开你的战斗主界面蓝图（`CC_CombatMainWidget` 派生），在根 Overlay 里：
 
 1. 拖入一个 **Damage Text Widget**（Palette 分类 UI）。
 2. 放在**最上层**，确保它在其他 HUD 元素之上。
