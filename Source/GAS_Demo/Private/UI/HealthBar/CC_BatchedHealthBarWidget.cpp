@@ -71,11 +71,11 @@ UUserWidget* UCC_BatchedHealthBarWidget::AcquireItem(UClass* ItemClass)
 		UE_LOG(LogGAS_Demo, Warning, TEXT("头顶血条控件 %s 没有实现 CC Health Bar Item 接口，只会显示、不会收到血量更新。"), *GetNameSafe(ItemClass));
 	}
 	Widget->SetVisibility(ESlateVisibility::HitTestInvisible);
-	if (UCanvasPanelSlot* Slot = ItemCanvas->AddChildToCanvas(Widget))
+	if (UCanvasPanelSlot* CanvasSlot = ItemCanvas->AddChildToCanvas(Widget))
 	{
 		// 按控件自身期望尺寸显示，底边中点对齐头顶锚点。
-		Slot->SetAutoSize(true);
-		Slot->SetAlignment(FVector2D(0.5f, 1.f));
+		CanvasSlot->SetAutoSize(true);
+		CanvasSlot->SetAlignment(FVector2D(0.5f, 1.f));
 	}
 	return Widget;
 }
@@ -135,8 +135,8 @@ void UCC_BatchedHealthBarWidget::NativeTick(const FGeometry& MyGeometry, float I
 		}
 		Active->bSeenThisFrame = true;
 		UUserWidget* Widget = Active->Widget.Get();
-		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Widget->Slot))
-			Slot->SetPosition(Projector.PlayerLocalToWidget(PlayerLocal) + ScreenOffset);
+		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Widget->Slot))
+			CanvasSlot->SetPosition(Projector.PlayerLocalToWidget(PlayerLocal) + ScreenOffset);
 		if ((!Active->bHasData || Active->LastData != Item.Data) && ItemClass->ImplementsInterface(UCC_HealthBarItem::StaticClass()))
 		{
 			ICC_HealthBarItem::Execute_OnHealthBarUpdated(Widget, Item.Data);

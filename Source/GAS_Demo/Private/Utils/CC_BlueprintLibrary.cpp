@@ -13,9 +13,10 @@
 #include "Damage/CC_LyraStyleDamage.h"
 #include "Damage/GASDamageExecutionBase.h"
 #include "Kismet/GameplayStatics.h"
+#include "UI/DamageText/CC_DamageTextStatics.h"
 
 ACC_EnemyCharacter* UCC_BlueprintLibrary::SpawnEnemy(const UObject* WorldContextObject,
-	TSubclassOf<ACC_EnemyCharacter> EnemyClass, const FTransform& SpawnTransform)
+                                                     TSubclassOf<ACC_EnemyCharacter> EnemyClass, const FTransform& SpawnTransform)
 {
 	UWorld* World = GEngine
 		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr;
@@ -197,7 +198,17 @@ void UCC_BlueprintLibrary::ApplyGameplayEffectSpecByTag(
 		SetByCallTag,
 		-Damage
 	);
-	TargetASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+	//TargetASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+
+	const FActiveGameplayEffectHandle Result =
+	SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+
+	if (Result.WasSuccessfullyApplied())
+	{
+		UCC_DamageTextStatics::ShowDamageText(
+			TargetASC, Damage,
+			ECC_DamageTextStyle::Normal);
+	}
 }
 
 /**

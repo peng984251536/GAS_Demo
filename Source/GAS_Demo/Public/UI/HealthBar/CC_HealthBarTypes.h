@@ -17,7 +17,7 @@ struct GAS_DEMO_API FCC_HealthBarOptions
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar", meta=(MustImplement="/Script/GAS_Demo.CC_HealthBarItem"))
 	TSubclassOf<UUserWidget> ItemWidgetClass;
 	/** 在角色位置上叠加的世界空间偏移，单位厘米；不随角色旋转，用于把锚点移到头顶。控件底边中点对齐这个锚点。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") FVector WorldOffset = FVector(0, 0, 120);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") FVector WorldOffset = FVector(0, 0, 80);
 	/** 建议尺寸，HUD 布局单位；默认控件按它设置宽高，自定义控件可以读取也可以忽略。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health Bar") FVector2D Size = FVector2D(90, 8);
 	/** 建议填充颜色；默认控件使用它，自定义控件可以读取也可以忽略。 */
