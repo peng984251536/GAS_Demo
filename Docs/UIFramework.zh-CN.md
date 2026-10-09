@@ -19,7 +19,8 @@
 | `UCC_UIStack` | 对官方 CommonActivatableWidgetStack 的薄封装，设置动画和对象池策略 |
 | `UCC_ActivatableWidget` | 页面基类：输入模式、返回策略、默认焦点、上下文注入、统一关闭 |
 | `UCC_UIInputData` | 官方 InputData 工作流的原生默认动作表：Enter/A 确认，Esc/B 返回 |
-| `UCC_PlayerHUDWidget` | HUD 展示层，读取 PlayerHUDModel；GAS 订阅和 Pawn 切换由 PlayerHUDController 负责 |
+| `UCC_CombatMainWidget` | 战斗主界面（原 PlayerHUDWidget），读取 CombatMainModel 并分发给子控件；GAS 订阅和 Pawn 切换由 CombatMainController 负责 |
+| `UCC_PlayerVitalsWidget` | 战斗主界面中的玩家血蓝条子控件，由 CombatMainWidget 推送数据 |
 | `UCC_UIController / UCC_UIModel` | 页面业务协调器与展示模型基类，随页面自动绑定/解绑 |
 | `UCC_MainMenuController / UCC_MainMenuModel` | 主界面统一操作入口和展示状态，已接房间子系统，开始/继续提供存档业务扩展点 |
 | `UCC_MenuButton / UCC_PauseMenuWidget / UCC_QuitDialogWidget` | 原生交互示例，分别演示 CommonButton、菜单和确认框；可由自己的蓝图替换 |
@@ -60,7 +61,7 @@ C++ 中引用层级一律使用原生标签 `CCTags::UILayer::Game / GameMenu / 
 1. 编译 C++ 并重启编辑器。任意本地 PlayerController 均可使用 UIManager 查询布局。
 2. 根布局只由 UIPolicy 配置，地图初始页面由独立装配入口打开，不再读取 Controller 的 HUD/初始菜单属性。
 3. 新建主菜单使用 `CC_MainMenuWidget`；背包、设置和确认框使用 `CC_ActivatableWidget`，复杂页面通过 ControllerClass 配置独立控制器。已经接入 CC 框架的页面无需重新改父类；旧框架页面应先核对绑定，再逐项迁移导航，不要批量删除业务节点。
-4. 自定义玩家 HUD 的父类改为 `CC_PlayerHUDWidget`，实现 `On Vitals Changed` 更新自己的血蓝条。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。
+4. 自定义战斗主界面的父类改为 `CC_CombatMainWidget`。血蓝条推荐放一个名为 `PlayerVitals` 的 `CC_PlayerVitalsWidget`（或其派生蓝图）子控件；也可以继续在主界面实现 `On Vitals Changed`。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。原先派生自 `CC_PlayerHUDWidget` 的蓝图由 ClassRedirects 自动迁移。
 5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画、层级表或 SafeZone，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
 6. 通知使用普通 `UserWidget`。头顶血条和伤害飘字由根布局的世界覆盖层自动创建，不要再手动 Add to Player Screen 或拖进 HUD；详见 [BatchedHealthBars.zh-CN.md](BatchedHealthBars.zh-CN.md) 与 [DamageText.zh-CN.md](DamageText.zh-CN.md)。
 
@@ -114,7 +115,7 @@ Get Owning Player → Get Root Layout For Player
 
 ## 数据更新与后续验证
 
-HUD 的更新链：Pawn 变化 → PlayerHUDController 绑定 ASC → 四项属性写入 PlayerHUDModel → Widget 收到模型通知 → On Vitals Changed。失活/重生时控制器精确解绑旧句柄；头顶血条管理器同样监听当前值与最大值，避免只改 MaxHealth 时界面不刷新。
+战斗主界面的更新链：Pawn 变化 → CombatMainController 绑定 ASC → 四项属性写入 CombatMainModel → CombatMainWidget 收到模型通知 → PlayerVitals.SetVitals 与 On Vitals Changed。失活/重生时控制器精确解绑旧句柄；头顶血条管理器同样监听当前值与最大值，避免只改 MaxHealth 时界面不刷新。
 
 编译后建议实际验证：打开暂停 → 退出确认 → 取消 → 返回游戏；手柄焦点是否恢复；连续点击是否重复入栈；血量和最大血量变化；重生换 Pawn；菜单动画途中切图；再次进入关卡没有重复 HUD。键盘 Esc 在 PIE 中可能优先触发编辑器停止运行，请在独立游戏窗口验证完整返回流程。
 

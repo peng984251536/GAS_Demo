@@ -1,4 +1,4 @@
-// 伤害飘字绘制层的 UMG 包装：由 CC_RootLayout 的世界覆盖层创建并铺满视口，不挂在角色上，也不属于玩家 HUD。
+// 伤害飘字绘制层的 UMG 包装：由 CC_RootLayout 的世界覆盖层创建并铺满视口，不挂在角色上，也不属于战斗主界面。
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,7 +13,7 @@ class UCC_DamageTextController;
  *
  * 数据流：飘字子系统 → CC_DamageTextController → CC_DamageTextModel → SCC_DamageTextLayer。
  * 本控件持有控制器，把模型交给 Slate 绘制层；它和绘制层都不直接访问子系统。
- * 与 CC_PlayerHUDWidget 是两个独立视图：HUD 是入栈页面，飘字是根布局世界覆盖层里的常驻控件。
+ * 与 CC_CombatMainWidget 是两个独立视图：战斗主界面是入栈页面，飘字是根布局世界覆盖层里的常驻控件。
  *
  * 使用方式：
  *   默认由 CC_RootLayout 的世界覆盖层自动创建（见 DamageTextLayerClass），不需要再往 HUD 蓝图里拖。

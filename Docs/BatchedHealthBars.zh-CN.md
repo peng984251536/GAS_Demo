@@ -9,7 +9,7 @@
 | 血条层 | `CC_BatchedHealthBarWidget` | 每个本地玩家 1 个，全屏 | 投影、距离剔除、用对象池摆放单条控件 |
 | 单条血条 | 任意实现 `CC Health Bar Item` 接口的 UserWidget | 每个可见敌人 1 个 | 决定一条血条长什么样 |
 
-血条层由 `CC_RootLayout` 的世界覆盖层自动创建，不进页面栈，不参与输入；打开菜单/弹窗时默认隐藏。它和左上角的玩家血蓝条 `CC_PlayerHUDWidget`（Game 层页面）互相独立。
+血条层由 `CC_RootLayout` 的世界覆盖层自动创建，不进页面栈，不参与输入；打开菜单/弹窗时默认隐藏。它和左上角的玩家血蓝条（战斗主界面 `CC_CombatMainWidget` 中的 `CC_PlayerVitalsWidget` 子控件，Game 层页面）互相独立。
 
 数据流：`子系统 → OnEntriesUpdated → 控制器 → 模型 → 血条层 → 单条控件的 On Health Bar Updated`。
 
