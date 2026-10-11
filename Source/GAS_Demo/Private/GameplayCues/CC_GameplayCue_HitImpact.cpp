@@ -1,7 +1,6 @@
-// 表现层桥接：接收 Cue 数值与标签，转换治疗符号后提交给飘字子系统；此处不执行扣血。
+// 独立命中特效与声音；此处不处理扣血或伤害数字。
 #include "GameplayCues/CC_GameplayCue_HitImpact.h"
 
-#include "UI/DamageText/CC_DamageTextSubsystem.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
@@ -90,44 +89,6 @@ bool UCC_GameplayCue_HitImpact::OnExecute_Implementation(
     {
         UGameplayStatics::PlaySoundAtLocation(MyTarget, HitSound, Location, SoundVolume);
         bPlayed = true;
-    }
-
-    // --- 伤害飘字 ---
-    // 与受击特效分开处理：即使没有 Niagara/Sound，只要有伤害值也应该显示数字，
-    // 所以这一步不参与上面的 bPlayed 判定。
-    if (bShowDamageText && !FMath::IsNearlyZero(Parameters.RawMagnitude))
-    {
-        if (UCC_DamageTextSubsystem* DamageText =
-            MyTarget->GetWorld()->GetSubsystem<UCC_DamageTextSubsystem>())
-        {
-            // 锚点用 Parameters.Location（UCC_DamageTextStatics 写入的是头顶），
-            // 而不是上面算出的命中点——数字贴在身上不易读，飘在头顶才对。
-            FVector TextAnchor = Parameters.Location;
-            if (TextAnchor.IsNearlyZero())
-            {
-                FVector Extent;
-                MyTarget->GetActorBounds(true, TextAnchor, Extent);
-                TextAnchor.Z += Extent.Z * 0.6f;
-            }
-
-            // 样式由 Cue 标签决定，与 UCC_DamageTextStatics 的约定对应。
-            ECC_DamageTextStyle Style = ECC_DamageTextStyle::Normal;
-            if (Parameters.AggregatedSourceTags.HasTagExact(TAG_Cue_Critical))
-            {
-                Style = ECC_DamageTextStyle::Critical;
-            }
-            else if (Parameters.AggregatedSourceTags.HasTagExact(TAG_Cue_Heal))
-            {
-                Style = ECC_DamageTextStyle::Heal;
-            }
-
-            // 治疗以负数传入，与子系统的正负约定一致（正数伤害、负数治疗）。
-            const float Amount = (Style == ECC_DamageTextStyle::Heal)
-                ? -FMath::Abs(Parameters.RawMagnitude)
-                : FMath::Abs(Parameters.RawMagnitude);
-
-            DamageText->ReportHit(TextAnchor, Amount, Style);
-        }
     }
 
     return bPlayed;

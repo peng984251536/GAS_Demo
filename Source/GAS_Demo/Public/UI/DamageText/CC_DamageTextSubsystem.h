@@ -1,104 +1,82 @@
-// 世界级数据管理器：维护活动飘字列表，处理近距离命中合并与超时淘汰；界面由 CC_DamageTextController 订阅后交给绘制层。
 #pragma once
-
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "UI/DamageText/CC_DamageTextTypes.h"
 #include "CC_DamageTextSubsystem.generated.h"
-
-class APlayerController;
-
-/**
- * 伤害飘字的数据与生命周期管理。
- *
- * 定位：只持有"还没播完的飘字"这一份活动列表，不做任何绘制。
- * 数据流：ReportHit → 本子系统合并/老化 → OnEntriesUpdated → CC_DamageTextController
- *        → CC_DamageTextModel → SCC_DamageTextLayer 一次性批量绘制。
- *
- * 为什么不用"每个数字一个 WidgetComponent"：
- *   每个 WidgetComponent 会创建独立的 Slate 控件并渲染到一张 DrawToRenderTarget 纹理上。
- *   多个世界空间 WidgetComponent 会增加独立渲染目标、控件布局与绘制开销；实际 draw call 数需运行时测量。
- *   本方案所有飘字共用一个 Slate 控件，在 OnPaint 里批量绘制，开销与数量近似线性。
- *
- * 联机约定：伤害数值由 GameplayCue 复制到各客户端，因此本子系统只在客户端持有数据。
- * 专用服务器不保存飘字；监听服务器还需要为本机玩家显示表现。
- */
+/** 本地飘字管理器：按玩家/目标保存条目、可选合并、限制数量和回收；不计算战斗伤害。 */
 UCLASS()
 class GAS_DEMO_API UCC_DamageTextSubsystem : public UTickableWorldSubsystem
 {
-	GENERATED_BODY()
-
+    GENERATED_BODY()
 public:
-	// --- USubsystem ---
-	/** 专用服务器不创建；单机、客户端和监听服务器均可创建。 */
-	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
-
-	// --- FTickableGameObject ---
-	virtual void Tick(float DeltaTime) override;
-	virtual TStatId GetStatId() const override;
-	/** 没有活动飘字时自动停止 Tick，空闲期零开销。 */
-	virtual bool IsTickable() const override;
-
-	/**
-	 * 提交一次命中表现。由 GameplayCue 在客户端调用。
-	 *
-	 * @param WorldLocation    飘字起点；通常取受击者骨骼位置，不是 Actor 原点。
-	 * @param Amount           已确定的表现数值。正数=伤害，负数=治疗。
-	 * @param Style            样式，决定颜色和字号；默认普通伤害。
-	 */
-	void ReportHit(const FVector& WorldLocation, float Amount,
-		ECC_DamageTextStyle Style = ECC_DamageTextStyle::Normal);
-
-	/**
-	 * 活动列表更新通知：每次 Tick 老化后、以及 ReportHit 新建或合并后广播。
-	 * 只供界面控制器复制快照，回调中不要再调用 ReportHit。
-	 */
-	FSimpleMulticastDelegate OnEntriesUpdated;
-
-	/**
-	 * 飘字控制器激活/失活时登记，返回该玩家登记后的数量。同一玩家有多个绘制层通常意味着
-	 * HUD 蓝图里仍拖着旧的 Damage Text Widget，而根布局也创建了一个，飘字会被画两遍。
-	 */
-	int32 AddDrawLayer(const APlayerController* Player);
-	void RemoveDrawLayer(const APlayerController* Player);
-	/** 当前活动飘字，仅供控制器只读复制。 */
-	const TArray<FCC_DamageTextEntry>& GetActiveEntries() const { return ActiveEntries; }
-
-	/** 合并窗口（秒）。距上次命中不超过该时间且锚点接近的条目可以累加；当前不按 Actor 身份区分。 */
-	UPROPERTY(EditAnywhere, Category = "Damage Text", meta = (ClampMin = "0.0"))
-	float MergeWindow = 0.25f;
-
-	/**
-	 * 合并距离阈值（厘米，世界空间）。
-	 * 只有世界锚点足够近才合并；距离判定不能保证目标相同，靠近的不同敌人仍可能合并。
-	 * 默认 120 厘米；密集敌人场景可缩小阈值，或将 MergeWindow 设为 0 禁用合并。
-	 */
-	UPROPERTY(EditAnywhere, Category = "Damage Text", meta = (ClampMin = "0.0"))
-	float MergeDistance = 120.0f;
-
-	/** 飘字总存活时长（秒），从该条目最后一次累加算起。 */
-	UPROPERTY(EditAnywhere, Category = "Damage Text", meta = (ClampMin = "0.1"))
-	float Lifetime = 1.1f;
-
-	/**
-	 * 最近一次 ReportHit 是否发生了合并（1=合并进了已有飘字，0=新建了一个飘字）。
-	 * 供调试和性能观测；单次命中最多合并进一个飘字，所以这里不会大于 1。
-	 * 不需要可以删掉。
-	 */
-	int32 LastMergeCount = 0;
-
+    /**
+     * 判断当前世界是否需要本地飘字子系统；专用服务器不创建。
+     * @param Outer 子系统所属对象，通常是当前 UWorld。
+     * @return 允许创建返回 true，否则返回 false。
+     */
+    virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+    /**
+     * 更新数字年龄与合并脉冲，回收过期条目，并通知画布重绘。
+     * @param DeltaTime 本次更新经过的秒数，用于年龄和脉冲衰减。
+     */
+    virtual void Tick(float DeltaTime) override;
+    /**
+     * 提供子系统更新开销的性能统计标识。
+     * @return 供引擎 stat 系统使用的统计标识。
+     */
+    virtual TStatId GetStatId() const override;
+    /**
+     * 没有活动数字时停止更新，避免空闲帧持续查询。
+     * @return 子系统可运行且存在活动条目时返回 true。
+     */
+    virtual bool IsTickable() const override;
+    /**
+     * 接收 Cue 的本地表现：可选同组累加，按玩家限制数量，再按目标安排初始错位。
+     * @param Viewer 本次数字的本地观看者；必须是有效的本地 PlayerController。
+     * @param Target 受击或被治疗的目标，用于归属与合并分组。
+     * @param Source 攻击或治疗来源，用于归属与合并分组，可为空。
+     * @param Location 数字起点的世界坐标；后续移动只影响投影，不自动跟随目标。
+     * @param Amount 指定数值；ReportHitForPlayer 中正数表示伤害、负数表示治疗。
+     * @param Style 普通、暴击或治疗样式，决定颜色、字号及治疗加号。
+     * @param DamageType 伤害分类标签；不同分类不合并，当前不自动计算元素抗性。
+     */
+    void ReportHitForPlayer(APlayerController* Viewer, AActor* Target, AActor* Source, const FVector& Location,
+        float Amount, ECC_DamageTextStyle Style, FGameplayTag DamageType);
+    /** 条目变化通知，容器据此复用、更新和回收 UMG。 */
+    FSimpleMulticastDelegate OnEntriesUpdated;
+    /**
+     * 登记玩家的飘字绘制层，用于发现 RootLayout 与 HUD 重复挂载。
+     * @param Player 当前本地玩家，用于分屏归属和绘制层登记。
+     * @return 该玩家登记后的绘制层数量；大于 1 表示可能重复绘制。
+     */
+    int32 AddDrawLayer(const APlayerController* Player);
+    /**
+     * 撤销玩家的绘制层登记。
+     * @param Player 当前本地玩家，用于分屏归属和绘制层登记。
+     */
+    void RemoveDrawLayer(const APlayerController* Player);
+    /**
+     * 取得唯一的只读活动列表；绘制时按 Viewer 筛选，不复制展示数据。
+     * @return 当前活动条目的只读引用，不要跨帧保存元素引用。
+     */
+    const TArray<FCC_DamageTextEntry>& GetActiveEntries() const { return ActiveEntries; }
+    /** 合并窗口秒数，0=逐击显示；只有同一完整分组允许合并。 */
+    UPROPERTY(EditAnywhere, Category="Damage Text", meta=(ClampMin="0")) float MergeWindow = 0.f;
+    /** 同组数字允许合并的世界距离阈值（厘米），不能代替目标身份。 */
+    UPROPERTY(EditAnywhere, Category="Damage Text", meta=(ClampMin="0")) float MergeDistance = 120.f;
+    /** 数字的存活时长，合并时重新计时。 */
+    UPROPERTY(EditAnywhere, Category="Damage Text", meta=(ClampMin="0.1")) float Lifetime = 1.1f;
+    /** 每玩家条目上限，满时优先淘汰普通伤害，数字丢弃不影响结算。 */
+    UPROPERTY(EditAnywhere, Category="Damage Text", meta=(ClampMin="1")) int32 MaxEntriesPerPlayer = 128;
+    /** true 显示所有角色的数字，false 仅显示自己造成或受到的数字。 */
+    UPROPERTY(EditAnywhere, Category="Damage Text") bool bShowAllDamage = false;
+    /** 调试值：最近提交是否合并，0=新建、1=合并。 */
+    int32 LastMergeCount = 0;
 private:
-	/** 每个本地玩家的绘制层数量，仅用于重复挂载诊断。 */
-	TMap<TWeakObjectPtr<const APlayerController>, int32> DrawLayerCounts;
-	/** 活动列表。新建时插入最前；超时删除采用交换移除，因此不保证长期保持新旧顺序。 */
-	TArray<FCC_DamageTextEntry> ActiveEntries;
-
-	/** 尝试把本次命中并入已有飘字；成功则刷新计时并返回 true。 */
-	bool TryMerge(const FVector& WorldLocation, float Amount, ECC_DamageTextStyle Style);
-
-	/** 老化淘汰：移除已经播完的条目。 */
-	void AgeEntries(float DeltaTime);
-
-	/** 建议的起始屏幕偏移，按当前活动数量错开，避免密集命中时完全重叠。 */
-	FVector2D NextStackOffset() const;
+    /** 按本地玩家记录绘制层数量，只用于重复显示诊断。 */
+    TMap<TWeakObjectPtr<const APlayerController>, int32> DrawLayerCounts;
+    /** 多个本地玩家共用的活动条目，每条记录独立 Viewer。 */
+    TArray<FCC_DamageTextEntry> ActiveEntries;
+    /** 只在本地生成，不作为伤害 RPC 或服务器结算 ID。 */
+    uint64 NextEntryId = 1;
 };

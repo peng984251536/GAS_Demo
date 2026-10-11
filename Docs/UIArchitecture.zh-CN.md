@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | 基础设施 | CC_UIManagerSubsystem、CC_UIPolicy、CC_RootLayout | 本地玩家布局所有权、可配置层级栈、输入、焦点和动画 |
 | View | CC_ActivatableWidget、CC_MainMenuWidget、CC_MultiplayerScreenWidget、CC_CombatMainWidget（及子控件 CC_PlayerVitalsWidget）；世界覆盖层的 CC_BatchedHealthBarWidget、CC_DamageTextWidget | 布局、展示、动画；把操作转发给 Controller |
-| Controller | CC_UIController 及功能子类；世界覆盖层基类 CC_WorldOverlayController（CC_HealthBarOverlayController、CC_DamageTextController） | 订阅业务系统、协调请求、导航、转换展示数据 |
-| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_CombatMainModel、CC_HealthBarOverlayModel、CC_DamageTextModel | 保存 UI 快照；页面模型通过 OnChanged 通知界面，世界覆盖层模型由视图逐帧读取（血条在 Tick 中摆放单条 UMG 控件，飘字在 Paint 中批量绘制） |
+| Controller | CC_UIController 及功能子类；世界覆盖层基类 CC_WorldOverlayController（CC_HealthBarOverlayController） | 订阅业务系统、协调请求、导航、转换展示数据 |
+| 展示 Model | CC_UIModel、CC_MainMenuModel、CC_CombatMainModel、CC_HealthBarOverlayModel | 保存 UI 快照；页面模型通过 OnChanged 通知界面，血条展示模型由视图在 Tick 中读取并摆放控件；飘字直接读取 Subsystem，不再使用 Model |
 | 真实业务 | GAS、CC_OnlineRoomSubsystem 等 | 验证规则、保存真实数据、完成跨地图事务 |
 
 页面强引用 Controller，Controller 强引用 Model；Controller 只弱引用页面和业务系统。Model 不引用 Widget 或 Controller。主菜单和 HUD 模型的写入口只向各自 C++ Controller 开放；View 使用 Getter 获取快照。
@@ -61,18 +61,16 @@
 
 ## 世界覆盖层（头顶血条、伤害飘字）
 
-两者都在 RootLayout 的世界覆盖层里，不是入栈页面，但同样走 View / Controller / Model：
+两者都由 RootLayout 的世界覆盖层创建，不进入页面栈。头顶血条保留 MVC；飘字采用更短的数据链路：
 
-- 头顶血条：`CC_BatchedHealthBarSubsystem → CC_HealthBarOverlayController → CC_HealthBarOverlayModel → CC_BatchedHealthBarWidget`
-- 伤害飘字：`CC_DamageTextSubsystem → CC_DamageTextController → CC_DamageTextModel → CC_DamageTextWidget / SCC_DamageTextLayer`
+- 头顶血条：`CC_BatchedHealthBarSubsystem → CC_HealthBarOverlayController → CC_HealthBarOverlayModel → CC_BatchedHealthBarWidget`。
+- 伤害飘字：`GameplayCue → CC_DamageTextSubsystem → SCC_DamageTextLayer`，`CC_DamageTextWidget` 负责挂载和更新订阅。
 
-与页面的区别：
+飘字 Subsystem 保留唯一活动列表，负责合并、排列、容量限制和回收。Widget 创建 Slate、订阅更新后使画布失效，释放时撤销订阅与绘制层登记。Slate 直接只读列表，按当前玩家筛选，处理投影和动画，不创建展示 Model，也不复制条目。
 
-1. 视图不是 `CC_ActivatableWidget`，用 `CC_UIController::CreateForView` 自己创建控制器：Slate 构建时 Activate，释放（含切图）时 Release。`CanHandleActions` / `RequestClose` 对这类控制器始终返回 false。
-2. 数据逐帧变化：子系统每次 Tick 或增删后广播 `OnEntriesUpdated`，控制器把条目转换为快照写入模型；视图在 Paint 时直接读取模型，模型不广播 OnChanged，避免每帧触发蓝图事件。
-3. 子系统仍是对外入口和数据源：敌人和蓝图通过 `Register Health Bar` 注册血条，GameplayCue 通过 `ReportHit` 提交飘字。显示规则（显隐、死亡/满血隐藏）在控制器里，投影和绘制在视图里，视图不再访问子系统。
-4. 两个功能各用一个控制器，不合并：数据来源（本地玩家 / 世界）和更新节奏不同。共用的部分是基类 `CC_WorldOverlayController`（重复挂载诊断）和投影工具 `FCC_WorldOverlayProjector`（世界坐标到控件坐标的换算）。
-5. 与 `CC_CombatMainWidget` 互相独立：战斗主界面是 Game 层的入栈页面，覆盖层由根布局直接托管，换战斗主界面不影响头顶血条和飘字。
+RootLayout 切图/切换 Controller 时释放 Slate 并重新挂载；Widget 因而重新绑定新玩家所在世界。绘制层使用弱引用，并拒绝绘制玩家/世界不匹配的数据。属性同步也会刷新绑定。
+
+血条和飘字仍共享投影工具 `FCC_WorldOverlayProjector`，并与战斗主界面独立。只有血条等需要协调展示的覆盖层使用 `CC_WorldOverlayController`。
 
 新增复杂页面时：定义展示模型 → 定义功能 Controller → 在页面设置 ControllerClass → View 转发操作并实现 OnUIModelChanged。功能控制器的 C++ OnActivated/OnDeactivated 覆盖应调用 Super，保证蓝图扩展事件执行。
 

@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Utils/CC_BlueprintLibrary.h"
@@ -10,10 +10,7 @@
 #include "Character/CC_EnemyCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
-#include "Damage/CC_LyraStyleDamage.h"
-#include "Damage/GASDamageExecutionBase.h"
 #include "Kismet/GameplayStatics.h"
-#include "UI/DamageText/CC_DamageTextStatics.h"
 
 ACC_EnemyCharacter* UCC_BlueprintLibrary::SpawnEnemy(const UObject* WorldContextObject,
                                                      TSubclassOf<ACC_EnemyCharacter> EnemyClass, const FTransform& SpawnTransform)
@@ -156,126 +153,3 @@ FClosestActorWithTagResult UCC_BlueprintLibrary::FindClosestActorWithTag(
 
 	return Result;
 }
-
-void UCC_BlueprintLibrary::ApplyGameplayEffectSpecByTag(
-    UAbilitySystemComponent* SourceASC,
-    UAbilitySystemComponent* TargetASC,
-	TSubclassOf<UGameplayEffect> GAEffect,
-	//const FGameplayEffectSpecHandle& SpecHandle,
-	const FGameplayTag& SetByCallTag,
-	int Damage)
-{
-	if (!IsValid(SourceASC) ||
-		!IsValid(TargetASC) ||
-		!GAEffect ||
-		!SetByCallTag.IsValid())
-	{
-		UE_LOG(
-			LogGAS_Demo,
-			Warning,
-			TEXT("ApplyGameplayEffectSpecByTag: Invalid input. SourceASC=%s TargetASC=%s Effect=%s Tag=%s"),
-			*GetNameSafe(SourceASC),
-			*GetNameSafe(TargetASC),
-			*GetNameSafe(GAEffect.Get()),
-			*SetByCallTag.ToString());
-
-		return;
-	}
-	
-	FGameplayEffectContextHandle ContextHandle = SourceASC->MakeEffectContext();
-
-	FGameplayEffectSpecHandle SpecHandle =
-		SourceASC->MakeOutgoingSpec(
-			GAEffect,
-			1.f,
-			ContextHandle
-			);
-
-	//ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-
-	UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
-		(SpecHandle),
-		SetByCallTag,
-		-Damage
-	);
-	//TargetASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-
-	const FActiveGameplayEffectHandle Result =
-	SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
-
-	if (Result.WasSuccessfullyApplied())
-	{
-		UCC_DamageTextStatics::ShowDamageText(
-			TargetASC, Damage,
-			ECC_DamageTextStyle::Normal);
-	}
-}
-
-/**
- * 伤害计算
- * @param SourceASC 
- * @param TargetASC 
- */
-void UCC_BlueprintLibrary::ApplyHeavyAttackDamage(UAbilitySystemComponent* SourceASC,
-                                                  UAbilitySystemComponent* TargetASC)
-{
-	if (!IsValid(SourceASC) || !IsValid(TargetASC))
-	{
-		return;
-	}
-
-	// 实际伤害由服务器结算。
-	if (!SourceASC->IsOwnerActorAuthoritative()
-		|| !TargetASC->IsOwnerActorAuthoritative())
-	{
-		return;
-	}
-
-	// 1. 创建上下文，记录这次效果的来源。
-	FGameplayEffectContextHandle Context =
-		SourceASC->MakeEffectContext();
-
-	// 如果有本次命中的 FHitResult，可在创建 Spec 前添加：
-	// Context.AddHitResult(HitResult);
-
-	// 2. 创建新的伤害 GE Spec。
-	// 此时会按默认配置快照攻击者的 AttackPower。
-	FGameplayEffectSpecHandle Spec =
-		SourceASC->MakeOutgoingSpec(
-			UCC_GE_LyraStyleDamage::StaticClass(),
-			1.0f,   // GE 等级，不是伤害倍率
-			Context);
-
-	if (!Spec.IsValid())
-	{
-		return;
-	}
-
-	// 3. 填写这一次攻击的参数。
-	Spec.Data->SetSetByCallerMagnitude(
-		StandaloneDamageTags::SkillScale, 2.0f);
-
-	Spec.Data->SetSetByCallerMagnitude(
-		StandaloneDamageTags::FlatDamage, 20.0f);
-
-	// 这两项默认就是 1，不填写也可以。
-	Spec.Data->SetSetByCallerMagnitude(
-		StandaloneDamageTags::DistanceMultiplier, 1.0f);
-
-	Spec.Data->SetSetByCallerMagnitude(
-		StandaloneDamageTags::HitMultiplier, 1.0f);
-
-	// 4. 应用到受击者。
-	// GAS 自动执行伤害计算，并输出 Health 扣减。
-	SourceASC->ApplyGameplayEffectSpecToTarget(
-		*Spec.Data.Get(),
-		TargetASC);
-}
-
-
-
-
-
-
-
-

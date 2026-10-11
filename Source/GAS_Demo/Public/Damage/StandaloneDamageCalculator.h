@@ -10,7 +10,7 @@
  * 输出接入层负责：扣血、护盾、死亡通知、飘字等游戏状态与表现。
  *
  * 相同输入总是得到相同结果；这里没有随机数、Actor 查询或属性写入。
- * 使用独立命名空间，避免与原项目的 CombatDamage::FCalculator/FModifier 混淆。
+ * 这是普通 C++ 函数和数值结构，不是另一套 UObject 伤害执行类。
  */
 namespace StandaloneDamage
 {
@@ -79,6 +79,9 @@ namespace StandaloneDamage
          */
         double IncomingMultiplier = 1.0;
 
+        /** 已聚合的输出增伤总倍率，1.5 表示增伤 50%，在固定防御前应用。 */
+        double OutgoingMultiplier = 1.0;
+
         /**
          * 外部团队、无敌等规则给出的许可结果。
          * false 时返回成功的零伤害；但仍先校验所有数值，不隐藏非法配置。
@@ -100,7 +103,7 @@ namespace StandaloneDamage
         /** 攻击力 * 技能系数 + 技能固定伤害，尚未处理命中环境。 */
         double RawDamage = 0.0;
 
-        /** RawDamage * 距离系数 * 命中倍率，即扣防御之前的伤害。 */
+        /** RawDamage * 输出增伤倍率 * 距离系数 * 命中倍率，即扣防御之前的伤害。 */
         double DamageBeforeDefense = 0.0;
 
         /** max(0, DamageBeforeDefense - Defense)，尚未应用承伤倍率。 */
@@ -122,7 +125,7 @@ namespace StandaloneDamage
      *
      * 固定顺序：
      *   攻击力 * 技能系数 + 固定伤害
-     *   -> 乘距离系数 -> 乘命中倍率 -> 扣固定防御并归零 -> 乘承伤倍率。
+     *   -> 乘输出增伤倍率 -> 乘距离系数 -> 乘命中倍率 -> 扣固定防御并归零 -> 乘承伤倍率。
      *
      * 示例：(100 * 2 + 20) * 0.5 * 2 = 220；扣 30 防御为 190；
      *       再乘 0.8 承伤倍率，最终为 152。
@@ -135,7 +138,7 @@ namespace StandaloneDamage
         // 1. 统一校验完整输入，即使本次禁止伤害，也能发现非法配置。
         const double Values[] = {
             Input.AttackPower, Input.SkillScale, Input.FlatDamage, Input.Defense,
-            Input.DistanceMultiplier, Input.HitMultiplier, Input.IncomingMultiplier
+            Input.DistanceMultiplier, Input.HitMultiplier, Input.IncomingMultiplier, Input.OutgoingMultiplier
         };
         for (const double Value : Values)
         {
@@ -154,7 +157,9 @@ namespace StandaloneDamage
 
         // 3. 先形成技能伤害，再应用距离衰减。固定伤害不受 SkillScale 放大。
         Result.RawDamage = Input.AttackPower * Input.SkillScale + Input.FlatDamage;
-        Result.DamageBeforeDefense = Result.RawDamage * Input.DistanceMultiplier;
+        Result.DamageBeforeDefense = Result.RawDamage * Input.OutgoingMultiplier;
+        if (!std::isfinite(Result.DamageBeforeDefense)) return { EError::Overflow };
+        Result.DamageBeforeDefense *= Input.DistanceMultiplier;
         // 每个阶段检查溢出，不能让后续的零倍率掩盖错误。
         if (!std::isfinite(Result.RawDamage) || !std::isfinite(Result.DamageBeforeDefense))
         {

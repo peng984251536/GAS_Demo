@@ -1,4 +1,4 @@
-// 世界覆盖层控制器基类：头顶血条、伤害飘字等投影到视口的常驻 UI 共用的约定。
+// 世界覆盖层控制器基类：头顶血条等需要 MVC 协调的常驻 UI 共用约定；伤害飘字已改为直接读取子系统。
 #pragma once
 
 #include "UI/Framework/CC_UIController.h"
@@ -13,7 +13,7 @@
  *   - 数据逐帧变化：子类在数据源每次更新后改写模型，视图在 Paint 中直接读取模型，
  *     模型不广播 OnChanged，避免每帧触发蓝图事件。
  *
- * 每种覆盖层各自一个子类（血条、飘字），数据来源和更新节奏不同，不合并成一个控制器。
+ * 复杂覆盖层按功能使用各自子类；简单飘字不再创建控制器。
  */
 UCLASS(Abstract)
 class GAS_DEMO_API UCC_WorldOverlayController : public UCC_UIController

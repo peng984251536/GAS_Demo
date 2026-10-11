@@ -1,74 +1,49 @@
-// 集中绘制的 Slate 叶子控件：所有数字共用一份画布，不为每次命中创建子控件。
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Widgets/SLeafWidget.h"
-#include "Widgets/DeclarativeSyntaxSupport.h"
-#include "UI/DamageText/CC_DamageTextTypes.h"
-
-class APlayerController;
-class UCC_DamageTextModel;
+#include "Widgets/Layout/SConstraintCanvas.h"
+class UCC_DamageTextWidget;
 
 /**
- * 伤害飘字绘制层。
- *
- * 这是一个 SLeafWidget（叶子控件，没有子槽），在 OnPaint 里一次性把所有
- * 活动飘字画完。所有数字共用一个控件的一次 OnPaint，但会提交多个文字绘制元素，不保证一个 draw call。
- *
- * 性能要点：
- *   - 不创建任何子控件。飘字数量增加不会增加控件数量，也就没有额外的布局计算。
- *   - 每帧只构建一次视图/投影矩阵，整批飘字复用，而不是每个飘字算一遍。
- *   - ComputeDesiredSize 返回 Zero，控件不占布局空间，纯粹作为绘制画布。
- *   - 没有活动飘字时 OnPaint 立即返回，不做任何投影。
- *
- * 数据只来自 CC_DamageTextModel（由 CC_DamageTextController 逐帧写入），本控件不访问子系统。
- * 构造时必须传入 Model 和 PlayerController；后者只用于取摄像机与视口做投影。
+ * 公共 UMG 布局面板：安排子控件，数字内容由 UMG 的 TextBlock 绘制。
+ * 简单模板可共享 Layer ID；资源、字体图集和裁剪仍可能拆批，不能保证一个 Draw Call。
  */
-class GAS_DEMO_API SCC_DamageTextLayer : public SLeafWidget
+class GAS_DEMO_API SCC_DamageTextLayer : public SConstraintCanvas
 {
 public:
-	SLATE_BEGIN_ARGS(SCC_DamageTextLayer)
-		: _FontSize(28.0f)
-		, _CritFontSize(40.0f)
-		, _RiseHeight(80.0f)
-	{}
-		/** 普通伤害字号。用 TAttribute 惰性求值，编辑器里改属性立即生效，无需重建控件。 */
-		SLATE_ATTRIBUTE(float, FontSize)
-		/** 暴击字号。应当明显大于普通字号才能形成视觉层级。 */
-		SLATE_ATTRIBUTE(float, CritFontSize)
-		/** 整个生命周期内向上飘升的像素高度。 */
-		SLATE_ATTRIBUTE(float, RiseHeight)
-		/** 投影用的控制器。通常是本机玩家的 Controller。 */
-		SLATE_ARGUMENT(APlayerController*, PlayerController)
-		/** 飘字展示模型；为空时不绘制。 */
-		SLATE_ARGUMENT(UCC_DamageTextModel*, Model)
-	SLATE_END_ARGS()
-
-	void Construct(const FArguments& InArgs);
-
-	// --- SWidget ---
-	virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
-		const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
-		int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
-
-	virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override;
-
+    SLATE_BEGIN_ARGS(SCC_DamageTextLayer) : _OwnerWidget(nullptr) {}
+        SLATE_ARGUMENT(UCC_DamageTextWidget*, OwnerWidget)
+    SLATE_END_ARGS()
+    /**
+     * 创建公共面板并启用一次集中位置更新。
+     * @param Args 构造参数，包含 UMG 外壳。
+     */
+    void Construct(const FArguments& Args);
+    /**
+     * 由容器统一同步位置，不给每个数字编写 Tick。
+     * @param Geometry 当前面板几何。
+     * @param CurrentTime 引擎当前时间。
+     * @param DeltaTime 本帧经过的秒数。
+     */
+    virtual void Tick(const FGeometry& Geometry, double CurrentTime, float DeltaTime) override;
+    /**
+     * 转交 UMG 子控件绘制；简单模板共享起始层，复杂布局可回退标准 Canvas 层级。
+     * @param Args Slate 绘制上下文。
+     * @param Geometry 当前容器几何。
+     * @param CullingRect 绘制裁剪区域。
+     * @param DrawElements 输出绘制元素列表。
+     * @param LayerId 起始层级。
+     * @param WidgetStyle 父级 Slate 样式。
+     * @param bParentEnabled 父级是否启用。
+     * @return 绘制完成后的最大层级。
+     */
+    virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& Geometry, const FSlateRect& CullingRect,
+        FSlateWindowElementList& DrawElements, int32 LayerId, const FWidgetStyle& WidgetStyle, bool bParentEnabled) const override;
+    /**
+     * 全屏容器依靠外部 Overlay 填充，不根据数字位置扩展期望尺寸。
+     * @param LayoutScaleMultiplier 布局缩放倍率。
+     * @return 零期望尺寸。
+     */
+    virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override { return FVector2D::ZeroVector; }
 private:
-	/** 按样式取颜色；Alpha 用于生命周期淡入淡出。 */
-	static FLinearColor StyleColor(ECC_DamageTextStyle Style, float Alpha);
-
-	/** 按样式取字号（未乘弹跳缩放）。 */
-	float StyleFontSize(ECC_DamageTextStyle Style) const;
-
-	/** 格式化数值文本：伤害为纯数字，治疗带 + 号。 */
-	static FText FormatAmount(float Amount, ECC_DamageTextStyle Style);
-
-	/** 弱引用，避免绘制层延长控制器生命周期。 */
-	TWeakObjectPtr<APlayerController> CachedController;
-	/** 弱引用，模型由控制器持有。 */
-	TWeakObjectPtr<UCC_DamageTextModel> CachedModel;
-
-	TAttribute<float> NormalFontSize;
-	TAttribute<float> CriticalFontSize;
-	TAttribute<float> Rise;
+    TWeakObjectPtr<UCC_DamageTextWidget> OwnerWidget;
 };

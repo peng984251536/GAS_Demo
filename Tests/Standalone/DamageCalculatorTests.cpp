@@ -64,6 +64,12 @@ int main()
     Input.HitMultiplier = 2.0;
     Check(Calculate(Input).Error == EError::Overflow, "final-stage overflow rejected");
 
+    Input = FInput{};
+    Input.AttackPower = 100.; Input.SkillScale = 2.; Input.FlatDamage = 20.;
+    Input.OutgoingMultiplier = 1.5; Input.HitMultiplier = 2.; Input.Defense = 30.; Input.IncomingMultiplier = 0.8;
+    Check(Near(Calculate(Input).FinalDamage, 504.), "outgoing bonus is applied before defense and incoming reduction");
+    Input.OutgoingMultiplier = -1.;
+    Check(Calculate(Input).Error == EError::InvalidInput, "negative outgoing multiplier rejected");
     std::cout << (Failures == 0 ? "PASS" : "FAIL") << ": standalone damage scenarios; failures=" << Failures << '\n';
     return Failures == 0 ? 0 : 1;
 }
