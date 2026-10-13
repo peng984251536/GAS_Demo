@@ -7,6 +7,7 @@
 #include "Abilities/GameplayAbility.h"
 #include "GameplayEffect.h"
 #include "Data/CC_TargetingTypes.h"
+#include "Components/CC_BuffComponent.h"
 #include "GameFramework/Character.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 
@@ -20,6 +21,7 @@ class UCC_CharacterConfig;
 class UCC_CharacterRuntimeData;
 class UCC_AttributeSet;
 class UActionComponent;
+class UCombatActionSet;
 
 // 初始化属性后调用
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
@@ -34,6 +36,11 @@ namespace CrashTags
 }
 
 
+/**
+ * 玩家与敌人共用的角色基类，提供属性、动作、运行时数据和 buff 的访问入口。
+ * 角色配置资产保持共享只读；当前生命、活动效果与动作状态由角色、ASC 和组件管理。
+ * 死亡和重生通过本类统一清理状态，UI 可以读取活动 buff 信息而不参与效果结算。
+ */
 UCLASS(Abstract)
 class GAS_DEMO_API ACC_BaseCharacter : public ACharacter,public IAbilitySystemInterface
 {
@@ -42,6 +49,24 @@ class GAS_DEMO_API ACC_BaseCharacter : public ACharacter,public IAbilitySystemIn
 public:
 	UPROPERTY(BlueprintAssignable)
 	FASCInitialized OnASCInitialized;
+    /**
+     * 获取当前角色独立的 buff 访问组件，用于施加效果和绑定 UI 变化通知。
+     * 配置保持共享只读，活动句柄与特殊玩法状态属于这个角色实例。
+     */
+    UFUNCTION(BlueprintPure, Category="Buff")
+    UCC_BuffComponent* GetBuffComponent() const { return BuffComponent; }
+    /**
+     * 返回当前角色的活动 buff 信息，供 UI 读取配置、层数与到期时间。
+     * 数据来自 GAS 的活动效果事件，可在客户端显示。
+     */
+    UFUNCTION(BlueprintPure, Category="Buff")
+    TArray<FCC_ActiveBuffInfo> GetActiveBuffs() const;
+    /**
+     * 获取当前实际使用的攻击动作集，优先使用有效 buff 的临时覆盖。
+     * 没有覆盖时返回角色共享配置中的动作集，不修改配置资产。
+     */
+    UFUNCTION(BlueprintPure, Category="Buff")
+    UCombatActionSet* GetEffectiveAttackActionSet() const;
 	
 	ACC_BaseCharacter();
 	
@@ -91,6 +116,8 @@ public:
 
 	
 protected:
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Buff")
+    TObjectPtr<UCC_BuffComponent> BuffComponent;
 
 	/** 构造函数创建的独立子对象；状态变化不会写回配置资产。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Instanced, Category = "Crash|Data")

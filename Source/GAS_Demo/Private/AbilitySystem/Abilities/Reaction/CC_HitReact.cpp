@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "AbilitySystem/Abilities/Reaction/CC_HitReact.h"
 #include "GAS_Demo.h"
@@ -66,7 +66,8 @@ void UCC_HitReact::ActivateAbility(const FGameplayAbilitySpecHandle Handle, cons
 		? Cast<ACC_BaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 	const UAbilitySystemComponent* HitASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
 	if (!IsValid(HitCharacter) || !HitCharacter->IsAlive() || HitCharacter->IsActorBeingDestroyed()
-		|| !IsValid(HitASC) || HitASC->HasMatchingGameplayTag(CCTags::Status::Death))
+		|| !IsValid(HitASC) || HitASC->HasMatchingGameplayTag(CCTags::Status::Death)
+		|| HitASC->HasMatchingGameplayTag(CCTags::Status::SuperArmor))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
@@ -117,6 +118,3 @@ void UCC_HitReact::FinishOwnedAction(bool bWasCancelled)
 
 	BaseCharacter->HandleRefreshHit();
 }
-
-
-

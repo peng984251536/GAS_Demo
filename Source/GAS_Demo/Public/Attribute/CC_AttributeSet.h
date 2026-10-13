@@ -49,6 +49,7 @@ public:
 	 * @param Attribute 正在发生变化的属性字段标识。
 	 * @param NewValue 待写入的数值，按引用裁剪到合法范围。
 	 */
+	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 
 	/**
@@ -100,6 +101,8 @@ public:
 	/** 攻击力数值；GAS 捕获时包含已聚合的攻击 Buff。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_AttackPower, Category = "Attributes|Vital")
 	FGameplayAttributeData AttackPower;
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_MoveSpeedMultiplier, Category="Attributes|Combat")
+	FGameplayAttributeData MoveSpeedMultiplier;
 	// 伤害修正与暴击属性
 	/** 固定防御，从防御前伤害中扣除，不是百分比护甲。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Defense, Category = "Attributes|Combat")
@@ -128,6 +131,8 @@ public:
 	// 属性复制回调
 
 	UFUNCTION()
+	void OnRep_MoveSpeedMultiplier(const FGameplayAttributeData& OldValue);
+	UFUNCTION()
 	void OnRep_Health(const FGameplayAttributeData& OldValue);
 	UFUNCTION()
 	void OnRep_MaxHealth(const FGameplayAttributeData& OldValue);
@@ -152,6 +157,7 @@ public:
 
 	// 属性访问器：统一集中声明 Getter / Setter / Init
 
+	ATTRIBUTE_ACCESSORS(ThisClass, MoveSpeedMultiplier);
 	ATTRIBUTE_ACCESSORS(ThisClass, Health);
 	ATTRIBUTE_ACCESSORS(ThisClass, MaxHealth);
 	ATTRIBUTE_ACCESSORS(ThisClass, Mana);

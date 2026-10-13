@@ -15,6 +15,7 @@ UCC_AttributeSet::UCC_AttributeSet()
 	, Mana(50.f)
 	, MaxMana(50.f)
 	, AttackPower(10.f)
+	, MoveSpeedMultiplier(1.f)
 	, Defense(0.f)
 	, OutgoingDamageBonus(0.f)
 	, IncomingDamageMultiplier(1.f)
@@ -34,6 +35,7 @@ UCC_AttributeSet::UCC_AttributeSet()
 void UCC_AttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION_NOTIFY(ThisClass, MoveSpeedMultiplier, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(ThisClass, Health, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(ThisClass, MaxHealth, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(ThisClass, Mana, COND_None, REPNOTIFY_Always);
@@ -233,4 +235,15 @@ void UCC_AttributeSet::ClampAttribute(const FGameplayAttribute& Attribute, float
 	else if (Attribute == GetCriticalMultiplierAttribute()) Value = FMath::Max(1.f, Value);
 	else if (Attribute == GetOutgoingDamageBonusAttribute()) Value = FMath::Max(-1.f, Value);
 	else Value = FMath::Max(0.f, Value);
+}
+
+void UCC_AttributeSet::OnRep_MoveSpeedMultiplier(const FGameplayAttributeData& OldValue)
+{
+    GAMEPLAYATTRIBUTE_REPNOTIFY(ThisClass, MoveSpeedMultiplier, OldValue);
+}
+void UCC_AttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
+{
+    Super::PostAttributeChange(Attribute, OldValue, NewValue);
+    if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue) SetHealth(FMath::Max(0.f, NewValue));
+    if (Attribute == GetMaxManaAttribute() && GetMana() > NewValue) SetMana(FMath::Max(0.f, NewValue));
 }
