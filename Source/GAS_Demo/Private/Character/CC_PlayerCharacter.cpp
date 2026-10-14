@@ -1,4 +1,5 @@
 ﻿#include "Character/CC_PlayerCharacter.h"
+#include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
 
 #include "AbilitySystemComponent.h"
@@ -167,3 +168,7 @@ UActionComponent* ACC_PlayerCharacter::GetUCombatActionComponent() const
 
 #pragma endregion 
 
+FGameplayTag ACC_PlayerCharacter::GetDefaultTeam() const
+{
+	return CCTags::Team::Player;
+}

@@ -279,5 +279,7 @@ const UCC_CharacterConfig* ACC_EnemyCharacter::GetCharacterConfig() const
 }
 #pragma endregion 
 
-
-
+FGameplayTag ACC_EnemyCharacter::GetDefaultTeam() const
+{
+	return CCTags::Team::Enemy;
+}

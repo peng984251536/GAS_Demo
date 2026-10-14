@@ -35,6 +35,8 @@ public:
 	virtual UCC_AttributeSet* GetAttributeSet() const override;
 	virtual  UActionComponent* GetUCombatActionComponent() const override;
 	virtual const UCC_CharacterConfig* GetCharacterConfig() const override;
+	/** 默认属于 CCTags.Team.Enemy；CharacterConfig.Team 有值时以配置为准。 */
+	virtual FGameplayTag GetDefaultTeam() const override;
 	
 	virtual void HandleDeath() override;
 	virtual void HandleRespawn() override;
