@@ -28,6 +28,8 @@ public:
 	virtual void OnRep_PlayerState() override;
 	bool TryActivateAbilities(TSubclassOf<UGameplayAbility> AbilityClass) const;
 	virtual UCC_AttributeSet* GetAttributeSet() const override;
+	/** 默认属于 CCTags.Team.Player；CharacterConfig.Team 有值时以配置为准。 */
+	virtual FGameplayTag GetDefaultTeam() const override;
 	
 	//蓝图事件
 	// UFUNCTION(BlueprintImplementableEvent, Category="Crash|Input")

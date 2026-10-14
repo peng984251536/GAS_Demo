@@ -101,6 +101,17 @@ namespace CCTags
 			"CCTags.Status.BeHit",
 			"角色处于受击状态"
 		);
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(
+			Charmed,
+			"CCTags.Status.Charmed",
+			"角色被魅惑，有效阵营变为施加者的阵营"
+		);
+	}
+
+	namespace Team
+	{
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Player, "CCTags.Team.Player", "玩家阵营（玩家及其随从）");
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(Enemy, "CCTags.Team.Enemy", "敌人阵营");
 	}
 
 	namespace UILayer

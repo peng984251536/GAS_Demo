@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystem/Abilities/CC_GameplayAbilityBase.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "UI/HealthBar/CC_HealthBarTypes.h"
 #include "CC_CharacterConfig.generated.h"
 
@@ -58,7 +59,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Montage")
 	TObjectPtr<UCombatActionData> DeathActionData;
 
-	/** 索敌时查找的 Actor Tag；带该 Tag 的存活角色会成为目标。默认 Player，改它即可改变索敌目标。 */
+	/**
+	 * 角色的基础阵营。为空时使用角色类的默认阵营（玩家角色为 CCTags.Team.Player，敌人为 CCTags.Team.Enemy）。
+	 * 站在玩家一边的 AI 随从在这里填 CCTags.Team.Player。敌我判断统一走 UCC_TeamStatics::IsHostile。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Team", meta = (Categories = "CCTags.Team"))
+	FGameplayTag Team;
+
+	/** 旧索敌方案（CC_FindRangedTarget）使用的 Actor Tag；AI 控制器已改为按阵营选目标，不再读取它。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Character|Targeting")
 	FName TargetingActorTag = FName("Player");
 	/** 最大射程；目标距离不超过它时无需移动。 */

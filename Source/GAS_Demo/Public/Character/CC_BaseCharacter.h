@@ -81,6 +81,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Crash|Data")
 	UCC_CharacterRuntimeData* GetRuntimeData() const;
 
+	/**
+	 * 角色类的默认阵营，CharacterConfig.Team 为空时使用。
+	 * 不要直接调用它判断敌我，请使用 UCC_TeamStatics::IsHostile。
+	 * @return 基类返回空标签，表示不属于任何阵营（与任何人都不敌对）。
+	 */
+	virtual FGameplayTag GetDefaultTeam() const { return FGameplayTag(); }
+
 	// 保留角色查询接口，让现有蓝图、AI、能力继续使用。
 	UFUNCTION(BlueprintCallable, Category = "Crash|Abilities")
 	void SetLastMoveInputDirection(const FVector& InDirection);
