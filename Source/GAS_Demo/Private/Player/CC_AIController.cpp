@@ -95,7 +95,11 @@ void ACC_AIController::BeginPlay()
 
 #pragma endregion 
 
-
+/**
+ * 
+ * @param Actor 
+ * @param Stimulus 
+ */
 void ACC_AIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
 	UBlackboardComponent* BlackboardComp = GetBlackboardComponent();

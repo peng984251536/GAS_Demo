@@ -1,0 +1,82 @@
+sequenceDiagram
+    autonumber
+    participant P as 拾取 / 施加入口
+    participant BC as BuffComponent（服务器）
+    participant S as 来源 ASC
+    participant A as 目标 ASC / GAS
+    participant B as Behavior 实例
+    participant C as 客户端 BuffComponent / UI
+
+    Note over BC,A: ASC 已完成初始化与事件绑定；来源为空时使用目标 ASC
+    P->>BC: ApplyBuff(GEClass, SourceASC, Level)
+    BC->>BC: 校验权威、存活、配置与参数
+    BC->>S: MakeOutgoingSpec + SourceObject / SetByCaller
+    S->>A: ApplyGameplayEffectSpecToTarget
+
+    alt GAS 拒绝施加
+        A-->>S: 应用失败
+        S-->>BC: 失败结果
+        BC-->>P: WasSuccessfullyApplied = false
+    else Instant 效果
+        A->>A: 执行原生 GE
+        Note over BC,C: 不创建活动 Buff 实例或 UI 条目；Instant 禁止配置 Behavior
+        A-->>S: 应用结果
+        S-->>BC: 应用结果
+        BC-->>P: 用 WasSuccessfullyApplied 判断成功
+    else 持续 / 永久效果：首次新增
+        A->>A: 创建 ActiveGE，计算属性、标签及抑制状态
+        A-->>BC: HandleEffectAdded(Handle)
+        BC->>BC: 创建 Instance；复制各 Behavior 模板；绑定 GE 事件
+        BC->>BC: RefreshFromGAS：读取真实层数、等级、时间、抑制
+        loop 每个 Behavior
+            BC->>B: Initialize(Component, View)
+            B->>B: Disabled；OnInitialized()
+            opt 当前未被抑制
+                BC->>B: Enable()
+                B->>B: Enabled；OnEnabled()
+            end
+        end
+        BC->>BC: SetHooks；更新 UI 快照；MarkItemDirty
+        BC-->>C: FastArray 增量复制
+        C->>C: PostReplicatedReceive → OnBuffsChanged → 刷新展示
+        A-->>S: 应用结果
+        S-->>BC: 应用结果
+        BC-->>P: 返回 GE Handle / 应用结果
+    end
+
+    opt 后续叠层 / 时间刷新
+        A-->>BC: OnStackChanged / OnTimeChanged
+        BC->>BC: RefreshFromGAS
+        BC->>B: UpdateView(View, bRefreshed)
+        B->>B: 层数变化调用 OnStackChanged；时间变化调用 OnRefreshed
+        Note over BC,B: 保留原 Behavior 对象，不再次 Initialize
+        BC-->>C: 更新层数与到期时间
+    end
+
+    opt 后续抑制与恢复
+        A-->>BC: OnInhibitionChanged(true)
+        BC->>BC: 从 HookIndex 移除该实例
+        BC->>B: Disable(Inhibited)
+        B->>B: OnDisabled；ReleaseResources(false)
+        Note over B: 清理订阅、计时器、WhileEnabled 资源；保留 Instance 资源
+        BC-->>C: bIsInhibited = true
+
+        A-->>BC: OnInhibitionChanged(false)
+        BC->>B: UpdateView；Enable()
+        B->>B: OnEnabled；重新登记启用期间资源
+        BC->>BC: 重新加入 HookIndex
+        BC-->>C: bIsInhibited = false
+    end
+
+    opt 到期 / 驱散 / 最终清理
+        Note over BC,A: 主动移除先调用 RemoveActiveGameplayEffect；到期由 GAS 发起
+        A->>A: 移除 ActiveGE，收回原生属性、标签及授予能力
+        A-->>BC: HandleEffectRemoved(Effect)
+        BC->>BC: FinishInstance：先摘除实例、钩子与 UI 条目
+        BC->>B: Shutdown(Reason)
+        B->>B: Finished；若仍 Enabled 则 OnDisabled(Ending)
+        B->>B: OnShutdown；ReleaseResources(true)
+        Note over B: 回收全部持有资源；Independent 子 GE / Actor 不由父 Buff 回收
+        BC->>BC: MarkArrayDirty；通知变化
+        BC-->>C: 删除展示条目
+    end

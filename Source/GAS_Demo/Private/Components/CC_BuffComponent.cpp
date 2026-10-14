@@ -1,23 +1,26 @@
 #include "Components/CC_BuffComponent.h"
-#include "Data/Buff/CC_BuffDefinition.h"
 #include "Data/Buff/CC_BuffBehavior.h"
-#include "Effects/Buff/CC_BuffFactory.h"
-#include "Effects/Buff/CC_GE_Buff.h"
+#include "Data/Buff/CC_BuffRulesComponent.h"
+#include "Data/Buff/CC_BuffUIData.h"
 #include "Character/CC_BaseCharacter.h"
 #include "Attribute/CC_AttributeSet.h"
 #include "AbilitySystemComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
-#include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "UObject/StrongObjectPtr.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
+void FCC_ReplicatedBuffArray::PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters)
+{
+    if (Owner) Owner->NotifyReplicatedChange();
+}
 UCC_BuffComponent::UCC_BuffComponent()
 {
     SetIsReplicatedByDefault(true);
     PrimaryComponentTick.bCanEverTick = false;
+    ReplicatedBuffs.Owner = this;
 }
-
 void UCC_BuffComponent::BeginPlay()
 {
     Super::BeginPlay();
@@ -27,80 +30,96 @@ void UCC_BuffComponent::BeginPlay()
         InitializeASC(Character->GetAbilitySystemComponent(), Character->GetAttributeSet());
     }
 }
-
+bool UCC_BuffComponent::CanApply() const
+{
+    const auto* Character = Cast<ACC_BaseCharacter>(GetOwner());
+    return !bEnded && !bClearing && Character && Character->HasAuthority() && Character->IsAlive()
+        && !Character->IsActorBeingDestroyed() && BoundASC.IsValid() && BoundASC->GetAvatarActor() == Character;
+}
 void UCC_BuffComponent::UnbindASC()
 {
-    auto* ASC = BoundASC.Get();
-    if (!ASC) return;
-    ASC->OnActiveGameplayEffectAddedDelegateToSelf.RemoveAll(this);
-    ASC->OnGameplayEffectAppliedDelegateToSelf.RemoveAll(this);
-    ASC->OnAnyGameplayEffectRemovedDelegate().RemoveAll(this);
-    ASC->GetGameplayAttributeValueChangeDelegate(UCC_AttributeSet::GetMoveSpeedMultiplierAttribute()).RemoveAll(this);
-    for (const auto& Entry : Runtime)
-        if (auto* Events = ASC->GetActiveEffectEventSet(Entry.Effect))
-        {
-            Events->OnStackChanged.RemoveAll(this);
-            Events->OnTimeChanged.RemoveAll(this);
-            Events->OnInhibitionChanged.RemoveAll(this);
-        }
+    if (auto* ASC = BoundASC.Get())
+    {
+        ASC->OnActiveGameplayEffectAddedDelegateToSelf.RemoveAll(this);
+        ASC->OnGameplayEffectAppliedDelegateToSelf.RemoveAll(this);
+        ASC->OnAnyGameplayEffectRemovedDelegate().RemoveAll(this);
+        ASC->GetGameplayAttributeValueChangeDelegate(UCC_AttributeSet::GetMoveSpeedMultiplierAttribute()).RemoveAll(this);
+        for (const auto& Pair : Instances)
+            if (auto* Events = ASC->GetActiveEffectEventSet(Pair.Key))
+            {
+                Events->OnStackChanged.RemoveAll(this);
+                Events->OnTimeChanged.RemoveAll(this);
+                Events->OnInhibitionChanged.RemoveAll(this);
+            }
+    }
 }
-
 void UCC_BuffComponent::InitializeASC(UAbilitySystemComponent* ASC, UAttributeSet* Attributes)
 {
-    if (BoundASC.Get() == ASC) return;
-    if (BoundASC.IsValid()) { ClearBuffs(); UnbindASC(); }
+    if (bEnded || BoundASC.Get() == ASC) return;
+    ClearBuffs(ECC_BuffEndReason::ASCReplaced);
+    UnbindASC();
     BoundASC = ASC;
     if (!ASC) return;
-    if (!bBaseSpeedCaptured)
-        if (auto* Character = Cast<ACC_BaseCharacter>(GetOwner()))
-        {
-            BaseWalkSpeed = Character->GetCharacterMovement()->MaxWalkSpeed;
-            bBaseSpeedCaptured = true;
-        }
-    ASC->GetGameplayAttributeValueChangeDelegate(UCC_AttributeSet::GetMoveSpeedMultiplierAttribute())
-        .AddUObject(this, &ThisClass::UpdateMovementSpeed);
+    if (BaseWalkSpeed <= 0.f)
+        if (auto* Character = Cast<ACC_BaseCharacter>(GetOwner())) BaseWalkSpeed = Character->GetCharacterMovement()->MaxWalkSpeed;
+    ASC->GetGameplayAttributeValueChangeDelegate(UCC_AttributeSet::GetMoveSpeedMultiplierAttribute()).AddUObject(this, &ThisClass::UpdateMovementSpeed);
     UpdateMovementSpeed(FOnAttributeChangeData());
     if (!GetOwner()->HasAuthority()) return;
     ASC->OnActiveGameplayEffectAddedDelegateToSelf.AddUObject(this, &ThisClass::HandleEffectAdded);
     ASC->OnGameplayEffectAppliedDelegateToSelf.AddUObject(this, &ThisClass::HandleEffectAdded);
     ASC->OnAnyGameplayEffectRemovedDelegate().AddUObject(this, &ThisClass::HandleEffectRemoved);
-    for (const auto Handle : ASC->GetActiveEffects(FGameplayEffectQuery()))
-        if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle)) HandleEffectAdded(ASC, Effect->Spec, Handle);
+    const auto Handles = ASC->GetActiveEffects(FGameplayEffectQuery());
+    for (auto Handle : Handles)
+        if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle))
+        {
+            const FGameplayEffectSpec Spec = Effect->Spec;
+            HandleEffectAdded(ASC, Spec, Handle);
+        }
 }
-
-FActiveGameplayEffectHandle UCC_BuffComponent::ApplyBuff(TSubclassOf<UCC_GE_Buff> BuffEffect,
-    UAbilitySystemComponent* SourceASC, float Level)
+FActiveGameplayEffectHandle UCC_BuffComponent::ApplyBuff(TSubclassOf<UGameplayEffect> EffectClass, UAbilitySystemComponent* SourceASC, float Level)
 {
-    auto* Character = Cast<ACC_BaseCharacter>(GetOwner());
-    if (!Character || !Character->HasAuthority() || !Character->IsAlive() || Character->IsActorBeingDestroyed() || bClearing) return {};
-    InitializeASC(Character->GetAbilitySystemComponent(), Character->GetAttributeSet());
-    auto* TargetASC = BoundASC.Get();
-    if (!TargetASC || TargetASC->GetAvatarActor() != Character) return {};
-    if (!SourceASC) SourceASC = TargetASC;
-    if (!IsValid(SourceASC) || !SourceASC->IsOwnerActorAuthoritative()) return {};
-    auto Spec = UCC_BuffFactory::MakeBuffSpec(SourceASC, BuffEffect, Level);
-    if (!Spec.IsValid()) return {};
-    // Native GAS handles requirements, immunity, stacking, overflow, durations, executions and GE component events.
-    return SourceASC->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), TargetASC);
+    return ApplyBuffWithParameters(EffectClass, SourceASC, Level, {});
 }
-
+FActiveGameplayEffectHandle UCC_BuffComponent::ApplyBuffWithParameters(TSubclassOf<UGameplayEffect> EffectClass,
+    UAbilitySystemComponent* SourceASC, float Level, const TMap<FGameplayTag, float>& SetByCaller)
+{
+    if (!CanApply() || !EffectClass || EffectClass->HasAnyClassFlags(CLASS_Abstract) || !FMath::IsFinite(Level) || Level <= 0.f) return {};
+    const auto* Definition = EffectClass.GetDefaultObject();
+    const auto* Rules = Definition->FindComponent<UCC_BuffRulesComponent>();
+    if (!Rules && !Definition->FindComponent<UCC_BuffUIData>()) return {};
+    if (Rules)
+    {
+        if (Definition->DurationPolicy == EGameplayEffectDurationType::Instant && !Rules->Behaviors.IsEmpty()) return {};
+        for (const UCC_BuffBehavior* Behavior : Rules->Behaviors)
+            if (!Behavior || Behavior->GetClass()->HasAnyClassFlags(CLASS_Abstract)) return {};
+    }
+    for (const auto& Pair : SetByCaller) if (!Pair.Key.IsValid() || !FMath::IsFinite(Pair.Value)) return {};
+    if (!SourceASC) SourceASC = BoundASC.Get();
+    if (!IsValid(SourceASC) || !SourceASC->IsOwnerActorAuthoritative()) return {};
+    auto Context = SourceASC->MakeEffectContext();
+    Context.AddSourceObject(Definition);
+    auto Spec = SourceASC->MakeOutgoingSpec(EffectClass, Level, Context);
+    if (!Spec.IsValid()) return {};
+    for (const auto& Pair : SetByCaller) Spec.Data->SetSetByCallerMagnitude(Pair.Key, Pair.Value);
+    return SourceASC->ApplyGameplayEffectSpecToTarget(*Spec.Data, BoundASC.Get());
+}
 void UCC_BuffComponent::HandleEffectAdded(UAbilitySystemComponent* Source, const FGameplayEffectSpec& Spec, FActiveGameplayEffectHandle Handle)
 {
-    if (!GetOwner()->HasAuthority() || !BoundASC.IsValid()) return;
-    const auto* Buff = Cast<UCC_GE_Buff>(Spec.Def);
-    const auto* Active = BoundASC->GetActiveGameplayEffect(Handle);
-    if (!Buff || !Buff->BuffConfiguration || !Active) return; // Instant GE is executed, not an active buff.
-    auto* Entry = Runtime.FindByPredicate([Handle](const auto& R) { return R.Effect == Handle; });
-    if (!Entry)
+    if (bEnded || !GetOwner()->HasAuthority() || !BoundASC.IsValid() || !Spec.Def
+        || !BoundASC->GetActiveGameplayEffect(Handle)) return;
+    const auto* Rules = Spec.Def->FindComponent<UCC_BuffRulesComponent>();
+    if (!Rules && !Spec.Def->FindComponent<UCC_BuffUIData>()) return;
+    if (!Instances.Contains(Handle))
     {
-        const int32 Id = NextInstanceId++;
-        auto& NewEntry = Runtime.AddDefaulted_GetRef();
-        NewEntry.InstanceId = Id;
-        NewEntry.Effect = Handle;
-        auto& Info = ActiveBuffs.AddDefaulted_GetRef();
-        Info.InstanceId = Id;
-        Info.Definition = Buff->BuffConfiguration;
-        Info.EffectClass = Buff->GetClass();
+        FCC_BuffInstance Instance;
+        Instance.View.Handle = Handle;
+        Instance.View.InstanceId = NextInstanceId++;
+        Instance.bRemoveOnDeath = !Rules || Rules->bRemoveOnDeath;
+        if (Rules) for (UCC_BuffBehavior* Template : Rules->Behaviors)
+            if (Template && !Template->GetClass()->HasAnyClassFlags(CLASS_Abstract))
+                Instance.Behaviors.Add(DuplicateObject<UCC_BuffBehavior>(Template, this,
+                    MakeUniqueObjectName(this, Template->GetClass(), Template->GetFName())));
+        Instances.Add(Handle, MoveTemp(Instance));
         if (auto* Events = BoundASC->GetActiveEffectEventSet(Handle))
         {
             Events->OnStackChanged.AddUObject(this, &ThisClass::HandleStackChanged);
@@ -110,160 +129,232 @@ void UCC_BuffComponent::HandleEffectAdded(UAbilitySystemComponent* Source, const
     }
     RefreshFromGAS(Handle);
 }
-
-void UCC_BuffComponent::RefreshFromGAS(FActiveGameplayEffectHandle Handle)
+void UCC_BuffComponent::RefreshFromGAS(FActiveGameplayEffectHandle Handle, bool bRefreshed)
 {
-    const auto* Entry = Runtime.FindByPredicate([Handle](const auto& R) { return R.Effect == Handle; });
+    auto* Instance = Instances.Find(Handle);
     const auto* Effect = BoundASC.IsValid() ? BoundASC->GetActiveGameplayEffect(Handle) : nullptr;
-    if (!Entry || !Effect) return;
-    const int32 Id = Entry->InstanceId;
-    auto* Info = ActiveBuffs.FindByPredicate([Id](const auto& R) { return R.InstanceId == Id; });
-    if (!Info) return;
-    Info->StackCount = Effect->Spec.GetStackCount();
-    Info->Duration = Effect->GetDuration();
-    Info->bIsInhibited = Effect->bIsInhibited;
-    Info->EndServerTime = Info->Duration < 0.f ? -1.f
-        : ServerTime() + FMath::Max(0.f, Effect->StartWorldTime + Info->Duration - GetWorld()->GetTimeSeconds());
-    const bool bInhibited = Info->bIsInhibited;
-    if (bInhibited) StopSpecials(Id); else StartSpecials(Id);
+    if (!Instance || !Effect) return;
+    FCC_BuffInstanceView View = Instance->View;
+    View.Owner = GetOwner();
+    View.TargetASC = BoundASC;
+    View.SourceASC = Effect->Spec.GetContext().GetOriginalInstigatorAbilitySystemComponent();
+    View.Instigator = Effect->Spec.GetContext().GetOriginalInstigator();
+    View.StackCount = Effect->Spec.GetStackCount();
+    View.Level = Effect->Spec.GetLevel();
+    View.SetByCaller = Effect->Spec.SetByCallerTagMagnitudes;
+    FCC_ReplicatedBuffItem Item;
+    Item.InstanceId = View.InstanceId;
+    Item.EffectClass = Effect->Spec.Def->GetClass();
+    Effect->Spec.GetAllAssetTags(Item.BuffTags);
+    Effect->Spec.GetAllGrantedTags(Item.BuffTags);
+    Item.StackCount = View.StackCount;
+    Item.Level = View.Level;
+    Item.Duration = Effect->GetDuration();
+    Item.bIsInhibited = Effect->bIsInhibited;
+    Item.EndServerTime = Item.Duration < 0.f ? -1.f : ServerTime() +
+        FMath::Max(0.f, Effect->StartWorldTime + Item.Duration - GetWorld()->GetTimeSeconds());
+    Instance->View = View;
+    const bool bEnable = !Item.bIsInhibited && !Instance->bSuspendedForDeath && !bEnded;
+    TArray<TStrongObjectPtr<UCC_BuffBehavior>> Behaviors;
+    for (UCC_BuffBehavior* Behavior : Instance->Behaviors) Behaviors.Emplace(Behavior);
+    if (!bEnable) SetHooks(Handle, false);
+    for (const auto& Pin : Behaviors)
+    {
+        auto* Behavior = Pin.Get();
+        if (!Instances.Contains(Handle)) return;
+        if (Behavior->State == ECC_BuffBehaviorState::Uninitialized) Behavior->Initialize(this, View);
+        else
+        {
+            if (!bEnable) Behavior->Disable(ECC_BuffDisableReason::Inhibited);
+            if (!Instances.Contains(Handle)) return;
+            Behavior->UpdateView(View, bRefreshed);
+        }
+        if (!Instances.Contains(Handle)) return;
+        if (bEnable) Behavior->Enable();
+    }
+    Instance = Instances.Find(Handle);
+    Effect = BoundASC.IsValid() ? BoundASC->GetActiveGameplayEffect(Handle) : nullptr;
+    if (!Instance || !Effect) return;
+    // A callback may stack, inhibit or remove the effect. Nested refresh owns newer state.
+    if (Effect->Spec.GetStackCount() != View.StackCount || Effect->bIsInhibited != Item.bIsInhibited) return;
+    SetHooks(Handle, bEnable);
+    auto* Existing = ReplicatedBuffs.Items.FindByPredicate([&](const auto& Entry) { return Entry.InstanceId == Item.InstanceId; });
+    if (!Existing) Existing = &ReplicatedBuffs.Items.AddDefaulted_GetRef();
+    // Preserve FastArray replication identity while replacing display fields.
+    Existing->InstanceId = Item.InstanceId;
+    Existing->EffectClass = Item.EffectClass;
+    Existing->BuffTags = Item.BuffTags;
+    Existing->StackCount = Item.StackCount;
+    Existing->Level = Item.Level;
+    Existing->bIsInhibited = Item.bIsInhibited;
+    Existing->EndServerTime = Item.EndServerTime;
+    Existing->Duration = Item.Duration;
+    ReplicatedBuffs.MarkItemDirty(*Existing);
     NotifyChanged();
 }
-
-void UCC_BuffComponent::StartSpecials(int32 InstanceId)
+void UCC_BuffComponent::SetHooks(FActiveGameplayEffectHandle Handle, bool bEnabled)
 {
-    auto* Entry = Runtime.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-    const auto* Info = ActiveBuffs.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-    if (!Entry || Entry->bSpecialsStarted || !Info || !Info->Definition) return;
-    auto* Character = Cast<ACC_BaseCharacter>(GetOwner());
-    const auto* Definition = Info->Definition.GetDefaultObject();
-    if (!Character || !Character->IsAlive() || !Definition) return;
-    Entry->bSpecialsStarted = true;
-    for (int32 Index = 0; Definition->SummonClass && Index < FMath::Clamp(Definition->SummonCount, 1, 32); ++Index)
+    for (auto& Pair : HookIndex) Pair.Value.RemoveAll([Handle](const auto& Entry) { return Entry.Handle == Handle; });
+    const auto* Instance = Instances.Find(Handle);
+    if (!Instance || !bEnabled) return;
+    for (int32 Index = 0; Index < Instance->Behaviors.Num(); ++Index)
     {
-        const float Angle = 2.f * PI * Index / FMath::Max(1, Definition->SummonCount);
-        const FVector Position = Character->GetActorLocation() + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Definition->SummonRadius;
-        FActorSpawnParameters Parameters;
-        Parameters.Owner = Character;
-        Parameters.Instigator = Character;
-        Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-        if (auto* Pawn = GetWorld()->SpawnActor<APawn>(Definition->SummonClass, Position, Character->GetActorRotation(), Parameters))
+        UCC_BuffBehavior* Behavior = Instance->Behaviors[Index];
+        if (!Behavior->IsEnabled()) continue;
+        for (auto Tag : Behavior->HandledHooks)
         {
-            auto* Current = Runtime.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-            if (!Current || !Current->bSpecialsStarted) { Pawn->Destroy(); return; }
-            Current->Summons.Add(Pawn);
-            Pawn->SpawnDefaultController();
+            auto& Entries = HookIndex.FindOrAdd(Tag);
+            Entries.Add({Behavior, Handle, Behavior->HookPriority, Instance->View.InstanceId, Index});
+            Entries.Sort([](const auto& A, const auto& B)
+            {
+                if (A.Priority != B.Priority) return A.Priority < B.Priority;
+                if (A.InstanceId != B.InstanceId) return A.InstanceId < B.InstanceId;
+                return A.BehaviorIndex < B.BehaviorIndex;
+            });
         }
     }
-    for (const auto& Template : Definition->Behaviors)
+}
+void UCC_BuffComponent::RunHook(FGameplayTag Hook, FInstancedStruct& Context)
+{
+    if (!GetOwner()->HasAuthority() || bEnded || bClearing || !Context.IsValid() || HookDepth >= 8) return;
+    const auto* Entries = HookIndex.Find(Hook);
+    if (!Entries) return;
+    const auto Snapshot = *Entries; // New entries join on the NEXT invocation.
+    const auto* ExpectedType = Context.GetScriptStruct();
+    TGuardValue<int32> DepthGuard(HookDepth, HookDepth + 1);
+    for (const auto& Entry : Snapshot)
     {
-        auto* Current = Runtime.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-        if (!Current || !Current->bSpecialsStarted) return;
-        if (!Template) continue;
-        auto* Behavior = DuplicateObject<UCC_BuffBehavior>(Template, this);
-        Current->Behaviors.Add(Behavior);
-        Behavior->OnApplied(Character, Definition, InstanceId);
+        TStrongObjectPtr<UCC_BuffBehavior> Behavior(Entry.Behavior.Get());
+        if (!Behavior.IsValid() || !Behavior->IsEnabled() || !Instances.Contains(Entry.Handle)) continue;
+        const auto Before = Context;
+        Behavior->ModifyHook(Hook, Context);
+        if (Context.GetScriptStruct() != ExpectedType)
+        {
+            Context = Before; // A generic hook may modify fields, never replace the context type.
+            ensureMsgf(false, TEXT("Buff hook replaced its context type."));
+        }
     }
 }
-
-void UCC_BuffComponent::StopSpecials(int32 InstanceId)
-{
-    auto* Entry = Runtime.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-    const auto* Info = ActiveBuffs.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-    if (!Entry || !Entry->bSpecialsStarted) return;
-    const auto* Definition = Info && Info->Definition ? Info->Definition.GetDefaultObject() : nullptr;
-    FCC_BuffRuntime Snapshot = *Entry;
-    Entry->bSpecialsStarted = false;
-    Entry->Behaviors.Reset();
-    Entry->Summons.Reset();
-    if (!Definition) return;
-    for (const auto& Behavior : Snapshot.Behaviors)
-        if (IsValid(Behavior)) Behavior->OnRemoved(Cast<ACC_BaseCharacter>(GetOwner()), Definition, InstanceId);
-    if (Definition->bDestroySummonsOnRemoval)
-        for (const auto& Pawn : Snapshot.Summons) if (IsValid(Pawn)) Pawn->Destroy();
-}
-
 bool UCC_BuffComponent::RemoveBuff(int32 InstanceId)
 {
     if (!GetOwner()->HasAuthority() || !BoundASC.IsValid()) return false;
-    const auto* Entry = Runtime.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-    return Entry && BoundASC->RemoveActiveGameplayEffect(Entry->Effect, -1);
+    for (const auto& Pair : Instances) if (Pair.Value.View.InstanceId == InstanceId)
+    {
+        const auto Handle = Pair.Key;
+        return BoundASC->RemoveActiveGameplayEffect(Handle, -1);
+    }
+    return false;
 }
-
+bool UCC_BuffComponent::ConsumeStacks(FActiveGameplayEffectHandle Handle, int32 Count)
+{
+    return GetOwner()->HasAuthority() && BoundASC.IsValid() && Count > 0 && Instances.Contains(Handle)
+        && BoundASC->RemoveActiveGameplayEffect(Handle, Count);
+}
+int32 UCC_BuffComponent::RemoveBuffsByQuery(const FGameplayTagQuery& Query, int32 MaxCount)
+{
+    if (!GetOwner()->HasAuthority() || !BoundASC.IsValid() || MaxCount == 0 || MaxCount < -1) return 0;
+    TArray<int32> Ids;
+    for (const auto& Item : ReplicatedBuffs.Items) if (Query.IsEmpty() || Query.Matches(Item.BuffTags)) Ids.Add(Item.InstanceId);
+    Ids.Sort(); // Deterministic oldest-first removal.
+    int32 Removed = 0;
+    for (int32 Id : Ids) if ((MaxCount < 0 || Removed < MaxCount) && RemoveBuff(Id)) ++Removed;
+    return Removed;
+}
+int32 UCC_BuffComponent::GetStackCountByTag(FGameplayTag Tag, bool bIncludeInhibited) const
+{
+    int32 Count = 0;
+    for (const auto& Item : ReplicatedBuffs.Items)
+        if (Item.BuffTags.HasTag(Tag) && (bIncludeInhibited || !Item.bIsInhibited)) Count += Item.StackCount;
+    return Count;
+}
 void UCC_BuffComponent::HandleEffectRemoved(const FActiveGameplayEffect& Effect)
 {
-    const auto* Entry = Runtime.FindByPredicate([&](const auto& R) { return R.Effect == Effect.Handle; });
-    if (!GetOwner()->HasAuthority() || !Entry) return;
-    const int32 Id = Entry->InstanceId;
-    StopSpecials(Id);
-    Runtime.RemoveAll([Id](const auto& R) { return R.InstanceId == Id; });
-    ActiveBuffs.RemoveAll([Id](const auto& R) { return R.InstanceId == Id; });
+    const auto* Reason = RemovalReasons.Find(Effect.Handle);
+    const auto EndReason = Reason ? *Reason : ECC_BuffEndReason::EffectRemoved;
+    RemovalReasons.Remove(Effect.Handle);
+    FinishInstance(Effect.Handle, EndReason);
+}
+void UCC_BuffComponent::FinishInstance(FActiveGameplayEffectHandle Handle, ECC_BuffEndReason Reason)
+{
+    FCC_BuffInstance Instance;
+    if (!Instances.RemoveAndCopyValue(Handle, Instance)) return;
+    SetHooks(Handle, false);
+    if (BoundASC.IsValid()) if (auto* Events = BoundASC->GetActiveEffectEventSet(Handle))
+    {
+        Events->OnStackChanged.RemoveAll(this);
+        Events->OnTimeChanged.RemoveAll(this);
+        Events->OnInhibitionChanged.RemoveAll(this);
+    }
+    ReplicatedBuffs.Items.RemoveAll([&](const auto& Item) { return Item.InstanceId == Instance.View.InstanceId; });
+    ReplicatedBuffs.MarkArrayDirty();
+    TArray<TStrongObjectPtr<UCC_BuffBehavior>> Behaviors;
+    for (UCC_BuffBehavior* Behavior : Instance.Behaviors) Behaviors.Emplace(Behavior);
+    for (const auto& Pin : Behaviors)
+    {
+        Pin->Shutdown(Reason);
+    }
     NotifyChanged();
 }
-
-void UCC_BuffComponent::ClearBuffs(bool bDeathOnly)
+void UCC_BuffComponent::ClearBuffs(ECC_BuffEndReason Reason)
 {
     if (!GetOwner()->HasAuthority() || bClearing) return;
     TGuardValue<bool> Guard(bClearing, true);
-    const auto Snapshot = ActiveBuffs;
-    for (const auto& Info : Snapshot)
-        if (!bDeathOnly || (Info.Definition && Info.Definition.GetDefaultObject()->bRemoveOnDeath)) RemoveBuff(Info.InstanceId);
+    TArray<FActiveGameplayEffectHandle> Handles;
+    Instances.GetKeys(Handles);
+    for (auto Handle : Handles)
+    {
+        auto* Instance = Instances.Find(Handle);
+        if (!Instance) continue;
+        if (Reason == ECC_BuffEndReason::OwnerDeath && !Instance->bRemoveOnDeath)
+        {
+            Instance->bSuspendedForDeath = true;
+            const auto Behaviors = Instance->Behaviors;
+            SetHooks(Handle, false);
+            for (UCC_BuffBehavior* Behavior : Behaviors)
+            {
+                TStrongObjectPtr<UCC_BuffBehavior> Pin(Behavior);
+                Behavior->Disable(ECC_BuffDisableReason::OwnerDeath);
+            }
+            continue;
+        }
+        RemovalReasons.Add(Handle, Reason);
+        if (BoundASC.IsValid()) BoundASC->RemoveActiveGameplayEffect(Handle, -1);
+        RemovalReasons.Remove(Handle);
+        FinishInstance(Handle, Reason); // Also handles expired/detached ASC.
+    }
 }
-
 void UCC_BuffComponent::HandleStackChanged(FActiveGameplayEffectHandle Handle, int32 NewCount, int32 OldCount) { RefreshFromGAS(Handle); }
-void UCC_BuffComponent::HandleTimeChanged(FActiveGameplayEffectHandle Handle, float Start, float Duration) { RefreshFromGAS(Handle); }
+void UCC_BuffComponent::HandleTimeChanged(FActiveGameplayEffectHandle Handle, float Start, float Duration) { RefreshFromGAS(Handle, true); }
 void UCC_BuffComponent::HandleInhibitionChanged(FActiveGameplayEffectHandle Handle, bool bInhibited) { RefreshFromGAS(Handle); }
-
-void UCC_BuffComponent::UpdateMovementSpeed(const FOnAttributeChangeData& Data)
-{
-    auto* Character = Cast<ACC_BaseCharacter>(GetOwner());
-    if (Character && BoundASC.IsValid())
-        Character->GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed * BoundASC->GetNumericAttribute(UCC_AttributeSet::GetMoveSpeedMultiplierAttribute());
-}
-
-int32 UCC_BuffComponent::GetBuffStackCount(TSubclassOf<UCC_GE_Buff> BuffEffect) const
-{
-    int32 Count = 0;
-    for (const auto& Info : ActiveBuffs) if (Info.EffectClass == BuffEffect) Count += Info.StackCount;
-    return Count;
-}
-
 float UCC_BuffComponent::ServerTime() const
 {
     const auto* State = GetWorld() ? GetWorld()->GetGameState() : nullptr;
     return State ? State->GetServerWorldTimeSeconds() : (GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f);
 }
-
+void UCC_BuffComponent::UpdateMovementSpeed(const FOnAttributeChangeData& Data)
+{
+    if (auto* Character = Cast<ACC_BaseCharacter>(GetOwner()))
+        if (BoundASC.IsValid()) Character->GetCharacterMovement()->MaxWalkSpeed =
+            BaseWalkSpeed * BoundASC->GetNumericAttribute(UCC_AttributeSet::GetMoveSpeedMultiplierAttribute());
+}
 float UCC_BuffComponent::GetRemainingTime(int32 InstanceId) const
 {
-    const auto* Info = ActiveBuffs.FindByPredicate([InstanceId](const auto& R) { return R.InstanceId == InstanceId; });
-    return !Info ? 0.f : (Info->EndServerTime < 0.f ? -1.f : FMath::Max(0.f, Info->EndServerTime - ServerTime()));
+    const auto* Item = ReplicatedBuffs.Items.FindByPredicate([InstanceId](const auto& Entry) { return Entry.InstanceId == InstanceId; });
+    return !Item ? 0.f : (Item->EndServerTime < 0.f ? -1.f : FMath::Max(0.f, Item->EndServerTime - ServerTime()));
 }
-
-UCombatActionSet* UCC_BuffComponent::GetAttackActionSetOverride() const
-{
-    for (int32 Index = ActiveBuffs.Num() - 1; Index >= 0; --Index)
-    {
-        const auto& Info = ActiveBuffs[Index];
-        const auto* Definition = Info.Definition ? Info.Definition.GetDefaultObject() : nullptr;
-        if (!Info.bIsInhibited && Definition && Definition->AttackActionSetOverride) return Definition->AttackActionSetOverride;
-    }
-    return nullptr;
-}
-
-void UCC_BuffComponent::NotifyChanged() { GetOwner()->ForceNetUpdate(); OnBuffsChanged.Broadcast(); }
-void UCC_BuffComponent::OnRep_ActiveBuffs() { OnBuffsChanged.Broadcast(); }
-
+void UCC_BuffComponent::NotifyChanged() { if (!bEnded) { GetOwner()->ForceNetUpdate(); OnBuffsChanged.Broadcast(); } }
+void UCC_BuffComponent::NotifyReplicatedChange() { OnBuffsChanged.Broadcast(); }
 void UCC_BuffComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME(UCC_BuffComponent, ActiveBuffs);
+    DOREPLIFETIME(ThisClass, ReplicatedBuffs);
 }
-
 void UCC_BuffComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
-    ClearBuffs();
-    if (auto* Character = Cast<ACC_BaseCharacter>(GetOwner())) Character->OnASCInitialized.RemoveDynamic(this, &ThisClass::InitializeASC);
+    bEnded = true;
+    ClearBuffs(ECC_BuffEndReason::EndPlay);
     UnbindASC();
     BoundASC.Reset();
+    if (auto* Character = Cast<ACC_BaseCharacter>(GetOwner())) Character->OnASCInitialized.RemoveDynamic(this, &ThisClass::InitializeASC);
     Super::EndPlay(Reason);
 }

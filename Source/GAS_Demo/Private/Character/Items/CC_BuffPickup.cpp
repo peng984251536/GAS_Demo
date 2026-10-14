@@ -1,7 +1,7 @@
 #include "Character/Items/CC_BuffPickup.h"
 #include "Character/CC_BaseCharacter.h"
 #include "Components/CC_BuffComponent.h"
-#include "Effects/Buff/CC_GE_Buff.h"
+#include "GameplayEffect.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"

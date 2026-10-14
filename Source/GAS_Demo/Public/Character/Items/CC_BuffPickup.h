@@ -6,7 +6,7 @@
 
 class USphereComponent;
 class UStaticMeshComponent;
-class UCC_GE_Buff;
+class UGameplayEffect;
 
 /**
  * 可放入场景的 buff 道具，编辑器中配置拾取后获得的效果类、范围和外观。
@@ -21,7 +21,7 @@ public:
     ACC_BuffPickup();
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Pickup") TObjectPtr<USphereComponent> PickupSphere;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Pickup") TObjectPtr<UStaticMeshComponent> Mesh;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") TSubclassOf<UCC_GE_Buff> BuffEffect;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") TSubclassOf<UGameplayEffect> BuffEffect;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup", meta=(ClampMin="1")) float BuffLevel = 1.f;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup", meta=(ClampMin="1")) float PickupRadius = 80.f;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") bool bPlayersOnly = true;

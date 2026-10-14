@@ -211,7 +211,7 @@ void ACC_BaseCharacter::HandleDeath()
 		return;
 	}
 	RuntimeData->SetAlive(false);
-	BuffComponent->ClearBuffs(true);
+	BuffComponent->ClearBuffs(ECC_BuffEndReason::OwnerDeath);
 	RuntimeData->SetHit(false);
 	RuntimeData->ClearClosestActor();
 
@@ -291,14 +291,12 @@ void ACC_BaseCharacter::HandleRespawn()
 
 
 
-TArray<FCC_ActiveBuffInfo> ACC_BaseCharacter::GetActiveBuffs() const
+TArray<FCC_ReplicatedBuffItem> ACC_BaseCharacter::GetActiveBuffs() const
 {
     return BuffComponent->GetActiveBuffs();
 }
 UCombatActionSet* ACC_BaseCharacter::GetEffectiveAttackActionSet() const
 {
-    if (auto* Override = BuffComponent->GetAttackActionSetOverride()) return Override;
     const auto* Config = GetCharacterConfig();
     return IsValid(Config) ? Config->AttackActionSet.Get() : nullptr;
 }
-

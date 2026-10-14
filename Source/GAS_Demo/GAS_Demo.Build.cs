@@ -30,6 +30,7 @@ public class GAS_Demo : ModuleRules
 			"SlateCore",
 			"GameplayAbilities",
 			"GameplayTasks",
+			"NetCore",
 			"ActorSequence",
 			"LevelSequence",
 			"MovieScene",

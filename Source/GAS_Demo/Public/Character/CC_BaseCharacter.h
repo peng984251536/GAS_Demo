@@ -60,7 +60,7 @@ public:
      * 数据来自 GAS 的活动效果事件，可在客户端显示。
      */
     UFUNCTION(BlueprintPure, Category="Buff")
-    TArray<FCC_ActiveBuffInfo> GetActiveBuffs() const;
+    TArray<FCC_ReplicatedBuffItem> GetActiveBuffs() const;
     /**
      * 获取当前实际使用的攻击动作集，优先使用有效 buff 的临时覆盖。
      * 没有覆盖时返回角色共享配置中的动作集，不修改配置资产。

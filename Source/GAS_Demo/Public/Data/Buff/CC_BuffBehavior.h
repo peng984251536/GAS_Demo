@@ -1,35 +1,65 @@
 #pragma once
-
 #include "CoreMinimal.h"
-#include "UObject/Object.h"
+#include "Data/Buff/CC_BuffTypes.h"
+#include "StructUtils/InstancedStruct.h"
+#include "TimerManager.h"
 #include "CC_BuffBehavior.generated.h"
 
-class ACC_BaseCharacter;
-class UCC_BuffDefinition;
-
-/**
- * 项目特殊 buff 行为的生命周期扩展，用于玩法切换或额外资源管理。
- * 配置中的对象仅作为模板；角色组件为每个活动 GE 复制独立实例，在服务器执行回调。
- * 不替代 GAS 的原生触发组件，不在共享模板上保存角色状态。
- */
+/** Templates are read-only. Only BuffComponent drives the lifecycle of server instances. */
 UCLASS(Abstract, Blueprintable, EditInlineNew, DefaultToInstanced)
 class GAS_DEMO_API UCC_BuffBehavior : public UObject
 {
     GENERATED_BODY()
 public:
-    /**
-     * 活动效果首次生效或从抑制状态恢复时执行，用于接入项目特殊玩法。
-     * Character 与 InstanceId 标识本次角色实例，不能把它们保存到共享配置模板。
-     */
-    UFUNCTION(BlueprintNativeEvent, Category="Buff")
-    void OnApplied(ACC_BaseCharacter* Character, const UCC_BuffDefinition* Definition, int32 InstanceId);
-    virtual void OnApplied_Implementation(ACC_BaseCharacter*, const UCC_BuffDefinition*, int32) {}
-    /**
-     * 对应效果被抑制、到期或移除时执行，释放 OnApplied 创建的资源。
-     * 此回调运行在服务器，客户端表现应通过复制对象或 GameplayCue 实现。
-     */
-    UFUNCTION(BlueprintNativeEvent, Category="Buff")
-    void OnRemoved(ACC_BaseCharacter* Character, const UCC_BuffDefinition* Definition, int32 InstanceId);
-    virtual void OnRemoved_Implementation(ACC_BaseCharacter*, const UCC_BuffDefinition*, int32) {}
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Buff|Hooks") FGameplayTagContainer HandledHooks;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Buff|Hooks") int32 HookPriority = 0;
     virtual UWorld* GetWorld() const override;
+    bool IsEnabled() const { return State == ECC_BuffBehaviorState::Enabled; }
+    const FCC_BuffInstanceView& GetContext() const { return View; }
+protected:
+    UFUNCTION(BlueprintNativeEvent, Category="Buff") void OnInitialized();
+    virtual void OnInitialized_Implementation() {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff") void OnEnabled();
+    virtual void OnEnabled_Implementation() {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff") void OnDisabled(ECC_BuffDisableReason Reason);
+    virtual void OnDisabled_Implementation(ECC_BuffDisableReason Reason) {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff") void OnStackChanged(int32 OldCount, int32 NewCount);
+    virtual void OnStackChanged_Implementation(int32 OldCount, int32 NewCount) {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff") void OnRefreshed();
+    virtual void OnRefreshed_Implementation() {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff") void OnShutdown(ECC_BuffEndReason Reason);
+    virtual void OnShutdown_Implementation(ECC_BuffEndReason Reason) {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff|Hooks") void ModifyHook(FGameplayTag Hook, UPARAM(ref) FInstancedStruct& Context);
+    virtual void ModifyHook_Implementation(FGameplayTag Hook, FInstancedStruct& Context) {}
+    UFUNCTION(BlueprintNativeEvent, Category="Buff|Events") void OnGameplayEvent(FGameplayTag Tag, const FGameplayEventData& Event);
+    virtual void OnGameplayEvent_Implementation(FGameplayTag Tag, const FGameplayEventData& Event) {}
+    UFUNCTION(BlueprintPure, Category="Buff") FCC_BuffInstanceView GetInstanceView() const { return View; }
+    UFUNCTION(BlueprintCallable, Category="Buff|Resources") void ListenGameplayEvent(FGameplayTag Tag);
+    FTimerHandle StartTimer(float Interval, bool bLoop, const FTimerDelegate& Callback);
+    UFUNCTION(BlueprintCallable, Category="Buff|Resources") AActor* SpawnOwnedActor(TSubclassOf<AActor> Class, const FTransform& Transform,
+        ECC_BuffResourceLifetime Lifetime = ECC_BuffResourceLifetime::Instance);
+    UFUNCTION(BlueprintCallable, Category="Buff|Resources") FActiveGameplayEffectHandle ApplyChildEffect(UAbilitySystemComponent* Target,
+        TSubclassOf<UGameplayEffect> Effect, float Level = 1.f,
+        ECC_BuffResourceLifetime Lifetime = ECC_BuffResourceLifetime::Independent);
+    UFUNCTION(BlueprintCallable, Category="Buff") bool ConsumeStacks(int32 Count = 1);
+private:
+    friend class UCC_BuffComponent;
+    void Initialize(UCC_BuffComponent* Component, const FCC_BuffInstanceView& InView);
+    void UpdateView(const FCC_BuffInstanceView& InView, bool bRefreshed);
+    void Enable();
+    void Disable(ECC_BuffDisableReason Reason);
+    void Shutdown(ECC_BuffEndReason Reason);
+    void ReceiveGameplayEvent(FGameplayTag Tag, const FGameplayEventData* Event);
+    void ReleaseResources(bool bFinal);
+    UPROPERTY(Transient) FCC_BuffInstanceView View;
+    UPROPERTY(Transient) TWeakObjectPtr<UCC_BuffComponent> Component;
+    UPROPERTY(Transient) ECC_BuffBehaviorState State = ECC_BuffBehaviorState::Uninitialized;
+    struct FEventSubscription { TWeakObjectPtr<UAbilitySystemComponent> ASC; FGameplayTagContainer Tags; FDelegateHandle Handle; };
+    struct FOwnedActor { TWeakObjectPtr<AActor> Actor; ECC_BuffResourceLifetime Lifetime; };
+    struct FChildEffect { TWeakObjectPtr<UAbilitySystemComponent> ASC; FActiveGameplayEffectHandle Handle; ECC_BuffResourceLifetime Lifetime; };
+    TArray<FEventSubscription> Subscriptions;
+    TArray<FTimerHandle> Timers;
+    TArray<FOwnedActor> Actors;
+    TArray<FChildEffect> Effects;
+    FGameplayEffectContextHandle CurrentEventContext;
 };

@@ -1,7 +1,7 @@
 #include "UI/Buff/CC_BuffBarWidget.h"
 #include "Character/CC_BaseCharacter.h"
 #include "Components/CC_BuffComponent.h"
-#include "Data/Buff/CC_BuffDefinition.h"
+#include "Data/Buff/CC_BuffUIData.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -44,8 +44,9 @@ void UCC_BuffBarWidget::RefreshBuffs()
     if (!Observed.IsValid()) return;
     for (const auto& Info : Observed->GetActiveBuffs())
     {
-        const auto* Definition = Info.Definition ? Info.Definition.GetDefaultObject() : nullptr;
-        if (!Definition) continue;
+        const auto* Effect = Info.EffectClass.GetDefaultObject();
+        const auto* Definition = Effect ? Effect->FindComponent<UCC_BuffUIData>() : nullptr;
+        if (!Definition || Definition->bHiddenInUI) continue;
         auto* Cell = WidgetTree->ConstructWidget<UVerticalBox>();
         auto* CellSlot = BuffBox->AddChildToHorizontalBox(Cell);
         CellSlot->SetPadding(FMargin(6.f));
