@@ -18,7 +18,10 @@ EDataValidationResult UCC_BuffRulesComponent::IsDataValid(FDataValidationContext
             Context.AddError(FText::FromString(TEXT("Buff behavior templates must be non-null and concrete.")));
             bInvalid = true;
         }
-        else if (Behavior->IsDataValid(Context) == EDataValidationResult::Invalid) bInvalid = true;
+        else if (Behavior->IsDataValid(Context) == EDataValidationResult::Invalid)
+        {
+            bInvalid = true;
+        }
     }
     return bInvalid ? EDataValidationResult::Invalid : EDataValidationResult::Valid;
 }

@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameplayEffectTypes.h"
+#include "Character/Combat/CC_ProjectileFireContext.h"
 #include "CC_ArrowProjectile.generated.h"
 
 class USphereComponent;
@@ -10,35 +12,48 @@ class UProjectileMovementComponent;
 
 /** 服务器生成并判定命中的箭；位置复制到客户端，客户端不自行造成伤害。 */
 UCLASS()
+
 class GAS_DEMO_API ACC_ArrowProjectile : public AActor
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-public:
-	ACC_ArrowProjectile();
+  public:
+    ACC_ArrowProjectile();
 
-	/** 在 SpawnActorDeferred 与 FinishSpawning 之间调用，保证碰撞开始前伤害参数已就绪。 */
-	void InitializeArrow(float InSpeed, float InFlatDamage);
+    /**
+	 * 在完成生成前写入参数并捕获攻击属性，确保碰撞启动时快照已就绪。
+	 * @param InSpeed 本次箭速。
+	 * @param InPayload 本次放箭的伤害参数；由箭保存副本。
+	 * @return 成功准备服务器伤害快照时返回 true。
+	 */
+    bool InitializeArrow(float InSpeed, const FCC_ArrowPayload& InPayload);
+    /**
+	 * 忽略同一齐射的其他箭，避免同位置生成的多支箭互相碰撞。
+	 * @param Other 同一次齐射生成的投射物。
+	 */
+    void IgnoreVolleyArrow(ACC_ArrowProjectile* Other);
 
-protected:
-	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaSeconds) override;
+  protected:
+    virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
 
-	/** 在游戏视口绘制箭实际使用的球形碰撞；可在投射物蓝图中关闭。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Arrow|Debug")
-	bool bDrawCollisionDebug = true;
+    /** 在游戏视口绘制箭实际使用的球形碰撞；可在投射物蓝图中关闭。 */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Arrow|Debug")
+    bool bDrawCollisionDebug = true;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arrow")
-	TObjectPtr<USphereComponent> Collision;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arrow")
-	TObjectPtr<UStaticMeshComponent> ArrowMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arrow")
-	TObjectPtr<UProjectileMovementComponent> Movement;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arrow")
+    TObjectPtr<USphereComponent> Collision;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arrow")
+    TObjectPtr<UStaticMeshComponent> ArrowMesh;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arrow")
+    TObjectPtr<UProjectileMovementComponent> Movement;
 
-private:
-	UFUNCTION()
-	void OnArrowHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
-		UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
+  private:
+    UFUNCTION()
+    void OnArrowHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent,
+                    FVector NormalImpulse, const FHitResult& Hit);
 
-	float FlatDamage = 10.0f;
+    UPROPERTY(Transient) FCC_ArrowPayload Payload;
+    FGameplayEffectSpecHandle DamageSnapshot;
+    bool bHitProcessed = false;
 };

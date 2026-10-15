@@ -29,6 +29,8 @@ UCombatActionSet* ACC_BaseCharacter::GetEffectiveAttackActionSet() const
 
 ## 分裂箭：一次射出多支
 
+当前已有实际实现：原生 GE 配置 `UCC_GE_BuffSplitArrow` + `UCC_BuffBehavior_SplitArrow`，可在 UE 中以此 GE 为父类创建 `GE_Buff_SplitArrow` 蓝图。实际字段与合并约定以 [四种 Buff](BuffSystem/FourExamples.zh-CN.md) 和 `FCC_ProjectileFireContext` 为准。下方保留原设计伪代码。
+
 - **归类**：规则层，事前修改型。
 - **依赖**：`UCC_BowShoot::ReleaseArrow` 拆分为 Build → Modify → Resolve → Execute；`ModifyProjectileFire` 钩子。
 

@@ -1,61 +1,31 @@
 # Buff 系统基础设施现状与待办
 
-基于 `ui/framework-review-fixes` 分支（提交 `ea85261`）整理。状态变化时请更新本文件。
-
-状态：✅ 已具备　🟡 部分具备　❌ 缺失
+此表以当前代码为准。实际四种 Buff 见 [FourExamples.zh-CN.md](BuffSystem/FourExamples.zh-CN.md)。
 
 ## 已具备
 
-| 能力 | 状态 | 位置 |
-|---|---|---|
-| Buff 定义继承 GE（持续时间、叠层、标签条件、等级） | ✅ | `UCC_BuffDefinition` |
-| 每个 GE 句柄一份 Behavior 实例，对称的 OnApplied / OnRemoved | ✅ | `UCC_BuffBehavior`，`UCC_BuffComponent::StartSpecials/StopSpecials` |
-| 抑制时停止、恢复时重启特殊效果 | ✅ | `UCC_BuffComponent::RefreshFromGAS` |
-| Buff 列表复制到客户端 | ✅ | `UCC_BuffComponent::ActiveBuffs` |
-| 事件触发 GA（AbilityTriggers） | ✅ | `CC_FindPlayerTarget` 等已在使用 |
-| 伤害 Execution | ✅ | `UCC_DamageExecution` |
-| 统一伤害入口 | 🟡 | `UCC_DamageStatics::ApplyDamage` 存在，但箭绕过了它 |
+| 能力 | 实现 |
+|---|---|
+| GE 原生持续时间、堆叠、修饰器和标签 | 普通 GE 蓝图 + 原生 GE 组件 |
+| 显示和规则配置分离 | UCC_BuffUIData、UCC_BuffRulesComponent；旧 Definition / Factory 已删除 |
+| 每个 ActiveGE 一份服务器 Behavior | Initialize / Enable / Disable / Shutdown，支持抑制与恢复 |
+| 规则资源对称回收 | Behavior 基类管理事件订阅、计时器、Actor 与子 GE |
+| Buff 列表复制 | FCC_ReplicatedBuffArray FastArray |
+| 四种示例 | 强攻、霸体、临时冲刺蓝图；分裂箭原生 GE 配置（蓝图生成待 UE 内确认） |
+| 原生临时能力授予 | Grant Abilities 组件授予 UCC_Dash，撤回时立即取消；输入由通用 GAS 入口触发 |
+| 放箭决策点 | Hook.Projectile.Fire，FCC_ProjectileFireContext，Build → Modify → Resolve → Execute |
+| 分裂箭规则 | 数量相加、角度取最大、倍率相乘，支持叠层和不同来源共存 |
+| 箭的发射快照 | FCC_ArrowPayload + GAS 攻击属性快照；命中通过 DamageStatics::ApplyDamage |
+| 投射物敌我查询 | 复用 UCC_TeamStatics::IsHostile |
+| 伤害来源元数据 | FCC_DamageRequest / FCC_GameplayEffectContext.SourceTags，投射物填写 Damage.Source.Projectile |
+| 调试 | LogCCBuff；生命周期 Log，钩子及快照 Verbose |
 
-## 待办（按依赖顺序）
+## 后续需求出现时再实现
 
-### 1. 阵营系统 🟡
+- 通用输入配置如何绑定新能力：当前不修改 PlayerController 的输入策略。
+- 伤害后的 DamageDealt / DamageTaken 事件与 ApplyEffectOnDamage 规则；本次四种 Buff 不依赖这些事件。
+- 近战等其他伤害来源的 Damage.Source.* 补齐；当前不扩大到全战斗流程。
+- 按状态标签选择动作集、移动射击、冻结、魅惑等具体玩法。
+- 爆炸箭、反弹、召唤规则及其专用基础设施。
 
-- ✅ `UCC_TeamStatics`（`IsHostile` / `GetEffectiveTeam` / `GetBaseTeam`），基础阵营来自 `CharacterConfig.Team`，为空时用角色类默认值（玩家 `CCTags.Team.Player`、敌人 `CCTags.Team.Enemy`）。
-- ✅ 魅惑：`CCTags.Status.Charmed` 生效时，有效阵营 = 施加该 GE 的 Instigator 的基础阵营（只在服务器可靠）。
-- ✅ AI 选目标（`ACC_AIController`）改用 `IsHostile`，详见 `AI-Targeting.zh-CN.md`。
-- ❌ `UCC_Primary::HitBoxOverlapText`（目前命中所有 Pawn，敌人会误伤同伴）。
-- ❌ `ACC_ArrowProjectile::OnArrowHit`（目前只排除射手）。
-- `CC_FindRangedTarget` / `CC_FindPlayerTarget` 是旧索敌方案，行为树已不再激活，用 `harness:allow R4` 标注保留。
-- 解锁：魅惑、反弹、召唤物敌我判断（近战和箭接入后完整生效）。
-
-### 2. 伤害管线统一 🟡
-
-- `ACC_ArrowProjectile::OnArrowHit` 改为调用 `UCC_DamageStatics::ApplyDamage`。
-- `FCC_DamageRequest` 增加 `SourceTags`（`Damage.Source.*`）。
-- 扣血后发送 `Event.Combat.DamageDealt` / `DamageTaken`。
-- 解锁：所有"命中/伤害后"类 Buff。
-
-### 3. 通用 Behavior：ApplyEffectOnDamage ❌
-
-- 依赖 2。完成后冻结、魅惑、中毒、减速等只需配置 GE。
-
-### 4. 放箭流程拆分 ❌
-
-- `UCC_BowShoot::ReleaseArrow` 拆为 Build → Modify → Resolve → Execute。
-- 新增 `FCC_ProjectileFireContext`、`FCC_ArrowPayload`，`UCC_BuffBehavior::ModifyProjectileFire`，`UCC_BuffComponent::ModifyProjectileFire`。
-- 解锁：分裂箭、爆炸箭、穿透箭等。
-
-### 5. 动作集按标签切换 ❌
-
-- `CharacterConfig.AttackActionSetOverrides`（有序）替代 `UCC_BuffDefinition::AttackActionSetOverride`。
-- `UCombatActionData.bAllowMovement` + `State.MovementLocked`。
-- 删除 `UCC_BuffComponent::GetAttackActionSetOverride`。
-
-### 6. 遗留字段迁移 ❌
-
-- `SummonClass` / `SummonCount` / `SummonRadius` / `bDestroySummonsOnRemoval` → `UCC_BuffBehavior_Summon`。
-- 完成 5、6 后，`UCC_BuffDefinition` 只剩显示信息与生命周期设置。
-
-### 7. 反弹投射物 ❌
-
-- 依赖 1。箭增加 `Deflect`；近战判定在有 `Ability.Deflect.Projectile` 时检测投射物。
+实现代码已编译通过；已准备 GAS_Demo.Buff.FourExamples，按用户要求不再继续执行 UE 验证。后续实机测试由用户负责。

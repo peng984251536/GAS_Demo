@@ -45,6 +45,8 @@ struct GAS_DEMO_API FCC_DamageRequest
     UPROPERTY(EditAnywhere, BlueprintReadWrite) ECC_CriticalPolicy CriticalPolicy = ECC_CriticalPolicy::Random;
     /** 伤害分类标签，用于结果传递和飘字分组；目前没有自动元素抗性或配色。 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite) FGameplayTag DamageType;
+    /** 来源标签集合，例如 Damage.Source.Projectile；合并：集合并集。 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) FGameplayTagContainer SourceTags;
     /** true 时从有效 HitResult 取飘字起点；false 使用目标包围盒顶部附近。 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bUseHitLocation = false;
     /** HitResult 是否已由命中检测填好；true 才会写入 EffectContext。 */

@@ -14,17 +14,19 @@ class UTextBlock;
  * 只观察角色组件同步的 UI 数据，不修改效果或属性；更换角色时重新绑定观察对象。
  */
 UCLASS()
+
 class GAS_DEMO_API UCC_BuffBarWidget : public UUserWidget
 {
     GENERATED_BODY()
-public:
+  public:
     /**
      * 更换当前观察的角色，解除旧角色通知并立即读取新角色的活动 buff。
      * 角色重生或切换控制对象后应再次调用，不保存对已销毁角色的强引用。
      */
-    UFUNCTION(BlueprintCallable, Category="Buff")
+    UFUNCTION(BlueprintCallable, Category = "Buff")
     void SetObservedCharacter(ACC_BaseCharacter* Character);
-protected:
+
+  protected:
     /**
      * 创建默认的 buff 展示容器，后续变化只更新显示内容，不修改角色状态。
      */
@@ -32,7 +34,8 @@ protected:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
     virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
-private:
+
+  private:
     UPROPERTY(Transient) TObjectPtr<UHorizontalBox> BuffBox;
     UPROPERTY(Transient) TArray<TObjectPtr<UTextBlock>> Timers;
     TArray<int32> InstanceIds;
