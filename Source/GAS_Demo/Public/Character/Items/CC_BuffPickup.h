@@ -20,12 +20,18 @@ class GAS_DEMO_API ACC_BuffPickup : public AActor
     GENERATED_BODY()
   public:
     ACC_BuffPickup();
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup") TObjectPtr<USphereComponent> PickupSphere;
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup") TObjectPtr<UStaticMeshComponent> Mesh;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup") TSubclassOf<UGameplayEffect> BuffEffect;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (ClampMin = "1")) float BuffLevel = 1.f;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (ClampMin = "1")) float PickupRadius = 80.f;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup") bool bPlayersOnly = true;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup")
+	TObjectPtr<USphereComponent> PickupSphere;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup")
+	TObjectPtr<UStaticMeshComponent> Mesh;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup")
+	TSubclassOf<UGameplayEffect> BuffEffect;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (ClampMin = "1"))
+	float BuffLevel = 1.f;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (ClampMin = "1"))
+	float PickupRadius = 80.f;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup")
+	bool bPlayersOnly = true;
     /**
      * 编辑器放置或修改道具时同步拾取球体范围，属性值使用世界中的厘米单位。
      */

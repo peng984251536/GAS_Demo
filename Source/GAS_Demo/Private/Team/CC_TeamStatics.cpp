@@ -81,6 +81,11 @@ bool UCC_TeamStatics::IsHostile(const AActor* A, const AActor* B)
 	return TeamA.IsValid() && TeamB.IsValid() && TeamA != TeamB;
 }
 
+/**
+ * 获取阵营信息
+ * @param Actor 
+ * @return 
+ */
 FGameplayTag UCC_TeamStatics::GetEffectiveTeam(const AActor* Actor)
 {
 	const ACC_BaseCharacter* Character = ResolveCharacter(Actor);
@@ -88,6 +93,7 @@ FGameplayTag UCC_TeamStatics::GetEffectiveTeam(const AActor* Actor)
 	{
 		return FGameplayTag();
 	}
+	
 	// 被魅惑时跟随魅惑者的基础阵营。读基础阵营而不是有效阵营，避免互相魅惑时递归。
 	const UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent();
 	if (ASC && ASC->HasMatchingGameplayTag(CCTags::Status::Charmed))

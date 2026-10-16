@@ -40,6 +40,7 @@ namespace CCTags
 		
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
+		
 		/** 被魅惑：有效阵营临时变为施加该效果者的阵营，见 UCC_TeamStatics::GetEffectiveTeam。 */
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Charmed);
 	}

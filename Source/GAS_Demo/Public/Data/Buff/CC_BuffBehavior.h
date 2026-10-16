@@ -159,9 +159,9 @@ class GAS_DEMO_API UCC_BuffBehavior : public UObject
      * @return 子 GE 的应用结果；失败时返回空句柄。
      */
     UFUNCTION(BlueprintCallable, Category = "Buff|Resources")
-    FActiveGameplayEffectHandle
-        ApplyChildEffect(UAbilitySystemComponent* Target, TSubclassOf<UGameplayEffect> Effect, float Level = 1.f,
-                         ECC_BuffResourceLifetime Lifetime = ECC_BuffResourceLifetime::Independent);
+    FActiveGameplayEffectHandle ApplyChildEffect(
+        UAbilitySystemComponent* Target, TSubclassOf<UGameplayEffect> Effect, float Level = 1.f,
+        ECC_BuffResourceLifetime Lifetime = ECC_BuffResourceLifetime::Independent);
     /**
      * 消耗自身 GE 的层数，可能同步触发自己的禁用与结束回调。
      * @param Count 正数层数；调用后不得假定实例仍然生效。

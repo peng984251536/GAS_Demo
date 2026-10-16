@@ -39,6 +39,8 @@ void UCC_BuffBehavior_SplitArrow::ModifyHook_Implementation(FGameplayTag Hook, F
      * 数量按层数相加，散射取最大，因此多个规则可以组合而无需相互识别。
      */
     Fire->Payload.DamageMultiplier *= FMath::Clamp(DamagePerArrowRatio, 0.f, 1.f);
+
+	
     UE_LOG(LogCCBuff, Verbose, TEXT("[SplitArrow] Owner=%s Instance=%d Stacks=%d Count=%d->%d Spread=%.1f Ratio=%.3f"),
            *GetNameSafe(GetContext().Owner.Get()), GetContext().InstanceId, GetContext().StackCount, Before,
            Fire->ProjectileCount, Fire->SpreadAngle, Fire->Payload.DamageMultiplier);
