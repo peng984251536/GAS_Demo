@@ -9,6 +9,7 @@ UE5 + GAS 的动作战斗 Demo。C++ 源码在 `Source/GAS_Demo`，设计文档�
 - AI 寻敌与阵营：`Docs/AI-Targeting.zh-CN.md`
 - 案例手册（分裂箭、爆炸箭、冻结、魅惑、反弹等）：`Docs/BuffSystem-Cookbook.zh-CN.md`
 - 基础设施现状与待办：`Docs/BuffSystem-Roadmap.zh-CN.md`
+- Buff 三选一（获取途径）：`Docs/BuffSelection.zh-CN.md`
 - 新增或修改 Buff 时，按 `.claude/skills/add-buff/SKILL.md` 的流程执行。
 
 ## 硬性规则（违反即视为错误）

@@ -20,6 +20,7 @@
 | 伤害来源元数据 | FCC_DamageRequest.SourceTags / DamageType 写入 Spec 动态标签，投射物填写 Damage.Source.Projectile；GE 修正器可按这些标签做条件增减伤 |
 | 伤害后事件 | AttributeSet 扣血后发送 Event.Combat.DamageDealt（来源）/ DamageTaken（目标），EventMagnitude 为实际扣血，Context 带暴击与命中点 |
 | 调试 | LogCCBuff；生命周期 Log，钩子及快照 Verbose |
+| 获取：三选一 | UCC_BuffOfferPool + UCC_BuffSelectionComponent（PlayerController 上，服务器抽取与校验）+ UCC_BuffSelectionScreen；见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
 
 ## 后续需求出现时再实现
 

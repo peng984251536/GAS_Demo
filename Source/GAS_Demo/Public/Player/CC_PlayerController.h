@@ -12,14 +12,26 @@ class UEnhancedInputComponent;
 class UGASInputConfig;
 class UCC_AbilitySystemComponent;
 class ACC_PlayerCharacter;
+class UCC_BuffSelectionComponent;
 
 UCLASS()
 class ACC_PlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
+public:
+	ACC_PlayerController();
+
+	/** Buff 三选一流程；跟随控制器而不是 Pawn，重生不会打断进行中的一轮。 */
+	UFUNCTION(BlueprintPure, Category="Buff|Selection")
+	UCC_BuffSelectionComponent* GetBuffSelection() const { return BuffSelection; }
+
 protected:
 	virtual void BeginPlay() override;
+
+	/** 在蓝图 PlayerController 的组件面板里设置 Selection Screen Class。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Buff|Selection")
+	TObjectPtr<UCC_BuffSelectionComponent> BuffSelection;
 	virtual void SetupInputComponent() override;
  
 	// 管理输入的map
