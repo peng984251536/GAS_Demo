@@ -4,6 +4,7 @@
 #include "GAS_Demo.h"
 #include "UI/HealthBar/CC_BatchedHealthBarWidget.h"
 #include "UI/DamageText/CC_DamageTextWidget.h"
+#include "UI/WorldIndicator/CC_WorldIndicatorLayer.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
 #include "Components/Border.h"
@@ -52,6 +53,7 @@ UCC_RootLayout::UCC_RootLayout(const FObjectInitializer& ObjectInitializer) : Su
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	HealthBarLayerClass = UCC_BatchedHealthBarWidget::StaticClass();
 	DamageTextLayerClass = UCC_DamageTextWidget::StaticClass();
+	WorldIndicatorLayerClass = UCC_WorldIndicatorLayer::StaticClass();
 }
 
 // 根布局提供稳定的游戏输入回退，避免最后一个菜单关闭后卡在 UI 模式。
@@ -92,6 +94,11 @@ void UCC_RootLayout::NativeOnInitialized()
 	{
 		DamageTextLayer = WidgetTree->ConstructWidget<UCC_DamageTextWidget>(DamageTextLayerClass, TEXT("DamageText"));
 		if (DamageTextLayer) Fill(WorldOverlayLayer, DamageTextLayer); // 飘字画在血条之上。
+	}
+	if (WorldIndicatorLayerClass && !WorldIndicatorLayerClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		WorldIndicatorLayer = WidgetTree->ConstructWidget<UCC_WorldIndicatorLayer>(WorldIndicatorLayerClass, TEXT("WorldIndicators"));
+		if (WorldIndicatorLayer) Fill(WorldOverlayLayer, WorldIndicatorLayer);
 	}
 
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
