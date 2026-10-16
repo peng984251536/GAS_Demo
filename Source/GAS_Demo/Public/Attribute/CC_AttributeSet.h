@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
 #include "AttributeSet.h"
-#include "Damage/CC_DamageTypes.h"
 #include "CC_AttributeSet.generated.h"
 
 #define ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \
@@ -15,8 +14,9 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FAttributesInitialized);
 
 /**
- * 保存角色资源和战斗属性，统一限制数值范围，并消费一次性伤害/治疗中转值。
- * 普通伤害公式由 DamageExecution 计算，本类负责实际资源修改和结算通知。
+ * 保存角色资源和战斗属性，统一限制数值范围，并消费 Damage / Healing 中间属性完成扣血和治疗。
+ * 伤害公式在 UCC_DamageExecution；扣血后在服务器发送 Event.Combat.DamageDealt / DamageTaken。
+ * 这里不做任何表现（飘字由伤害 GE 上的 GameplayCue 负责）。
  */
 UCLASS()
 class GAS_DEMO_API UCC_AttributeSet : public UAttributeSet
@@ -53,24 +53,12 @@ public:
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 
 	/**
-	 * 执行前拒绝非权威、非法中转量和免疫伤害。
-	 * @param Data 本次 GE 的目标、Spec 和属性修改数据。
-	 * @return 允许此次修改返回 true，否则返回 false。
-	 */
-	virtual bool PreGameplayEffectExecute(FGameplayEffectModCallbackData& Data) override;
-
-	/**
-	 * 消费中转值、修改生命并发布结果，同时维护资源边界。
+	 * 消费 Damage / Healing 中间属性修改生命；伤害后发送 GameplayEvent。同时维护资源边界。
 	 * @param Data 本次 GE 的目标、Spec 和属性修改数据。
 	 */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 
-	// 初始化状态与结算通知
-
-	/**
-	 * 服务器本地结算委托；通知已完成的伤害或治疗结果，不自动复制。
-	 */
-	FCC_DamageResolvedDelegate OnDamageResolved;
+	// 初始化状态
 
 	/**
 	 * 属性初始化标记；复制规则与其他通知属性保持 REPNOTIFY_Always。
@@ -120,13 +108,16 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CriticalMultiplier, Category = "Attributes|Combat")
 	FGameplayAttributeData CriticalMultiplier;
 
-	// 一次性结算中转属性（不复制）
-	/** 一次伤害的正数中转值；消费后清零，不复制，不配置持续修正。 */
-	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Settlement")
-	FGameplayAttributeData IncomingDamage;
-	/** 一次治疗的正数中转值；消费后清零，不复制，不配置持续修正。 */
-	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Settlement")
-	FGameplayAttributeData IncomingHealing;
+	// 一次性中间属性（不复制）：只由伤害/治疗 GE 写入，消费后立即清零，不要配置持续修正
+	/**
+	 * 本次伤害量，只由 UCC_DamageExecution 输出；伤害 GE 上的飘字 Cue 读它。
+	 * 在 GE 修正器列表中隐藏，策划无法绕过 UCC_DamageStatics 直接配置扣血（CLAUDE.md 规则 3）。
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Meta", meta = (HideFromModifiers))
+	FGameplayAttributeData Damage;
+	/** 本次治疗量，由治疗 GE 写入（药水等 GE 也可以直接配置它）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Meta")
+	FGameplayAttributeData Healing;
 
 	// 属性复制回调
 
@@ -168,8 +159,8 @@ public:
 	ATTRIBUTE_ACCESSORS(ThisClass, IncomingDamageMultiplier);
 	ATTRIBUTE_ACCESSORS(ThisClass, CriticalChance);
 	ATTRIBUTE_ACCESSORS(ThisClass, CriticalMultiplier);
-	ATTRIBUTE_ACCESSORS(ThisClass, IncomingDamage);
-	ATTRIBUTE_ACCESSORS(ThisClass, IncomingHealing);
+	ATTRIBUTE_ACCESSORS(ThisClass, Damage);
+	ATTRIBUTE_ACCESSORS(ThisClass, Healing);
 
 private:
 	/**

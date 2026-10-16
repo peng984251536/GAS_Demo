@@ -1,7 +1,7 @@
 #include "Tests/CC_BuffTestTypes.h"
 #include "Attribute/CC_AttributeSet.h"
 #include "GameplayTags/CC_Tags.h"
-#include "Damage/CC_DamageTypes.h"
+#include "Damage/CC_DamageTags.h"
 #include "Data/Buff/CC_BuffRulesComponent.h"
 #include "Data/Buff/CC_BuffUIData.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
@@ -27,7 +27,7 @@ UCC_BuffTestEffect::UCC_BuffTestEffect()
     Tags->SetAndApplyTargetTagChanges(Changes);
     auto* Requirements = CreateDefaultSubobject<UTargetTagRequirementsGameplayEffectComponent>(TEXT("NativeRequirements"));
     GEComponents.Add(Requirements);
-    Requirements->ApplicationTagRequirements.IgnoreTags.AddTag(StandaloneDamageTags::DamageImmunity);
+    Requirements->ApplicationTagRequirements.IgnoreTags.AddTag(CCDamageTags::Immunity);
     Requirements->OngoingTagRequirements.IgnoreTags.AddTag(CCTags::Status::Invincible);
     auto* Additional = CreateDefaultSubobject<UAdditionalEffectsGameplayEffectComponent>(TEXT("NativeCompletionTrigger"));
     GEComponents.Add(Additional);
@@ -44,7 +44,7 @@ UCC_BuffTestPeriodicEffect::UCC_BuffTestPeriodicEffect()
     Period = FScalableFloat(0.25f);
     bExecutePeriodicEffectOnApplication = false;
     auto& Damage = Modifiers.AddDefaulted_GetRef();
-    Damage.Attribute = UCC_AttributeSet::GetIncomingDamageAttribute();
+    Damage.Attribute = UCC_AttributeSet::GetDamageAttribute();
     Damage.ModifierOp = EGameplayModOp::Additive;
     Damage.ModifierMagnitude = FScalableFloat(5.f);
     GEComponents.Add(CreateDefaultSubobject<UCC_BuffRulesComponent>(TEXT("BuffRules")));
@@ -53,7 +53,7 @@ UCC_BuffTestInstantEffect::UCC_BuffTestInstantEffect()
 {
     DurationPolicy = EGameplayEffectDurationType::Instant;
     auto& Healing = Modifiers.AddDefaulted_GetRef();
-    Healing.Attribute = UCC_AttributeSet::GetIncomingHealingAttribute();
+    Healing.Attribute = UCC_AttributeSet::GetHealingAttribute();
     Healing.ModifierOp = EGameplayModOp::Additive;
     Healing.ModifierMagnitude = FScalableFloat(10.f);
     GEComponents.Add(CreateDefaultSubobject<UCC_BuffUIData>(TEXT("BuffUI")));

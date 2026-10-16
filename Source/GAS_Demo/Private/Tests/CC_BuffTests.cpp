@@ -10,7 +10,7 @@
 #include "Character/CC_EnemyCharacter.h"
 #include "Data/CC_CharacterRuntimeData.h"
 #include "GameplayTags/CC_Tags.h"
-#include "Damage/CC_DamageTypes.h"
+#include "Damage/CC_DamageTags.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "UObject/UObjectHash.h"
 #include "UObject/StrongObjectPtr.h"
@@ -80,9 +80,9 @@ bool FCCNativeBuffIntegrationTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Native expiration restores attributes"), ASC->GetNumericAttribute(UCC_AttributeSet::GetAttackPowerAttribute()), 100.f);
     TestEqual(TEXT("Native expiration removes UI record"), Component->GetActiveBuffs().Num(), 0);
 
-    ASC->AddLooseGameplayTag(StandaloneDamageTags::DamageImmunity);
+    ASC->AddLooseGameplayTag(CCDamageTags::Immunity);
     TestFalse(TEXT("Native application requirement rejects"), Component->ApplyBuff(UCC_BuffTestEffect::StaticClass()).WasSuccessfullyApplied());
-    ASC->RemoveLooseGameplayTag(StandaloneDamageTags::DamageImmunity);
+    ASC->RemoveLooseGameplayTag(CCDamageTags::Immunity);
     Component->ApplyBuff(UCC_BuffTestEffect::StaticClass());
     Component->ApplyBuff(UCC_BuffTestOtherEffect::StaticClass());
     TestEqual(TEXT("Different GE classes remain distinct"), Component->GetActiveBuffs().Num(), 2);

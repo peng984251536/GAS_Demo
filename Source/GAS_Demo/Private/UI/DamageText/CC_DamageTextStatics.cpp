@@ -2,6 +2,7 @@
 #include "AbilitySystemComponent.h"
 #include "Damage/CC_GameplayEffectContext.h"
 #include "GameplayCues/CC_GameplayCue_DamageText.h"
+#include "Damage/CC_DamageTags.h"
 #include "GameFramework/Actor.h"
 
 /**
@@ -16,7 +17,6 @@ void UCC_DamageTextStatics::ShowDamageText(UAbilitySystemComponent* TargetASC, f
 {
     if (!IsValid(TargetASC) || !IsValid(TargetASC->GetAvatarActor())
         || !FMath::IsFinite(Amount) || FMath::IsNearlyZero(Amount)) return;
-    if (Style != ECC_DamageTextStyle::Normal && Style != ECC_DamageTextStyle::Critical && Style != ECC_DamageTextStyle::Heal) return;
     AActor* Source = IsValid(SourceASC) ? SourceASC->GetAvatarActor() : nullptr;
     FGameplayEffectContextHandle Context(new FCC_GameplayEffectContext());
     Context.AddInstigator(Source, Source);
@@ -25,18 +25,15 @@ void UCC_DamageTextStatics::ShowDamageText(UAbilitySystemComponent* TargetASC, f
     Params.EffectContext = Context;
     Params.Instigator = Source;
     Params.EffectCauser = Source;
-    Params.RawMagnitude = Style == ECC_DamageTextStyle::Heal ? -FMath::Abs(Amount) : FMath::Abs(Amount);
-    FVector Extent;
-    TargetASC->GetAvatarActor()->GetActorBounds(true, Params.Location, Extent);
-    Params.Location.Z += Extent.Z + 20.f;
-    // 显式显示工具未提供来源时，不能因目标是敌人而把本地数字全部过滤掉。
+    Params.RawMagnitude = FMath::Abs(Amount);
+    // 位置由 Cue 决定（没有命中点时用目标头顶）；没有来源时跳过"只看自己相关伤害"的筛选。
     if (!Source) Params.AggregatedSourceTags.AddTag(CCDamageCueTags::ManualDisplay);
+    const FGameplayTag CueTag = Style == ECC_DamageTextStyle::Heal ? CCDamageTags::CueHealText : CCDamageTags::CueDamageText;
     if (TargetASC->IsOwnerActorAuthoritative())
-        TargetASC->ExecuteGameplayCue(CCDamageCueTags::DamageText, Params);
+        TargetASC->ExecuteGameplayCue(CueTag, Params);
     else
-        // 非预测客户端直接 ExecuteGameplayCue 可能不执行；显式调用本地事件不发送 RPC。
-        // TODO
-        TargetASC->InvokeGameplayCueEvent(CCDamageCueTags::DamageText, EGameplayCueEvent::Executed, Params);
+        // 客户端直接调用 ExecuteGameplayCue 不会执行；只在本地触发，不发 RPC。
+        TargetASC->InvokeGameplayCueEvent(CueTag, EGameplayCueEvent::Executed, Params);
 }
 
 /**

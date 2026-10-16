@@ -15,15 +15,16 @@
 | 原生临时能力授予 | Grant Abilities 组件授予 UCC_Dash，撤回时立即取消；输入由通用 GAS 入口触发 |
 | 放箭决策点 | Hook.Projectile.Fire，FCC_ProjectileFireContext，Build → Modify → Resolve → Execute |
 | 分裂箭规则 | 数量相加、角度取最大、倍率相乘，支持叠层和不同来源共存 |
-| 箭的发射快照 | FCC_ArrowPayload + GAS 攻击属性快照；命中通过 DamageStatics::ApplyDamage |
+| 箭的发射快照 | FCC_ArrowPayload + GAS 攻击属性快照；命中通过 DamageStatics::ApplyPreparedDamage |
 | 投射物敌我查询 | 复用 UCC_TeamStatics::IsHostile |
-| 伤害来源元数据 | FCC_DamageRequest / FCC_GameplayEffectContext.SourceTags，投射物填写 Damage.Source.Projectile |
+| 伤害来源元数据 | FCC_DamageRequest.SourceTags / DamageType 写入 Spec 动态标签，投射物填写 Damage.Source.Projectile；GE 修正器可按这些标签做条件增减伤 |
+| 伤害后事件 | AttributeSet 扣血后发送 Event.Combat.DamageDealt（来源）/ DamageTaken（目标），EventMagnitude 为实际扣血，Context 带暴击与命中点 |
 | 调试 | LogCCBuff；生命周期 Log，钩子及快照 Verbose |
 
 ## 后续需求出现时再实现
 
 - 通用输入配置如何绑定新能力：当前不修改 PlayerController 的输入策略。
-- 伤害后的 DamageDealt / DamageTaken 事件与 ApplyEffectOnDamage 规则；本次四种 Buff 不依赖这些事件。
+- ApplyEffectOnDamage 规则（监听已实现的 DamageDealt / DamageTaken 事件）；ProcDepth 防循环字段尚未加入 Context。
 - 近战等其他伤害来源的 Damage.Source.* 补齐；当前不扩大到全战斗流程。
 - 按状态标签选择动作集、移动射击、冻结、魅惑等具体玩法。
 - 爆炸箭、反弹、召唤规则及其专用基础设施。

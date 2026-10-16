@@ -1,7 +1,7 @@
 #include "Attribute/CC_AttributeSet.h"
-#include "AbilitySystem/CC_AbilitySystemComponent.h"
-#include "Damage/CC_GameplayEffectContext.h"
-#include "Damage/CC_DamageTypes.h"
+#include "Damage/CC_DamageTags.h"
+#include "Abilities/GameplayAbilityTypes.h"
+#include "AbilitySystemBlueprintLibrary.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Actor.h"
@@ -21,15 +21,15 @@ UCC_AttributeSet::UCC_AttributeSet()
 	, IncomingDamageMultiplier(1.f)
 	, CriticalChance(0.f)
 	, CriticalMultiplier(1.5f)
-	, IncomingDamage(0.f)
-	, IncomingHealing(0.f)
+	, Damage(0.f)
+	, Healing(0.f)
 {
 }
 
 // 属性复制规则
 
 /**
- * 登记持久属性的复制规则，中转数值只在服务器瞬时使用。
+ * 登记持久属性的复制规则，中间属性只在服务器瞬时使用。
  * @param OutLifetimeProps 输出的属性复制规则列表。
  */
 void UCC_AttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -73,88 +73,58 @@ void UCC_AttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, f
 	ClampAttribute(Attribute, Value);
 }
 
-/**
- * 执行前检查权威、合法中转量和免疫状态。
- * @param Data 本次 GE 的目标、Spec 和属性修改数据。
- * @return 允许执行返回 true，否则返回 false。
- */
-bool UCC_AttributeSet::PreGameplayEffectExecute(FGameplayEffectModCallbackData& Data)
+namespace
 {
-	if (!Super::PreGameplayEffectExecute(Data)) return false;
-	if (Data.EvaluatedData.Attribute == GetIncomingDamageAttribute() || Data.EvaluatedData.Attribute ==
-		GetIncomingHealingAttribute())
+	/** 把一次伤害结算以 GameplayEvent 发给受击者和来源，供 Buff / 技能（Ability Trigger）使用。 */
+	void SendDamageEvents(const FGameplayEffectModCallbackData& Data, float HealthDamage)
 	{
-		if (!Data.Target.IsOwnerActorAuthoritative() || !FMath::IsFinite(Data.EvaluatedData.Magnitude)
-			|| Data.EvaluatedData.Magnitude < 0.f)
-			return false;
-		if (Data.EvaluatedData.Attribute == GetIncomingDamageAttribute()
-			&& (GetHealth() <= 0.f || Data.Target.HasMatchingGameplayTag(StandaloneDamageTags::DamageImmunity)))
-			return false;
+		const FGameplayEffectContextHandle& Context = Data.EffectSpec.GetContext();
+		UAbilitySystemComponent* SourceASC = Context.GetOriginalInstigatorAbilitySystemComponent();
+		if (!SourceASC) SourceASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Context.GetOriginalInstigator());
+		FGameplayEventData Payload;
+		Payload.Instigator = SourceASC ? SourceASC->GetAvatarActor() : Context.GetOriginalInstigator();
+		Payload.Target = Data.Target.GetAvatarActor();
+		Payload.EventMagnitude = HealthDamage;
+		Payload.ContextHandle = Context; // 暴击、命中点
+		Payload.InstigatorTags = *Data.EffectSpec.CapturedSourceTags.GetAggregatedTags(); // 含伤害类型和来源标签
+		Payload.TargetTags = *Data.EffectSpec.CapturedTargetTags.GetAggregatedTags();
+
+		Payload.EventTag = CCDamageTags::EventDamageTaken;
+		Data.Target.HandleGameplayEvent(Payload.EventTag, &Payload);
+		if (SourceASC)
+		{
+			Payload.EventTag = CCDamageTags::EventDamageDealt;
+			SourceASC->HandleGameplayEvent(Payload.EventTag, &Payload);
+		}
 	}
-	return true;
 }
 
 /**
- * 消费中转量、修改实际生命并发布结算结果，保持回调重入时的结果独立。
+ * 消费中间属性并修改生命。中间属性先读出再清零，事件回调里再次施加的效果不会读到残留值。
  * @param Data 本次 GE 的目标、Spec 和属性修改数据。
  */
 void UCC_AttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
 	Super::PostGameplayEffectExecute(Data);
-	const bool bDamage = Data.EvaluatedData.Attribute == GetIncomingDamageAttribute();
-	const bool bHealing = Data.EvaluatedData.Attribute == GetIncomingHealingAttribute();
-	if (bDamage || bHealing)
+	if (Data.EvaluatedData.Attribute == GetDamageAttribute())
 	{
-		// 先保存到局部变量并清零中转属性，防止同步回调中新效果复用上次残留值。
-		const float Amount = bDamage ? GetIncomingDamage() : GetIncomingHealing();
-		if (bDamage) SetIncomingDamage(0.f);
-		else SetIncomingHealing(0.f);
-		if (Data.Target.IsOwnerActorAuthoritative() && FMath::IsFinite(Amount) && Amount > 0.f)
+		const float Amount = GetDamage();
+		SetDamage(0.f);
+		if (Amount > 0.f)
 		{
-			// 结果采用值副本；残血时 ResolvedDamage 可以大于实际 HealthDamage。
-			FCC_DamageResolved Result;
-			const auto& Context = Data.EffectSpec.GetContext();
-			Result.Source = Context.GetOriginalInstigatorAbilitySystemComponent()
-				                ? Context.GetOriginalInstigatorAbilitySystemComponent()->GetAvatarActor()
-				                : Context.GetOriginalInstigator();
-			Result.Target = Data.Target.GetAvatarActor();
-			Result.HealthBefore = GetHealth();
-			Result.HealthAfter = FMath::Clamp(Result.HealthBefore + (bHealing ? Amount : -Amount), 0.f, GetMaxHealth());
-			Result.ResolvedDamage = Amount;
-			Result.HealthDamage = FMath::Abs(Result.HealthBefore - Result.HealthAfter);
-			Result.bHealing = bHealing;
-			Result.bKilled = bDamage && Result.HealthBefore > 0.f && Result.HealthAfter <= 0.f;
-			if (const auto* Typed = FCC_GameplayEffectContext::Get(Context))
-			{
-				Result.DamageType = Typed->DamageType;
-				Result.bCritical = !bHealing && Typed->bCritical;
-				if (Typed->bUseHitLocation && Context.GetHitResult()) Result.TextLocation = Context.GetHitResult()->
-					ImpactPoint;
-				else if (Result.Target)
-				{
-					FVector Extent;
-					Result.Target->GetActorBounds(true, Result.TextLocation, Extent);
-					Result.TextLocation.Z += Extent.Z + 20.f;
-				}
-			}
-			else if (Result.Target)
-			{
-				FVector Extent;
-				Result.Target->GetActorBounds(true, Result.TextLocation, Extent);
-				Result.TextLocation.Z += Extent.Z + 20.f;
-			}
-			// SetHealth 会同步触发生命委托，甚至再次施加效果；必须提前确定本击结果，避免重入覆盖。
-			SetHealth(Result.HealthAfter);
-			// 普通 ASC 可订阅属性集委托；项目 ASC 继续通知自动创建的反馈组件。
-			OnDamageResolved.Broadcast(Result);
-			if (auto* ASC = Cast<UCC_AbilitySystemComponent>(&Data.Target)) ASC->PublishDamageResult(Result);
+			const float HealthBefore = GetHealth();
+			SetHealth(FMath::Clamp(HealthBefore - Amount, 0.f, GetMaxHealth()));
+			// 事件在扣血之后发送；EventMagnitude 是实际扣血量（残血时小于理论伤害）。
+			SendDamageEvents(Data, HealthBefore - GetHealth());
 		}
 	}
-	else if (Data.EvaluatedData.Attribute == GetMaxHealthAttribute()) SetHealth(
-		FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
-	else if (Data.EvaluatedData.Attribute == GetMaxManaAttribute()) SetMana(FMath::Clamp(GetMana(), 0.f, GetMaxMana()));
-	else if (Data.EvaluatedData.Attribute == GetHealthAttribute()) SetHealth(
-		FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+	else if (Data.EvaluatedData.Attribute == GetHealingAttribute())
+	{
+		const float Amount = GetHealing();
+		SetHealing(0.f);
+		if (Amount > 0.f) SetHealth(FMath::Clamp(GetHealth() + Amount, 0.f, GetMaxHealth()));
+	}
+	// 其他属性的范围由 ClampAttribute（Pre*Change）和 PostAttributeChange 统一维护，这里不再重复裁剪。
 	if (!bAttributesInitialized)
 	{
 		bAttributesInitialized = true;

@@ -1,11 +1,12 @@
-#include "Damage/StandaloneDamageCalculator.h"
+// 纯伤害公式的独立测试，不需要 Unreal：Tests/Standalone/RunDamageCalculatorTests.cmd
+#include "Damage/CC_DamageFormula.h"
 
 #include <iostream>
 #include <limits>
 
 int main()
 {
-    using namespace StandaloneDamage;
+    using namespace CCDamageFormula;
     int Failures = 0;
     auto Check = [&](bool Condition, const char* Description)
     {
@@ -16,60 +17,49 @@ int main()
         }
     };
     auto Near = [](double A, double B) { return std::abs(A - B) < 0.000001; };
+    double Damage = -1.0;
 
     FInput Input;
     Input.AttackPower = 100.0;
     Input.SkillScale = 2.0;
     Input.FlatDamage = 20.0;
-    Input.DistanceMultiplier = 0.5;
-    Input.HitMultiplier = 2.0;
+    Input.OutgoingBonus = 0.5;
+    Input.CriticalMultiplier = 2.0;
     Input.Defense = 30.0;
     Input.IncomingMultiplier = 0.8;
-    const FResult Result = Calculate(Input);
-    Check(Result.IsValid() && Near(Result.FinalDamage, 152.0), "skill, distance, hit, defense, incoming use documented order");
-    Check(Near(Result.RawDamage, 220.0) && Near(Result.DamageAfterDefense, 190.0), "intermediate values describe the hit");
-    Check(Near(Input.AttackPower, 100.0), "input is unchanged");
-
-    Input.bDamageAllowed = false;
-    Check(Calculate(Input).IsValid() && Calculate(Input).FinalDamage == 0.0, "team/immunity veto produces no damage");
-    Input.bDamageAllowed = true;
-    Input.Defense = 1000.0;
-    Check(Calculate(Input).FinalDamage == 0.0, "high defense does not heal");
-    Input.Defense = 0.0;
-    Input.HitMultiplier = 0.0;
-    Check(Calculate(Input).FinalDamage == 0.0, "zero hit multiplier is a valid zero-damage hit");
+    Check(Calculate(Input, Damage) && Near(Damage, 504.0), "(100*2+20)*1.5*2-30 then *0.8 = 504");
 
     Input = FInput{};
-    Input.AttackPower = 150.0;
-    Check(Calculate(Input).FinalDamage == 150.0, "already buffed attack is consumed once");
+    Input.AttackPower = 100.0;
+    Input.DamageMultiplier = 0.5;
+    Check(Calculate(Input, Damage) && Near(Damage, 50.0), "skill-side multiplier applies before defense");
+    Input.Defense = 1000.0;
+    Check(Calculate(Input, Damage) && Damage == 0.0, "high defense does not heal");
+
+    Input = FInput{};
     Input.SkillScale = 0.0;
     Input.FlatDamage = 25.0;
-    Check(Calculate(Input).FinalDamage == 25.0, "flat-only skill ignores attack");
+    Input.AttackPower = 999.0;
+    Check(Calculate(Input, Damage) && Near(Damage, 25.0), "flat-only skill ignores attack");
+    Input.OutgoingBonus = -1.0;
+    Check(Calculate(Input, Damage) && Damage == 0.0, "-100% bonus is a valid zero");
+    Input.OutgoingBonus = -1.5;
+    Check(!Calculate(Input, Damage) && Damage == 0.0, "bonus below -1 rejected");
 
+    Input = FInput{};
     Input.Defense = -1.0;
-    Check(Calculate(Input).Error == EError::InvalidInput, "negative defense rejected");
+    Check(!Calculate(Input, Damage), "negative defense rejected");
     Input.Defense = std::numeric_limits<double>::quiet_NaN();
-    Check(Calculate(Input).Error == EError::InvalidInput, "NaN rejected");
+    Check(!Calculate(Input, Damage), "NaN rejected");
     Input.Defense = std::numeric_limits<double>::infinity();
-    Check(Calculate(Input).Error == EError::InvalidInput, "infinity rejected");
+    Check(!Calculate(Input, Damage), "infinity rejected");
 
     Input = FInput{};
     Input.AttackPower = std::numeric_limits<double>::max();
     Input.SkillScale = 2.0;
-    Input.DistanceMultiplier = 0.0;
-    Check(Calculate(Input).Error == EError::Overflow, "later zero multiplier cannot hide overflow");
-    Input = FInput{};
-    Input.AttackPower = 1.0;
-    Input.IncomingMultiplier = std::numeric_limits<double>::max();
-    Input.HitMultiplier = 2.0;
-    Check(Calculate(Input).Error == EError::Overflow, "final-stage overflow rejected");
+    Input.DamageMultiplier = 0.0;
+    Check(!Calculate(Input, Damage), "later zero multiplier cannot hide overflow");
 
-    Input = FInput{};
-    Input.AttackPower = 100.; Input.SkillScale = 2.; Input.FlatDamage = 20.;
-    Input.OutgoingMultiplier = 1.5; Input.HitMultiplier = 2.; Input.Defense = 30.; Input.IncomingMultiplier = 0.8;
-    Check(Near(Calculate(Input).FinalDamage, 504.), "outgoing bonus is applied before defense and incoming reduction");
-    Input.OutgoingMultiplier = -1.;
-    Check(Calculate(Input).Error == EError::InvalidInput, "negative outgoing multiplier rejected");
-    std::cout << (Failures == 0 ? "PASS" : "FAIL") << ": standalone damage scenarios; failures=" << Failures << '\n';
+    if (Failures == 0) std::cout << "All damage formula tests passed\n";
     return Failures == 0 ? 0 : 1;
 }

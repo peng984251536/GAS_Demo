@@ -4,7 +4,6 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 
 #include "GameplayTags/CC_Tags.h"
-#include "Damage/CC_CombatFeedbackComponent.h"
 #include "GameFramework/Actor.h"
 
 
@@ -372,36 +371,3 @@ FActiveGameplayEffectHandle UCC_AbilitySystemComponent::ApplyEffectSpecToSelf(FG
 	return {};
 }
 #pragma endregion
-/**
- * 初始化 ASC 后在服务器 Owner 上创建或复用反馈组件，并刷新订阅。
- * @param Owner ASC 所属 Actor；玩家通常为 PlayerState，敌人通常为角色。
- * @param Avatar ASC 当前操作的 Avatar，通常是角色 Pawn。
- */
-void UCC_AbilitySystemComponent::InitAbilityActorInfo(AActor* Owner, AActor* Avatar)
-{
-    Super::InitAbilityActorInfo(Owner, Avatar);
-    if (Owner && Owner->HasAuthority())
-    {
-        if (!CombatFeedback)
-        {
-            CombatFeedback = Owner->FindComponentByClass<UCC_CombatFeedbackComponent>();
-            if (!CombatFeedback)
-            {
-                CombatFeedback = NewObject<UCC_CombatFeedbackComponent>(Owner);
-                Owner->AddInstanceComponent(CombatFeedback);
-                CombatFeedback->RegisterComponent();
-            }
-        }
-        CombatFeedback->Initialize(this);
-    }
-}
-
-
-/**
- * 在权威端广播已确定的结算结果，不再次扣血或激活死亡。
- * @param Result 本次伤害/治疗的不可变结果副本，包含完整伤害、实际生命变化与归属。
- */
-void UCC_AbilitySystemComponent::PublishDamageResult(const FCC_DamageResolved& Result)
-{
-    if (IsOwnerActorAuthoritative()) OnDamageResolved.Broadcast(Result);
-}

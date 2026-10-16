@@ -60,10 +60,10 @@ bool ACC_ArrowProjectile::InitializeArrow(float InSpeed, const FCC_ArrowPayload&
     //Movement->Velocity = GetActorForwardVector() * Speed;
     Payload = InPayload;
     FCC_DamageRequest Request;
-    Request.SkillScale = Payload.SkillScale * Payload.DamageMultiplier;
-    Request.FlatDamage = Payload.FlatDamage * Payload.DamageMultiplier;
+    Request.SkillScale = Payload.SkillScale;
+    Request.FlatDamage = Payload.FlatDamage;
+    Request.DamageMultiplier = Payload.DamageMultiplier;
     Request.SourceTags = Payload.SourceTags;
-    Request.bUseHitLocation = true;
     DamageSnapshot = UCC_DamageStatics::PrepareDamage(
         UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(GetInstigator()), Request, this);
     UE_LOG(LogCCBuff, Verbose, TEXT("[Arrow][Snapshot] Arrow=%s Speed=%.1f Skill=%.3f Flat=%.1f Tags=%s Valid=%d"),
@@ -137,7 +137,7 @@ void ACC_ArrowProjectile::OnArrowHit(UPrimitiveComponent* HitComponent, AActor* 
 	 */
     if (IsValid(TargetASC) && UCC_TeamStatics::IsHostile(this, OtherActor))
     {
-        const ECC_DamageApplyStatus Status = UCC_DamageStatics::ApplyDamage(TargetASC, DamageSnapshot, &Hit);
+        const ECC_DamageApplyStatus Status = UCC_DamageStatics::ApplyPreparedDamage(TargetASC, DamageSnapshot, &Hit);
         UE_LOG(LogCCBuff, Log, TEXT("[Arrow][Hit] Arrow=%s Target=%s DamageStatus=%d Ratio=%.3f"), *GetNameSafe(this),
                *GetNameSafe(OtherActor), static_cast<int32>(Status), Payload.DamageMultiplier);
     }

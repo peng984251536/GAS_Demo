@@ -4,17 +4,14 @@
 #include "CC_GE_Healing.generated.h"
 
 /**
- * 内置 Instant 治疗 GE，将正 SetByCaller 治疗量输出到 IncomingHealing。
- * 技能通过 UCC_DamageStatics::ApplyHealing 创建并应用 Spec。
- * 实际恢复量、生命上限限制和治疗数字由属性集与反馈组件处理。
+ * 项目唯一的治疗 GE（Instant），由 UCC_DamageStatics::ApplyHealing 创建 Spec。
+ * SetByCaller 治疗量 → Healing 中间属性；AttributeSet 负责限制到最大生命。
+ * GameplayCue：GameplayCue.Combat.HealText，数值取 Healing 中间属性。
  */
 UCLASS()
 class GAS_DEMO_API UCC_GE_Healing : public UGameplayEffect
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 public:
-    /**
-     * 配置正数 SetByCaller 治疗量到 IncomingHealing 的中转 Modifier。
-     */
-    UCC_GE_Healing();
+	UCC_GE_Healing();
 };
