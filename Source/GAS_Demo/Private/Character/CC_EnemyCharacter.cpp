@@ -11,7 +11,6 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 #include "Character/Combat/CC_ArrowProjectile.h"
 #include "Data/CC_CharacterConfig.h"
-#include "UI/HealthBar/CC_BatchedHealthBarSubsystem.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "DrawDebugHelpers.h"
@@ -60,14 +59,8 @@ void ACC_EnemyCharacter::BeginPlay()
 
 	GetAbilitySystemComponent()->InitAbilityActorInfo(this,this);
 
-	// 广播委托 初始化
-	OnASCInitialized.Broadcast(
-	GetAbilitySystemComponent(),
-	GetAttributeSet());
-
-	// 头顶血条是纯本地表现，客户端和监听服务器各自注册；推迟一帧，
-	// 确保关卡加载期间生成的敌人注册时本地玩家已经切换到当前世界。
-	GetWorldTimerManager().SetTimerForNextTick(this, &ThisClass::RegisterOverheadHealthBar);
+	// 广播委托 初始化（头顶血条等 UI 订阅 ACC_BaseCharacter::OnAnyCharacterReady 自行处理）
+	BroadcastASCInitialized();
 
 	//-----后续是服务器相关的初始化----//
 	if(!HasAuthority()) return;
@@ -240,30 +233,6 @@ void ACC_EnemyCharacter::HandleDeath()
 	{
 		EnemyController->StopMovement();
 	}
-}
-
-void ACC_EnemyCharacter::RegisterOverheadHealthBar()
-{
-	if (!IsValid(this) || IsActorBeingDestroyed()) return;
-	// 外观与规则统一来自角色配置；未指定配置时按默认样式显示，避免漏配的敌人没有血条。
-	const UCC_CharacterConfig* Config = GetCharacterConfig();
-	if (Config && !Config->bShowOverheadHealthBar) return;
-	const FCC_HealthBarOptions Options = Config ? Config->OverheadHealthBar : FCC_HealthBarOptions();
-	const UGameInstance* GameInstance = GetGameInstance();
-	if (!GameInstance) return;
-	for (ULocalPlayer* Player : GameInstance->GetLocalPlayers())
-		if (UCC_BatchedHealthBarSubsystem* Manager = Player ? Player->GetSubsystem<UCC_BatchedHealthBarSubsystem>() : nullptr)
-			Manager->RegisterHealthBar(this, Options);
-}
-
-void ACC_EnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-	// 管理器也会在 Tick 中清理失效角色，这里主动移除以立即解绑属性委托。
-	if (const UGameInstance* GameInstance = GetGameInstance())
-		for (ULocalPlayer* Player : GameInstance->GetLocalPlayers())
-			if (UCC_BatchedHealthBarSubsystem* Manager = Player ? Player->GetSubsystem<UCC_BatchedHealthBarSubsystem>() : nullptr)
-				Manager->UnregisterHealthBar(this);
-	Super::EndPlay(EndPlayReason);
 }
 
 void ACC_EnemyCharacter::HandleRespawn()

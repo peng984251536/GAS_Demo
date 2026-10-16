@@ -11,10 +11,6 @@
 
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Cue_HitImpact, "GameplayCue.Combat.HitImpact");
 
-// 表现层用这两个标签区分暴击与治疗；由 UCC_DamageTextStatics 在发 Cue 时挂上。
-UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Cue_Critical, "GameplayCue.DamageText.Critical");
-UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Cue_Heal, "GameplayCue.DamageText.Heal");
-
 // 注册一次性受击 Cue 标签，使 ASC 的 ExecuteGameplayCue 能找到此表现类。
 UCC_GameplayCue_HitImpact::UCC_GameplayCue_HitImpact()
 {
@@ -28,7 +24,7 @@ bool UCC_GameplayCue_HitImpact::HandlesEvent(EGameplayCueEvent::Type EventType) 
     return EventType == EGameplayCueEvent::Executed;
 }
 
-// 过滤无效目标和专用服务器，分别处理特效、声音与飘字；返回值只反映特效/声音播放结果。
+// 过滤无效目标和专用服务器后播放特效与声音；伤害数字由 DamageText Cue 负责。
 bool UCC_GameplayCue_HitImpact::OnExecute_Implementation(
     AActor* MyTarget, const FGameplayCueParameters& Parameters) const
 {

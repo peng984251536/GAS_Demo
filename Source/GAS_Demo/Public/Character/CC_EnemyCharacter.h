@@ -48,13 +48,9 @@ protected:
 	
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-	/** 从所有本地玩家的血条管理器中移除自己。 */
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GiveStartupAbilities() override;
 	
 private:
-	/** 按角色配置（Character|UI）向本机每个本地玩家注册头顶血条；专用服务器没有本地玩家，自然不做任何事。 */
-	void RegisterOverheadHealthBar();
 	/** 后撤决策的节流计时；只在服务器且目标进入 MinRange 后尝试激活能力。 */
 	float KeepDistanceCheckRemaining = 0.0f;
 	// 可见但是不可编辑

@@ -181,7 +181,7 @@ classDiagram
 |---|---|---|
 | `FCC_BuffInstanceView` | "这一份 Buff"的只读信息，传给 Behavior | 跟着 ActiveGE |
 | `FCC_*HookContext` / `FCC_ProjectileFireContext` | 某个决策点"这一次"的可修改参数 | 一次 `RunHook` 调用 |
-| `FCC_GameplayEffectContext` | 随 GE 传递的来源信息：`SourceTags`、`ProcDepth`、`ProcChainMask`、`VolleyId` | 一次伤害 / 一次施加 |
+| `FCC_GameplayEffectContext` | 随 GE 传递的信息：目前只有暴击；规划中的 `ProcDepth`、`ProcChainMask`、`VolleyId` 也放这里。来源标签和伤害类型写在 Spec 动态标签上 | 一次伤害 / 一次施加 |
 
 ## 3. 时序：弓箭手获得分裂箭之后
 
@@ -268,7 +268,7 @@ sequenceDiagram
     T-->>A: true
     A->>A: VolleyId 去重：同一齐射对同一目标只结算一次（可选）
     A->>D: ApplyDamage(Request{ FlatDamage = Payload.Damage, SourceTags = Projectile, VolleyId })
-    D->>X: 应用伤害 GE（Context 带 SourceTags / ProcDepth = 0）
+    D->>X: 应用伤害 GE（Spec 标签带 SourceTags；规划：Context 带 ProcDepth = 0）
     X->>SBC: RunHook(Hook.Damage.Outgoing, DmgCtx)
     X->>TBC: RunHook(Hook.Damage.Incoming, DmgCtx)
     X->>X: 最终伤害 = (Base × (1 + Increased) × More + Flat) − 防御

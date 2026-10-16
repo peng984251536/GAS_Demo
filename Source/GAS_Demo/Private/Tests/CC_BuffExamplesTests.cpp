@@ -15,7 +15,7 @@
 #include "Data/CC_CharacterRuntimeData.h"
 #include "Data/Buff/CC_BuffTags.h"
 #include "Damage/CC_DamageStatics.h"
-#include "Damage/CC_GameplayEffectContext.h"
+#include "GameplayEffect.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/RootMotionSource.h"
 #include "GameplayTags/CC_Tags.h"
@@ -81,11 +81,11 @@ bool FCCBuffExamplesTest::RunTest(const FString& Parameters)
     TargetASC->SetNumericAttributeBase(UCC_AttributeSet::GetHealthAttribute(), 500.f);
     TargetASC->SetNumericAttributeBase(UCC_AttributeSet::GetDefenseAttribute(), 0.f);
     TargetASC->SetNumericAttributeBase(UCC_AttributeSet::GetIncomingDamageMultiplierAttribute(), 1.f);
-    TestTrue(TEXT("Prepared damage applied"), UCC_DamageStatics::ApplyDamage(TargetASC, Snapshot) == ECC_DamageApplyStatus::Applied);
+    TestTrue(TEXT("Prepared damage applied"), UCC_DamageStatics::ApplyPreparedDamage(TargetASC, Snapshot) == ECC_DamageApplyStatus::Applied);
     TestTrue(TEXT("Damage keeps launch attack snapshot"), FMath::IsNearlyEqual(
         TargetASC->GetNumericAttribute(UCC_AttributeSet::GetHealthAttribute()), 422.f));
-    const auto* Metadata = Snapshot.IsValid() ? FCC_GameplayEffectContext::Get(Snapshot.Data->GetContext()) : nullptr;
-    TestTrue(TEXT("Snapshot carries projectile source"), Metadata && Metadata->SourceTags.HasTagExact(CCBuffTags::ProjectileDamage));
+    TestTrue(TEXT("Snapshot carries projectile source tag"),
+        Snapshot.IsValid() && Snapshot.Data->GetDynamicAssetTags().HasTagExact(CCBuffTags::ProjectileDamage));
 
     auto DashHandle = Buffs->ApplyBuff(Dash);
     auto* DashSpec = ASC->FindAbilitySpecFromClass(UCC_Dash::StaticClass());

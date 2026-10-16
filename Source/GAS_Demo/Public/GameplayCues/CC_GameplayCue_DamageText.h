@@ -1,36 +1,39 @@
 #pragma once
+
 #include "GameplayCueNotify_Static.h"
 #include "NativeGameplayTags.h"
 #include "CC_GameplayCue_DamageText.generated.h"
-/** 独立伤害/治疗数字标签，不再复用命中特效 Cue。 */
+
 namespace CCDamageCueTags
 {
-    GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(DamageText);
-    /** 独立显示工具省略来源时的观看者标记，不修改正常伤害的筛选策略。 */
-    GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(ManualDisplay);
+	/** 手动显示工具（UCC_DamageTextStatics）没有来源时挂上，跳过"只看自己相关伤害"的筛选。 */
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(ManualDisplay);
 }
-/** 客户端数字桥接：解析类型和数值，筛选本地观看者，再提交飘字子系统；不修改属性。 */
+
+/**
+ * 伤害数字的客户端表现，由伤害 GE 上配置的 GameplayCue.Combat.DamageText 触发。
+ * 只做显示：决定数字位置（有命中点用命中点，否则用目标头顶）、样式、给哪些本地玩家看，然后交给 UCC_DamageNumberSource。
+ */
 UCLASS()
 class GAS_DEMO_API UCC_GameplayCue_DamageText : public UGameplayCueNotify_Static
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 public:
-    /**
-     * 设置独立伤害数字 Cue 标签，与声音和 Niagara 特效分离。
-     */
-    UCC_GameplayCue_DamageText();
-    /**
-     * 只响应单次 Executed 事件。
-     * @param Type 本次 GameplayCue 事件类型。
-     * @return 事件为 Executed 时返回 true，其他事件返回 false。
-     */
-    virtual bool HandlesEvent(EGameplayCueEvent::Type Type) const override;
-    /**
-     * 解析伤害/治疗样式，筛选本地观看者，并提交独立飘字条目。
-     * @param Target 接收数字 Cue 的目标 Actor。
-     * @param Params 数字 Cue 参数：位置、来源、数值以及扩展 Context。
-     * @return 至少向一个本地玩家提交数字时返回 true。
-     */
-    virtual bool OnExecute_Implementation(AActor* Target,
-        const FGameplayCueParameters& Params) const override;
+	UCC_GameplayCue_DamageText();
+	virtual bool HandlesEvent(EGameplayCueEvent::Type Type) const override { return Type == EGameplayCueEvent::Executed; }
+	virtual bool OnExecute_Implementation(AActor* Target, const FGameplayCueParameters& Params) const override;
+protected:
+	/** 没有命中点时，数字出现在目标包围盒顶部上方多少厘米。 */
+	UPROPERTY(EditDefaultsOnly, Category="Damage Text") float HeadOffset = 20.f;
+	/** true 表示这是治疗数字。 */
+	bool bHealing = false;
+};
+
+/** 治疗数字，由治疗 GE 上的 GameplayCue.Combat.HealText 触发。 */
+UCLASS()
+class GAS_DEMO_API UCC_GameplayCue_HealText : public UCC_GameplayCue_DamageText
+{
+	GENERATED_BODY()
+public:
+	UCC_GameplayCue_HealText();
 };

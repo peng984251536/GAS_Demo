@@ -70,9 +70,7 @@ void ACC_PlayerCharacter::PossessedBy(AController* PlayerController)
 	HandleRespawn();
 
 	// 广播委托 初始化
-	OnASCInitialized.Broadcast(
-	GetAbilitySystemComponent(),
-	GetAttributeSet());
+	BroadcastASCInitialized();
 	
 	FOnGameplayAttributeValueChange& ChangeDelegate =
 	GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(
@@ -104,7 +102,7 @@ void ACC_PlayerCharacter::OnRep_PlayerState()
 	GetAbilitySystemComponent()->InitAbilityActorInfo(GetPlayerState(),this);
 
 	// 广播委托 初始化
-	OnASCInitialized.Broadcast(GetAbilitySystemComponent(),GetAttributeSet());
+	BroadcastASCInitialized();
 
 
 }

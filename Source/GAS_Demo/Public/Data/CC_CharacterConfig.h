@@ -4,7 +4,6 @@
 #include "AbilitySystem/Abilities/CC_GameplayAbilityBase.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
-#include "UI/HealthBar/CC_HealthBarTypes.h"
 #include "CC_CharacterConfig.generated.h"
 
 class UGameplayAbility;
@@ -12,6 +11,24 @@ class UGameplayEffect;
 class UCombatActionSet;
 class UCombatActionData;
 class ACC_ArrowProjectile;
+class UUserWidget;
+
+/** 头顶血条的配置。只是数据，玩法代码不读取；由 UI 侧的 UCC_HealthBarSource 读取。 */
+USTRUCT(BlueprintType)
+struct GAS_DEMO_API FCC_OverheadHealthBarConfig
+{
+	GENERATED_BODY()
+	/** 血条控件（任意实现 CC World Indicator Widget 的 UserWidget，推荐派生 CC_HealthBarWidget）。
+	 *  留空使用 项目设置 → CC World Indicator 中的默认血条。软引用，专用服务器不会加载。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health Bar", meta = (MustImplement = "/Script/GAS_Demo.CC_WorldIndicatorWidget"))
+	TSoftClassPtr<UUserWidget> WidgetClass;
+	/** 叠加在角色位置上的世界偏移（厘米），控件底边中点对齐这里。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health Bar")
+	FVector WorldOffset = FVector(0.f, 0.f, 80.f);
+	/** 超过这个距离不显示（厘米）；0 表示不限。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health Bar", meta = (ClampMin = "0"))
+	float MaxDistance = 5000.f;
+};
 
 
 /** 一项初始技能配置。以后可在这里添加输入标签等“每个技能各不相同”的配置。 */
@@ -90,15 +107,12 @@ public:
 	UPROPERTY(EditDefaultsOnly,BlueprintReadWrite,Category="Crash|AI")
 	float AttackDelay{1.0f};
 
-	/** 是否显示头顶血条（目前由敌人使用；玩家自身血量在 HUD 左上角显示）。 */
+	/** 是否显示头顶血条。本地玩家自己的角色始终不显示（自身血量在 HUD 上）。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI")
 	bool bShowOverheadHealthBar = true;
-	/**
-	 * 头顶血条：Item Widget Class 选用哪个单条血条控件（任意实现 CC Health Bar Item 接口的 UserWidget），
-	 * 以及挂点偏移、显示距离、满血/死亡隐藏等规则。控件类留空则用血条层的默认控件。
-	 */
+	/** 头顶血条用哪个控件、挂在哪、多远隐藏；满血 / 死亡隐藏在血条控件上配置。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI", meta = (EditCondition = "bShowOverheadHealthBar"))
-	FCC_HealthBarOptions OverheadHealthBar;
+	FCC_OverheadHealthBarConfig OverheadHealthBar;
 	
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;

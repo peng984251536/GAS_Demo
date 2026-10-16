@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
 #include "Utils/FBufferedAbilityInput.h"
-#include "Damage/CC_DamageTypes.h"
 #include "CC_AbilitySystemComponent.generated.h"
 
 
@@ -17,21 +16,6 @@ class GAS_DEMO_API UCC_AbilitySystemComponent : public UAbilitySystemComponent
 public:
 	// Sets default values for this component's properties
 	UCC_AbilitySystemComponent();
-    /**
-     * 初始化 ASC 后在服务器 Owner 上创建或复用反馈组件，并刷新订阅。
-     * @param Owner ASC 所属 Actor；玩家通常为 PlayerState，敌人通常为角色。
-     * @param Avatar ASC 当前操作的 Avatar，通常是角色 Pawn。
-     */
-    virtual void InitAbilityActorInfo(AActor* Owner, AActor* Avatar) override;
-    /** 项目级结算通知：供反馈、战斗日志等服务器逻辑订阅，不会自动复制。 */
-    FCC_DamageResolvedDelegate OnDamageResolved;
-    /**
-     * 在权威端广播已确定的结算结果，不再次扣血或激活死亡。
-     * @param Result 本次伤害/治疗的不可变结果副本，包含完整伤害、实际生命变化与归属。
-     */
-    void PublishDamageResult(const FCC_DamageResolved& Result);
-    /** 自动反馈组件；玩家通常挂在 PlayerState（ASC Owner），敌人挂在角色 Owner。 */
-    UPROPERTY(Transient) TObjectPtr<class UCC_CombatFeedbackComponent> CombatFeedback;
 
 	void HandleAutoActivatedAbility(const FGameplayAbilitySpec& AbilitySpec );
 
