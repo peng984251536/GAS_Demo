@@ -12,7 +12,7 @@ namespace CCDamageCueTags
 
 /**
  * 伤害数字的客户端表现，由伤害 GE 上配置的 GameplayCue.Combat.DamageText 触发。
- * 只做显示：决定数字位置（有命中点用命中点，否则用目标头顶）、样式、给哪些本地玩家看，然后交给飘字子系统。
+ * 只做显示：决定数字位置（有命中点用命中点，否则用目标头顶）、样式、给哪些本地玩家看，然后交给 UCC_DamageNumberSource。
  */
 UCLASS()
 class GAS_DEMO_API UCC_GameplayCue_DamageText : public UGameplayCueNotify_Static

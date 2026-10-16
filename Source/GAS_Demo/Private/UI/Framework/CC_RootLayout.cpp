@@ -2,8 +2,6 @@
 #include "UI/Framework/CC_ActivatableWidget.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
-#include "UI/HealthBar/CC_BatchedHealthBarWidget.h"
-#include "UI/DamageText/CC_DamageTextWidget.h"
 #include "UI/WorldIndicator/CC_WorldIndicatorLayer.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
@@ -51,8 +49,6 @@ UCC_RootLayout::UCC_RootLayout(const FObjectInitializer& ObjectInitializer) : Su
 {
 	bAutoActivate = true;
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	HealthBarLayerClass = UCC_BatchedHealthBarWidget::StaticClass();
-	DamageTextLayerClass = UCC_DamageTextWidget::StaticClass();
 	WorldIndicatorLayerClass = UCC_WorldIndicatorLayer::StaticClass();
 }
 
@@ -85,16 +81,6 @@ void UCC_RootLayout::NativeOnInitialized()
 	WorldOverlayLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Fill(Outer, WorldOverlayLayer);
 	// 在根布局自己的 WidgetTree 中构建，切图更换 Controller 时 SetPlayerContext 会一并传给它们。
-	if (HealthBarLayerClass && !HealthBarLayerClass->HasAnyClassFlags(CLASS_Abstract))
-	{
-		HealthBarLayer = WidgetTree->ConstructWidget<UCC_BatchedHealthBarWidget>(HealthBarLayerClass, TEXT("HealthBars"));
-		if (HealthBarLayer) Fill(WorldOverlayLayer, HealthBarLayer);
-	}
-	if (DamageTextLayerClass && !DamageTextLayerClass->HasAnyClassFlags(CLASS_Abstract))
-	{
-		DamageTextLayer = WidgetTree->ConstructWidget<UCC_DamageTextWidget>(DamageTextLayerClass, TEXT("DamageText"));
-		if (DamageTextLayer) Fill(WorldOverlayLayer, DamageTextLayer); // 飘字画在血条之上。
-	}
 	if (WorldIndicatorLayerClass && !WorldIndicatorLayerClass->HasAnyClassFlags(CLASS_Abstract))
 	{
 		WorldIndicatorLayer = WidgetTree->ConstructWidget<UCC_WorldIndicatorLayer>(WorldIndicatorLayerClass, TEXT("WorldIndicators"));

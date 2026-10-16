@@ -9,8 +9,6 @@
 
 class UOverlay;
 class UCC_ActivatableWidget;
-class UCC_BatchedHealthBarWidget;
-class UCC_DamageTextWidget;
 class UCC_WorldIndicatorLayer;
 
 /** 官方 CommonUI 栈的薄封装，只开放内置过渡配置，不另写动画状态机。 */
@@ -127,12 +125,6 @@ public:
 	void Shutdown();
 	/** 精确按 Layer 标签查找对应的栈，未配置的标签返回空。 */
 	UCommonActivatableWidgetContainerBase* GetLayer(FGameplayTag Layer) const;
-	/** 根布局托管的头顶血条绘制层；未配置时为空。 */
-	UFUNCTION(BlueprintPure, Category="UI|World Overlay")
-	UCC_BatchedHealthBarWidget* GetHealthBarLayer() const { return HealthBarLayer; }
-	/** 根布局托管的伤害飘字绘制层；未配置时为空。 */
-	UFUNCTION(BlueprintPure, Category="UI|World Overlay")
-	UCC_DamageTextWidget* GetDamageTextLayer() const { return DamageTextLayer; }
 	/** 世界指示器层（血条、伤害数字、交互提示等共用）；未配置时为空。 */
 	UFUNCTION(BlueprintPure, Category="UI|World Overlay")
 	UCC_WorldIndicatorLayer* GetWorldIndicatorLayer() const { return WorldIndicatorLayer; }
@@ -165,17 +157,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="UI|Layers")
 	bool bApplySafeZone = true;
 	/**
-	 * 世界覆盖层：位于所有页面层之下、铺满整个视口，不参与输入、不进页面栈。
-	 * 头顶血条与伤害飘字由根布局在这里统一创建，随根布局一起挂载、切图和分屏，
-	 * 不再需要在 PlayerController 里 Add to Player Screen 或往 HUD 蓝图里拖控件。
-	 * 设为空即不创建对应层。
+	 * 世界覆盖层：位于所有页面层之下、铺满整个视口（不受 SafeZone 影响），不参与输入、不进页面栈。
+	 * 这里只创建一个世界指示器层，头顶血条、伤害数字等都显示在它上面，随根布局一起挂载、切图和分屏。
+	 * 设为空即不创建。
 	 */
-	UPROPERTY(EditDefaultsOnly, Category="UI|World Overlay")
-	TSubclassOf<UCC_BatchedHealthBarWidget> HealthBarLayerClass;
-	/** 伤害飘字绘制层的类；设为空即不创建。 */
-	UPROPERTY(EditDefaultsOnly, Category="UI|World Overlay")
-	TSubclassOf<UCC_DamageTextWidget> DamageTextLayerClass;
-	/** 世界指示器层的类；设为空即不创建。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|World Overlay")
 	TSubclassOf<UCC_WorldIndicatorLayer> WorldIndicatorLayerClass;
 	/** 菜单/弹窗层有页面时隐藏世界覆盖层（隐藏期间不执行绘制）。 */
@@ -202,8 +187,6 @@ private:
 	UPROPERTY(Transient) TArray<FCC_UIRuntimeLayer> RuntimeLayers;
 	/** 最底视觉层：世界空间投影的血条与飘字，自身和子控件均不参与命中测试。 */
 	UPROPERTY(Transient) TObjectPtr<UOverlay> WorldOverlayLayer;
-	UPROPERTY(Transient) TObjectPtr<UCC_BatchedHealthBarWidget> HealthBarLayer;
-	UPROPERTY(Transient) TObjectPtr<UCC_DamageTextWidget> DamageTextLayer;
 	UPROPERTY(Transient) TObjectPtr<UCC_WorldIndicatorLayer> WorldIndicatorLayer;
 	/** 最上视觉层：提示，其自身和子控件均不参与命中测试。 */
 	UPROPERTY(Transient) TObjectPtr<UOverlay> NotificationLayer;

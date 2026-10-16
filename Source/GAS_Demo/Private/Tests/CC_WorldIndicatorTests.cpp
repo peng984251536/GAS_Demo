@@ -4,6 +4,10 @@
 
 #include "UI/WorldIndicator/CC_WorldIndicator.h"
 #include "UI/WorldIndicator/CC_WorldIndicatorSubsystem.h"
+#include "UI/HealthBar/CC_HealthBarSource.h"
+#include "UI/DamageText/CC_DamageNumberSource.h"
+#include "UI/WorldIndicator/CC_WorldIndicatorSettings.h"
+#include "Character/CC_EnemyCharacter.h"
 #include "CommonGameViewportClient.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -13,8 +17,8 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 
-/** 子系统增删契约与锚点计算；显示层需要视口，在 PIE 中验证。 */
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCCWorldIndicatorSubsystemTest, "GAS_Demo.UI.WorldIndicator.Subsystem",
+/** 子系统增删契约、锚点计算、血条来源与伤害数字来源；显示层需要视口，在 PIE 中验证。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCCWorldIndicatorSubsystemTest, "GAS_Demo.UI.WorldIndicator.SubsystemAndSources",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FCCWorldIndicatorSubsystemTest::RunTest(const FString& Parameters)
@@ -77,6 +81,35 @@ bool FCCWorldIndicatorSubsystemTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Clear notifies each indicator"), Removed, 2);
 	Subsystem->OnIndicatorAdded.Clear();
 	Subsystem->OnIndicatorRemoved.Clear();
+
+	// 血条来源：收到"角色就绪"后添加跟随角色的指示器，角色 EndPlay 后移除。
+	UCC_HealthBarSource* HealthBars = Player->GetSubsystem<UCC_HealthBarSource>();
+	if (!TestNotNull(TEXT("Health bar source"), HealthBars)) return false;
+	ACC_EnemyCharacter* Enemy = World->SpawnActor<ACC_EnemyCharacter>();
+	if (!TestNotNull(TEXT("Enemy"), Enemy)) return false;
+	ACC_BaseCharacter::OnAnyCharacterReady.Broadcast(Enemy);
+	ACC_BaseCharacter::OnAnyCharacterReady.Broadcast(Enemy);
+	TestEqual(TEXT("One health bar per character"), HealthBars->GetHealthBarCount(), 1);
+	TestEqual(TEXT("Health bar is a world indicator"), Subsystem->GetIndicators().Num(), 1);
+	TestTrue(TEXT("Health bar follows the character"),
+		Subsystem->GetIndicators().Num() == 1 && Subsystem->GetIndicators()[0]->GetAnchorActor() == Enemy);
+	Enemy->Destroy();
+	TestEqual(TEXT("EndPlay removes the health bar"), HealthBars->GetHealthBarCount(), 0);
+	TestEqual(TEXT("EndPlay removes the indicator"), Subsystem->GetIndicators().Num(), 0);
+
+	// 伤害数字来源：数量上限优先淘汰最旧的普通数字。
+	UCC_DamageNumberSource* Numbers = Player->GetSubsystem<UCC_DamageNumberSource>();
+	if (!TestNotNull(TEXT("Damage number source"), Numbers)) return false;
+	const int32 Max = FMath::Max(1, GetDefault<UCC_WorldIndicatorSettings>()->MaxDamageNumbersPerPlayer);
+	Numbers->ShowNumber(nullptr, FVector::ZeroVector, 1.f, ECC_DamageTextStyle::Critical, FGameplayTag());
+	for (int32 Index = 1; Index < Max + 3; ++Index)
+		Numbers->ShowNumber(nullptr, FVector::ZeroVector, 1.f, ECC_DamageTextStyle::Normal, FGameplayTag());
+	TestEqual(TEXT("Damage numbers capped per player"), Numbers->GetActiveCount(), Max);
+	TestTrue(TEXT("Critical number survives eviction"), Numbers->GetActiveNumbers()[0]->Style == ECC_DamageTextStyle::Critical);
+	Numbers->ShowNumber(nullptr, FVector::ZeroVector, 0.f, ECC_DamageTextStyle::Normal, FGameplayTag());
+	TestEqual(TEXT("Zero amount ignored"), Numbers->GetActiveCount(), Max);
+	Subsystem->ClearIndicators();
+	TestEqual(TEXT("Clear recycles numbers"), Numbers->GetActiveCount(), 0);
 	return true;
 }
 

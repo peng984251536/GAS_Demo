@@ -24,7 +24,7 @@
 | `UCC_UIController / UCC_UIModel` | 页面业务协调器与展示模型基类，随页面自动绑定/解绑 |
 | `UCC_MainMenuController / UCC_MainMenuModel` | 主界面统一操作入口和展示状态，已接房间子系统，开始/继续提供存档业务扩展点 |
 | `UCC_MenuButton / UCC_PauseMenuWidget / UCC_QuitDialogWidget` | 原生交互示例，分别演示 CommonButton、菜单和确认框；可由自己的蓝图替换 |
-| 世界覆盖层 | RootLayout 自动创建的 `CC_BatchedHealthBarWidget` 与 `CC_DamageTextWidget`，位于所有页面层之下，不进页面栈；血条持有 Controller/Model，飘字由 Widget 绑定 Subsystem 并由 Slate 直接读取，见 [UIArchitecture.zh-CN.md](UIArchitecture.zh-CN.md#世界覆盖层头顶血条伤害飘字) |
+| 世界覆盖层 | RootLayout 自动创建的 `CC_WorldIndicatorLayer`，位于所有页面层之下，不进页面栈；头顶血条和伤害数字都是它显示的指示器，见 [WorldIndicator.zh-CN.md](WorldIndicator.zh-CN.md) |
 
 UI 不要求特定 PlayerController 子类；项目控制器直接继承 APlayerController。
 
@@ -63,7 +63,7 @@ C++ 中引用层级一律使用原生标签 `CCTags::UILayer::Game / GameMenu / 
 3. 新建主菜单使用 `CC_MainMenuWidget`；背包、设置和确认框使用 `CC_ActivatableWidget`，复杂页面通过 ControllerClass 配置独立控制器。已经接入 CC 框架的页面无需重新改父类；旧框架页面应先核对绑定，再逐项迁移导航，不要批量删除业务节点。
 4. 自定义战斗主界面的父类改为 `CC_CombatMainWidget`。血蓝条推荐放一个名为 `PlayerVitals` 的 `CC_PlayerVitalsWidget`（或其派生蓝图）子控件；也可以继续在主界面实现 `On Vitals Changed`。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。原先派生自 `CC_PlayerHUDWidget` 的蓝图由 ClassRedirects 自动迁移。
 5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画、层级表或 SafeZone，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
-6. 通知使用普通 `UserWidget`。头顶血条和伤害飘字由根布局的世界覆盖层自动创建，不要再手动 Add to Player Screen 或拖进 HUD；详见 [BatchedHealthBars.zh-CN.md](BatchedHealthBars.zh-CN.md) 与 [DamageText.zh-CN.md](DamageText.zh-CN.md)。
+6. 通知使用普通 `UserWidget`。头顶血条和伤害飘字由根布局的世界覆盖层自动创建，不要再手动 Add to Player Screen 或拖进 HUD；详见 [WorldIndicator.zh-CN.md](WorldIndicator.zh-CN.md)。
 
 通用页面打开：
 

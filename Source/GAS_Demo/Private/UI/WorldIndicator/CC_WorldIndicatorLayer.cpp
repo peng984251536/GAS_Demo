@@ -77,15 +77,18 @@ void UCC_WorldIndicatorLayer::ShowIndicator(UCC_WorldIndicator* Indicator)
 		return;
 	}
 	// 首次用到的控件类异步加载，避免卡顿；加载完成时指示器可能已被移除。
+	// 先占位再发请求：已在内存中的资源可能在 RequestAsyncLoad 内部就同步回调。
 	const TWeakObjectPtr<UCC_WorldIndicator> WeakIndicator = Indicator;
-	PendingLoads.Add(Indicator, UAssetManager::GetStreamableManager().RequestAsyncLoad(SoftClass.ToSoftObjectPath(),
+	PendingLoads.Add(Indicator);
+	TSharedPtr<FStreamableHandle> Handle = UAssetManager::GetStreamableManager().RequestAsyncLoad(SoftClass.ToSoftObjectPath(),
 		FStreamableDelegate::CreateWeakLambda(this, [this, WeakIndicator]()
 		{
-			PendingLoads.Remove(WeakIndicator);
+			if (PendingLoads.Remove(WeakIndicator) == 0) return; // 加载期间已被移除。
 			UCC_WorldIndicator* Ready = WeakIndicator.Get();
 			const UCC_WorldIndicatorSubsystem* Subsystem = BoundSubsystem.Get();
 			if (Ready && Subsystem && Subsystem->GetIndicators().Contains(Ready)) CreateWidgetFor(Ready, Ready->WidgetClass.Get());
-		})));
+		}));
+	if (TSharedPtr<FStreamableHandle>* Pending = PendingLoads.Find(Indicator)) *Pending = Handle;
 }
 
 void UCC_WorldIndicatorLayer::CreateWidgetFor(UCC_WorldIndicator* Indicator, UClass* WidgetClass)
@@ -97,7 +100,7 @@ void UCC_WorldIndicatorLayer::CreateWidgetFor(UCC_WorldIndicator* Indicator, UCl
 		UE_LOG(LogGAS_Demo, Warning, TEXT("世界指示器控件 %s 没有实现 CC World Indicator Widget 接口，只显示、不绑定数据。"), *GetNameSafe(WidgetClass));
 
 	UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Widget->Slot);
-	if (!CanvasSlot || Widget->GetParent() != Canvas) CanvasSlot = Canvas->AddChildToCanvas(Widget);
+	if (!CanvasSlot || Widget->GetParent() != Canvas.Get()) CanvasSlot = Canvas->AddChildToCanvas(Widget);
 	if (CanvasSlot)
 	{
 		// Slot 只在这里设置一次；之后每帧只改渲染平移。
@@ -121,7 +124,7 @@ void UCC_WorldIndicatorLayer::HideIndicator(UCC_WorldIndicator* Indicator)
 	if (ImplementsIndicatorWidget(Entry.Widget)) ICC_WorldIndicatorWidget::Execute_UnbindIndicator(Entry.Widget);
 	// 留在画布里折叠，下次复用时不必重新创建 Slot。
 	Entry.Widget->SetVisibility(ESlateVisibility::Collapsed);
-	WidgetPool.Release(Entry.Widget);
+	WidgetPool.Release(Entry.Widget, false);
 }
 
 void UCC_WorldIndicatorLayer::ReleaseAll()

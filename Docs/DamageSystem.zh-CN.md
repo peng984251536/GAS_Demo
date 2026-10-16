@@ -103,7 +103,8 @@ UCC_DamageStatics::ApplyDamage(SourceASC, TargetASC, Request);
 
 - 伤害数字显示**理论伤害**（Damage 中间属性），残血 5 挨 100 显示 100；治疗显示请求的治疗量。
 - 有命中点时从命中点出现，否则从目标包围盒顶部上方 `HeadOffset`（默认 20cm）出现。
-- 默认只显示给本地攻击者和本地受击者；`DamageTextSubsystem.bShowAllDamage` 显示全部。
+- 默认只显示给本地攻击者和本地受击者；项目设置 CC World Indicator 的 `Show All Damage Numbers` 显示全部。
+- Cue 把数字交给每个本地玩家的 `UCC_DamageNumberSource`，显示、容量和自定义控件见 [WorldIndicator.zh-CN.md](WorldIndicator.zh-CN.md)。
 - 伤害类型取 Spec 标签中第一个 `Damage.Type.*`，交给飘字控件选样式。
 - 两个 Cue 是原生 C++ 类，由 `CC_GameplayCueManager` 在路由时注册，不需要蓝图资产。
 - 独立显示工具 `UCC_DamageTextStatics::ShowDamageText` 只显示数字，不扣血；常规伤害不要再调用它。

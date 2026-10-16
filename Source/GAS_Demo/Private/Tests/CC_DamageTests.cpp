@@ -10,7 +10,11 @@
 #include "Damage/CC_GameplayEffectContext.h"
 #include "Effects/Damage/CC_GE_Damage.h"
 #include "GameplayCues/CC_GameplayCueManager.h"
-#include "UI/DamageText/CC_DamageTextSubsystem.h"
+#include "UI/DamageText/CC_DamageNumberSource.h"
+#include "UI/WorldIndicator/CC_WorldIndicatorSubsystem.h"
+#include "CommonGameViewportClient.h"
+#include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -206,64 +210,85 @@ bool FCCDamageCueTest::RunTest(const FString& Parameters)
 	Original.AddHitResult(Hit, true);
 	TestEqual(TEXT("Duplicate copies HitResult by value"), Duplicate.GetHitResult()->ImpactPoint, FVector(20.f, 30.f, 40.f));
 
-	// 2. 伤害 GE 自带的 Cue：数值是 Execution 输出的理论伤害。
-	FDamageTestWorld TestWorld;
-	if (!TestNotNull(TEXT("World"), TestWorld.World)) return false;
-	UWorld* World = TestWorld.World;
+	// 2. 伤害 GE 自带的 Cue → 本地玩家的伤害数字来源：数值是 Execution 输出的理论伤害。
+	UGameInstance* Instance = NewObject<UGameInstance>(GEngine);
+	Instance->InitializeStandalone();
+	UWorld* World = Instance->GetWorld();
+	if (!TestNotNull(TEXT("World"), World)) return false;
+	FWorldContext& WorldContext = GEngine->GetWorldContextFromWorldChecked(World);
+	UCommonGameViewportClient* Viewport = NewObject<UCommonGameViewportClient>(GEngine);
+	WorldContext.GameViewport = Viewport;
+	Viewport->Init(WorldContext, Instance, false);
+	ULocalPlayer* LocalPlayer = NewObject<ULocalPlayer>(GEngine);
+	Instance->AddLocalPlayer(LocalPlayer, FPlatformUserId::CreateFromInternalId(0));
+	ON_SCOPE_EXIT
+	{
+		Instance->RemoveLocalPlayer(LocalPlayer);
+		Instance->Shutdown();
+		Viewport->DetachViewportClient();
+		GEngine->DestroyWorldContext(World);
+		World->DestroyWorld(false);
+	};
+	// 隔离世界没有 GameMode/登录流程，手动把控制器和本地玩家连起来。
 	APlayerController* Viewer = World->SpawnActor<APlayerController>();
-	APlayerController* OtherViewer = World->SpawnActor<APlayerController>();
+	Viewer->Player = LocalPlayer;
+	LocalPlayer->PlayerController = Viewer;
 	World->AddController(Viewer);
-	World->AddController(OtherViewer);
-	UAbilitySystemComponent* Source = TestWorld.MakeASC();
-	UAbilitySystemComponent* Target = TestWorld.MakeASC();
+	auto MakeASC = [World]()
+	{
+		APawn* Actor = World->SpawnActor<APawn>();
+		UAbilitySystemComponent* ASC = NewObject<UAbilitySystemComponent>(Actor);
+		Actor->AddInstanceComponent(ASC);
+		ASC->RegisterComponent();
+		ASC->AddAttributeSetSubobject(NewObject<UCC_AttributeSet>(Actor));
+		ASC->InitAbilityActorInfo(Actor, Actor);
+		return ASC;
+	};
+	UAbilitySystemComponent* Source = MakeASC();
+	UAbilitySystemComponent* Target = MakeASC();
 	Viewer->Possess(Cast<APawn>(Source->GetAvatarActor()));
 	SetBase(Source, UCC_AttributeSet::GetAttackPowerAttribute(), 10.f);
 	SetBase(Target, UCC_AttributeSet::GetMaxHealthAttribute(), 1000.f);
 	SetBase(Target, UCC_AttributeSet::GetHealthAttribute(), 1000.f);
-	UCC_DamageTextSubsystem* Text = World->GetSubsystem<UCC_DamageTextSubsystem>();
-	if (!TestNotNull(TEXT("Damage text subsystem"), Text)) return false;
+	UCC_DamageNumberSource* Numbers = LocalPlayer->GetSubsystem<UCC_DamageNumberSource>();
+	UCC_WorldIndicatorSubsystem* Indicators = LocalPlayer->GetSubsystem<UCC_WorldIndicatorSubsystem>();
+	if (!TestNotNull(TEXT("Damage number source"), Numbers) || !TestNotNull(TEXT("Indicator subsystem"), Indicators)) return false;
 	TestTrue(TEXT("Project cue manager configured"), UAbilitySystemGlobals::Get().GetGameplayCueManager()->IsA<UCC_GameplayCueManager>());
 
 	FCC_DamageRequest Request;
 	Request.CriticalPolicy = ECC_CriticalPolicy::Disabled;
 	UCC_DamageStatics::ApplyDamage(Source, Target, Request);
-	TestEqual(TEXT("GE cue submits one entry to the attacker only"), Text->GetActiveEntries().Num(), 1);
-	if (!Text->GetActiveEntries().IsEmpty())
+	TestEqual(TEXT("GE cue shows one number"), Numbers->GetActiveCount(), 1);
+	TestEqual(TEXT("Number is a world indicator"), Indicators->GetIndicators().Num(), 1);
+	if (Numbers->GetActiveCount() > 0)
 	{
-		TestTrue(TEXT("Entry belongs to attacker"), Text->GetActiveEntries()[0].Viewer == Viewer);
-		TestEqual(TEXT("Cue magnitude is resolved damage"), Text->GetActiveEntries()[0].Amount, 10.f);
+		TestEqual(TEXT("Cue magnitude is resolved damage"), Numbers->GetActiveNumbers().Last()->Amount, 10.f);
+		TestTrue(TEXT("Number stays at a fixed location"), Numbers->GetActiveNumbers().Last()->GetAnchorActor() == nullptr);
 	}
 	SetBase(Target, UCC_AttributeSet::GetHealthAttribute(), 3.f);
 	UCC_DamageStatics::ApplyDamage(Source, Target, Request);
-	TestEqual(TEXT("Overkill still shows resolved damage"), Text->GetActiveEntries()[0].Amount, 10.f);
-	const int32 EntriesBeforeImmune = Text->GetActiveEntries().Num();
+	TestEqual(TEXT("Overkill still shows resolved damage"), Numbers->GetActiveNumbers().Last()->Amount, 10.f);
+	TestTrue(TEXT("Second number on the same target is offset"),
+		Numbers->GetActiveNumbers().Last()->ScreenOffset != Numbers->GetActiveNumbers()[0]->ScreenOffset);
+	const int32 CountBeforeImmune = Numbers->GetActiveCount();
 	SetBase(Target, UCC_AttributeSet::GetHealthAttribute(), 1000.f);
 	Target->AddLooseGameplayTag(CCDamageTags::Immunity);
 	UCC_DamageStatics::ApplyDamage(Source, Target, Request);
-	TestEqual(TEXT("Immune hit shows no number"), Text->GetActiveEntries().Num(), EntriesBeforeImmune);
+	TestEqual(TEXT("Immune hit shows no number"), Numbers->GetActiveCount(), CountBeforeImmune);
 	Target->RemoveLooseGameplayTag(CCDamageTags::Immunity);
 
 	// 3. 治疗 GE 自带的 Cue。
 	UCC_DamageStatics::ApplyHealing(Source, Target, 5.f);
-	TestTrue(TEXT("Heal cue uses heal style"), Text->GetActiveEntries()[0].Style == ECC_DamageTextStyle::Heal);
-	Text->Tick(2.f);
+	TestTrue(TEXT("Heal cue uses heal style"), Numbers->GetActiveNumbers().Last()->Style == ECC_DamageTextStyle::Heal);
 
-	// 4. 飘字分组（表现层）：同组合并，目标/样式/观看者不同则独立。
-	Text->MergeWindow = 0.25f;
-	const FVector Location(100.f, 100.f, 100.f);
-	AActor* FirstTarget = Target->GetAvatarActor();
-	AActor* SecondTarget = World->SpawnActor<AActor>();
-	AActor* SourceActor = Source->GetAvatarActor();
-	Text->ReportHitForPlayer(Viewer, FirstTarget, SourceActor, Location, 10.f, ECC_DamageTextStyle::Normal, FGameplayTag());
-	Text->ReportHitForPlayer(Viewer, FirstTarget, SourceActor, Location, 20.f, ECC_DamageTextStyle::Normal, FGameplayTag());
-	TestEqual(TEXT("Same group merges"), Text->GetActiveEntries().Num(), 1);
-	TestEqual(TEXT("Merged amount"), Text->GetActiveEntries()[0].Amount, 30.f);
-	Text->ReportHitForPlayer(Viewer, SecondTarget, SourceActor, Location, 5.f, ECC_DamageTextStyle::Normal, FGameplayTag());
-	Text->ReportHitForPlayer(Viewer, FirstTarget, SourceActor, Location, -5.f, ECC_DamageTextStyle::Heal, FGameplayTag());
-	Text->ReportHitForPlayer(Viewer, FirstTarget, SourceActor, Location, 5.f, ECC_DamageTextStyle::Critical, FGameplayTag());
-	Text->ReportHitForPlayer(OtherViewer, FirstTarget, SourceActor, Location, 5.f, ECC_DamageTextStyle::Normal, FGameplayTag());
-	TestEqual(TEXT("Targets, styles and viewers stay independent"), Text->GetActiveEntries().Num(), 5);
-	Text->Tick(2.f);
+	// 4. 移除后指示器对象被回收，再显示时复用。
+	UCC_DamageNumberIndicator* First = Numbers->GetActiveNumbers()[0];
+	Indicators->RemoveIndicator(First);
+	TestEqual(TEXT("Removed number leaves the source"), Numbers->GetActiveCount(), CountBeforeImmune);
+	Numbers->ShowNumber(Target->GetAvatarActor(), FVector::ZeroVector, 7.f, ECC_DamageTextStyle::Normal, FGameplayTag());
+	TestTrue(TEXT("Indicator object is recycled"), Numbers->GetActiveNumbers().Last() == First);
+	Indicators->ClearIndicators();
+	TestEqual(TEXT("Clearing indicators empties the source"), Numbers->GetActiveCount(), 0);
 	return true;
 }
 

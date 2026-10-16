@@ -1,7 +1,8 @@
 #include "GameplayCues/CC_GameplayCue_DamageText.h"
 #include "Damage/CC_DamageTags.h"
 #include "Damage/CC_GameplayEffectContext.h"
-#include "UI/DamageText/CC_DamageTextSubsystem.h"
+#include "UI/DamageText/CC_DamageNumberSource.h"
+#include "UI/WorldIndicator/CC_WorldIndicatorSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
@@ -56,9 +57,6 @@ bool UCC_GameplayCue_DamageText::OnExecute_Implementation(AActor* Target, const 
 	UWorld* World = IsValid(Target) ? Target->GetWorld() : nullptr;
 	const float Amount = FMath::Abs(Params.RawMagnitude);
 	if (!World || World->GetNetMode() == NM_DedicatedServer || !FMath::IsFinite(Amount) || FMath::IsNearlyZero(Amount)) return false;
-	UCC_DamageTextSubsystem* Subsystem = World->GetSubsystem<UCC_DamageTextSubsystem>();
-	if (!Subsystem) return false;
-
 	const FCC_GameplayEffectContext* Context = FCC_GameplayEffectContext::Get(Params.EffectContext);
 	const ECC_DamageTextStyle Style = bHealing ? ECC_DamageTextStyle::Heal
 		: (Context && Context->bCritical ? ECC_DamageTextStyle::Critical : ECC_DamageTextStyle::Normal);
@@ -67,14 +65,18 @@ bool UCC_GameplayCue_DamageText::OnExecute_Implementation(AActor* Target, const 
 	AActor* Instigator = Params.GetInstigator();
 	const bool bManualDisplay = Params.AggregatedSourceTags.HasTagExact(CCDamageCueTags::ManualDisplay);
 
-	// 分屏逐玩家筛选：默认只显示自己造成的和自己受到的；子系统开关可显示全部。
+	const bool bShowAll = GetDefault<UCC_WorldIndicatorSettings>()->bShowAllDamageNumbers;
+
+	// 分屏逐玩家筛选：默认只显示自己造成的和自己受到的；项目设置可改为显示全部。
 	bool bSubmitted = false;
 	for (auto It = World->GetPlayerControllerIterator(); It; ++It)
 	{
 		APlayerController* Player = It->Get();
 		if (!Player || !Player->IsLocalController()) continue;
-		if (!bManualDisplay && !Subsystem->bShowAllDamage && !IsOwnedByPlayer(Instigator, Player) && !IsOwnedByPlayer(Target, Player)) continue;
-		Subsystem->ReportHitForPlayer(Player, Target, Instigator, Location, bHealing ? -Amount : Amount, Style, DamageType);
+		if (!bManualDisplay && !bShowAll && !IsOwnedByPlayer(Instigator, Player) && !IsOwnedByPlayer(Target, Player)) continue;
+		UCC_DamageNumberSource* Numbers = UCC_DamageNumberSource::GetForPlayer(Player);
+		if (!Numbers) continue;
+		Numbers->ShowNumber(Target, Location, Amount, Style, DamageType);
 		bSubmitted = true;
 	}
 	return bSubmitted;

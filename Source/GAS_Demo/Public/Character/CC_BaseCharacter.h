@@ -29,6 +29,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	UAbilitySystemComponent*, ASC,
 	UAttributeSet*, AS
 );
+class ACC_BaseCharacter;
+/** 任意角色完成 ASC 初始化（含客户端复制完成）。供 UI 等表现层发现角色，玩法代码不依赖订阅者。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FCC_AnyCharacterReady, ACC_BaseCharacter*);
+
 namespace CrashTags
 {
 	extern GAS_DEMO_API const FName Player;
@@ -49,6 +53,10 @@ class GAS_DEMO_API ACC_BaseCharacter : public ACharacter,public IAbilitySystemIn
 public:
 	UPROPERTY(BlueprintAssignable)
 	FASCInitialized OnASCInitialized;
+	/** 静态事件：任意角色 ASC 初始化完成时广播（头顶血条等由此发现角色）。服务器和客户端都会广播。 */
+	static FCC_AnyCharacterReady OnAnyCharacterReady;
+	/** 本角色是否已完成 ASC 初始化。 */
+	bool IsASCInitialized() const { return bASCInitialized; }
     /**
      * 获取当前角色独立的 buff 访问组件，用于施加效果和绑定 UI 变化通知。
      * 配置保持共享只读，活动句柄与特殊玩法状态属于这个角色实例。
@@ -123,6 +131,8 @@ public:
 
 	
 protected:
+	/** ASC 初始化完成后由子类调用：广播 OnASCInitialized 和 OnAnyCharacterReady。 */
+	void BroadcastASCInitialized();
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Buff")
     TObjectPtr<UCC_BuffComponent> BuffComponent;
 
@@ -141,4 +151,6 @@ protected:
 
 	virtual void InitializeAttributes() const;
 	
+private:
+	bool bASCInitialized = false;
 };

@@ -32,7 +32,7 @@ void UCC_DamageTextStatics::ShowDamageText(UAbilitySystemComponent* TargetASC, f
     if (TargetASC->IsOwnerActorAuthoritative())
         TargetASC->ExecuteGameplayCue(CueTag, Params);
     else
-        // 客户端直接调用 ExecuteGameplayCue 不会执行；只在本地触发，不发 RPC。
+        // 客户端直接调用 ExecuteGameplayCue 不会执行，改为只在本地触发（不发 RPC，只有本机看到）。
         TargetASC->InvokeGameplayCueEvent(CueTag, EGameplayCueEvent::Executed, Params);
 }
 

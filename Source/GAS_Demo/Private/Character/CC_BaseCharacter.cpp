@@ -18,6 +18,15 @@ namespace CrashTags
 }
 
 // Sets default values
+FCC_AnyCharacterReady ACC_BaseCharacter::OnAnyCharacterReady;
+
+void ACC_BaseCharacter::BroadcastASCInitialized()
+{
+	bASCInitialized = true;
+	OnASCInitialized.Broadcast(GetAbilitySystemComponent(), GetAttributeSet());
+	OnAnyCharacterReady.Broadcast(this);
+}
+
 ACC_BaseCharacter::ACC_BaseCharacter()
 {
 	BuffComponent = CreateDefaultSubobject<UCC_BuffComponent>(TEXT("BuffComponent"));
