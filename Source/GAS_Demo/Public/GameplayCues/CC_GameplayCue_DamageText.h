@@ -22,6 +22,7 @@ public:
 	UCC_GameplayCue_DamageText();
 	virtual bool HandlesEvent(EGameplayCueEvent::Type Type) const override { return Type == EGameplayCueEvent::Executed; }
 	virtual bool OnExecute_Implementation(AActor* Target, const FGameplayCueParameters& Params) const override;
+
 protected:
 	/** 没有命中点时，数字出现在目标包围盒顶部上方多少厘米。 */
 	UPROPERTY(EditDefaultsOnly, Category="Damage Text") float HeadOffset = 20.f;

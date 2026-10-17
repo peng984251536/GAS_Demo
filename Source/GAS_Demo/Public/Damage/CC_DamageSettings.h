@@ -30,4 +30,6 @@ public:
 	static TSubclassOf<UCC_GE_Damage> GetDamageEffectClass();
 	/** 配置的治疗 GE 类；未配置或加载失败时返回原生 CC_GE_Healing。 */
 	static TSubclassOf<UCC_GE_Healing> GetHealingEffectClass();
+
+	
 };

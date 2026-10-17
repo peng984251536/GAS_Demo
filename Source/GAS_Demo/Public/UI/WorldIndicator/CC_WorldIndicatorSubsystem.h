@@ -33,6 +33,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="UI|World Indicator")
 	void ClearIndicators();
 
+	/**
+	 * 提供给widget的信息
+	 * @return 
+	 */
 	const TArray<TObjectPtr<UCC_WorldIndicator>>& GetIndicators() const { return Indicators; }
 	FCC_WorldIndicatorEvent OnIndicatorAdded;
 	FCC_WorldIndicatorEvent OnIndicatorRemoved;

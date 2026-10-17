@@ -38,8 +38,14 @@ void UCC_DamageNumberSource::ShowNumber(AActor* Target, const FVector& Location,
 {
 	const ULocalPlayer* Player = GetLocalPlayer();
 	UCC_WorldIndicatorSubsystem* Indicators = Player ? Player->GetSubsystem<UCC_WorldIndicatorSubsystem>() : nullptr;
+
 	Amount = FMath::Abs(Amount);
-	if (!Indicators || !FMath::IsFinite(Amount) || FMath::IsNearlyZero(Amount) || Location.ContainsNaN()) return;
+	if (!Indicators ||
+		!FMath::IsFinite(Amount) ||
+		FMath::IsNearlyZero(Amount) ||
+		Location.ContainsNaN())
+		return;
+	
 	const UCC_WorldIndicatorSettings* Settings = GetDefault<UCC_WorldIndicatorSettings>();
 
 	// 数量上限：先淘汰最旧的普通数字；全是重要数字时丢弃新的普通数字。
@@ -49,13 +55,20 @@ void UCC_DamageNumberSource::ShowNumber(AActor* Target, const FVector& Location,
 		{
 			return Number->Style == ECC_DamageTextStyle::Normal;
 		});
-		if (OldestNormal == INDEX_NONE && Style == ECC_DamageTextStyle::Normal) return;
+		if (OldestNormal == INDEX_NONE && Style == ECC_DamageTextStyle::Normal)
+			return;
+		
 		Indicators->RemoveIndicator(Active[OldestNormal != INDEX_NONE ? OldestNormal : 0]); // 回收在 HandleIndicatorRemoved。
 	}
 
 	// 同一目标已有的数字越多，新数字越往两侧错开：0, +1, -1, +2, -2 …（最多 7 个槽位循环）。
 	int32 Slot = 0;
-	for (const UCC_DamageNumberIndicator* Number : Active) if (Number->Target == Target) ++Slot;
+	for (const UCC_DamageNumberIndicator* Number : Active)
+	{
+		if (Number->Target == Target)
+			++Slot;
+	}
+		
 	Slot %= 7;
 	const int32 Ring = (Slot + 1) / 2;
 

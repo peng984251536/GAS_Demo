@@ -22,8 +22,11 @@ namespace
 ECC_DamageApplyStatus UCC_DamageStatics::ApplyDamage(UAbilitySystemComponent* SourceASC,
 	UAbilitySystemComponent* TargetASC, const FCC_DamageRequest& Request)
 {
-	if (!IsReady(SourceASC) || !IsReady(TargetASC)) return ECC_DamageApplyStatus::InvalidInput;
-	if (!SourceASC->IsOwnerActorAuthoritative()) return ECC_DamageApplyStatus::NotAuthority;
+	if (!IsReady(SourceASC) || !IsReady(TargetASC))
+		return ECC_DamageApplyStatus::InvalidInput;
+	if (!SourceASC->IsOwnerActorAuthoritative())
+		return ECC_DamageApplyStatus::NotAuthority;
+	
 	const FGameplayEffectSpecHandle Spec = PrepareDamage(SourceASC, Request);
 	return Spec.IsValid() ? ApplyPreparedDamage(TargetASC, Spec) : ECC_DamageApplyStatus::InvalidInput;
 }
@@ -31,22 +34,35 @@ ECC_DamageApplyStatus UCC_DamageStatics::ApplyDamage(UAbilitySystemComponent* So
 FGameplayEffectSpecHandle UCC_DamageStatics::PrepareDamage(UAbilitySystemComponent* SourceASC,
 	const FCC_DamageRequest& Request, UObject* SourceObject)
 {
-	if (!IsReady(SourceASC) || !SourceASC->IsOwnerActorAuthoritative()) return {};
-	if (!IsValidAmount(Request.SkillScale) || !IsValidAmount(Request.FlatDamage) || !IsValidAmount(Request.DamageMultiplier)) return {};
+	if (!IsReady(SourceASC) || !SourceASC->IsOwnerActorAuthoritative())
+		return {};
+	if (!IsValidAmount(Request.SkillScale) ||
+		!IsValidAmount(Request.FlatDamage) ||
+		!IsValidAmount(Request.DamageMultiplier))
+		return {};
 
 	FGameplayEffectContextHandle Context = SourceASC->MakeEffectContext();
 	FCC_GameplayEffectContext* Typed = FCC_GameplayEffectContext::GetMutable(Context);
-	if (!Typed) return {}; // DefaultGame.ini 未配置 CC_AbilitySystemGlobals。
+	if (!Typed)
+		return {}; // DefaultGame.ini 未配置 CC_AbilitySystemGlobals。
 	Typed->CriticalPolicy = Request.CriticalPolicy;
-	if (Request.bHasHitResult) Context.AddHitResult(Request.HitResult);
-	if (SourceObject) Context.AddSourceObject(SourceObject);
+	if (Request.bHasHitResult)
+		Context.AddHitResult(Request.HitResult);
+	// 自定义的数据
+	if (SourceObject)
+		Context.AddSourceObject(SourceObject);
 
 	// 创建 Spec 时捕获攻击方快照；目标属性在应用时读取。
-	FGameplayEffectSpecHandle Spec = SourceASC->MakeOutgoingSpec(UCC_DamageSettings::GetDamageEffectClass(), 1.f, Context);
-	if (!Spec.IsValid()) return {};
+	FGameplayEffectSpecHandle Spec = SourceASC->MakeOutgoingSpec(
+		UCC_DamageSettings::GetDamageEffectClass(), 1.f, Context);
+	
+	if (!Spec.IsValid())
+		return {};
+	
 	Spec.Data->SetSetByCallerMagnitude(CCDamageTags::SkillScale, Request.SkillScale);
 	Spec.Data->SetSetByCallerMagnitude(CCDamageTags::FlatDamage, Request.FlatDamage);
 	Spec.Data->SetSetByCallerMagnitude(CCDamageTags::DamageMultiplier, Request.DamageMultiplier);
+	
 	// 伤害类型和来源标签写进 Spec 标签：GE 修正器的标签条件、GameplayEvent 和 Cue 都能读到。
 	Spec.Data->AppendDynamicAssetTags(Request.SourceTags);
 	if (Request.DamageType.IsValid()) Spec.Data->AddDynamicAssetTag(Request.DamageType);

@@ -137,9 +137,14 @@ void ACC_ArrowProjectile::OnArrowHit(UPrimitiveComponent* HitComponent, AActor* 
 	 */
     if (IsValid(TargetASC) && UCC_TeamStatics::IsHostile(this, OtherActor))
     {
-        const ECC_DamageApplyStatus Status = UCC_DamageStatics::ApplyPreparedDamage(TargetASC, DamageSnapshot, &Hit);
-        UE_LOG(LogCCBuff, Log, TEXT("[Arrow][Hit] Arrow=%s Target=%s DamageStatus=%d Ratio=%.3f"), *GetNameSafe(this),
-               *GetNameSafe(OtherActor), static_cast<int32>(Status), Payload.DamageMultiplier);
+        const ECC_DamageApplyStatus Status = UCC_DamageStatics::ApplyPreparedDamage
+            (TargetASC, DamageSnapshot, &Hit);
+        
+        UE_LOG(LogCCBuff, Log, TEXT("[Arrow][Hit] Arrow=%s Target=%s DamageStatus=%d Ratio=%.3f"),
+            *GetNameSafe(this),
+            *GetNameSafe(OtherActor),
+            static_cast<int32>(Status),
+            Payload.DamageMultiplier);
     }
     else
     {

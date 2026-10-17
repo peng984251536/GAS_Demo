@@ -73,7 +73,15 @@ bool UCC_GameplayCue_DamageText::OnExecute_Implementation(AActor* Target, const 
 	{
 		APlayerController* Player = It->Get();
 		if (!Player || !Player->IsLocalController()) continue;
-		if (!bManualDisplay && !bShowAll && !IsOwnedByPlayer(Instigator, Player) && !IsOwnedByPlayer(Target, Player)) continue;
+		if (!bManualDisplay &&
+			!bShowAll &&
+			!IsOwnedByPlayer(Instigator, Player) &&
+			!IsOwnedByPlayer(Target, Player))
+			continue;
+		//为数字创建一个固定坐标的指示器；
+		//数字控件播完动画后自己移除，
+		//这里回收指示器对象复用
+		// 相当于是对象池管理器
 		UCC_DamageNumberSource* Numbers = UCC_DamageNumberSource::GetForPlayer(Player);
 		if (!Numbers) continue;
 		Numbers->ShowNumber(Target, Location, Amount, Style, DamageType);
