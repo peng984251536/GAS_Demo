@@ -49,9 +49,25 @@ class GAS_DEMO_API ACC_ArrowProjectile : public AActor
     TObjectPtr<UProjectileMovementComponent> Movement;
 
   private:
+    /** 阻挡碰撞：世界障碍等非 Pawn 物体。 */
     UFUNCTION()
     void OnArrowHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent,
                     FVector NormalImpulse, const FHitResult& Hit);
+
+    /**
+     * 重叠：Pawn 通道。敌对目标结算伤害并销毁；友方（含包围圈里的同伴）直接穿过，
+     * 否则远程圈的弓兵射向玩家时，箭会先撞上外圈的近战友军被销毁。
+     */
+    UFUNCTION()
+    void OnArrowOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,
+                        int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
+    /**
+     * 结算一次有效碰撞：敌对且有 ASC 时提交伤害快照，然后销毁箭。每支箭只结算一次。
+     * @param OtherActor 被命中的 Actor。
+     * @param Hit 命中信息。
+     */
+    void ProcessImpact(AActor* OtherActor, const FHitResult& Hit);
 
     UPROPERTY(Transient) FCC_ArrowPayload Payload;
     FGameplayEffectSpecHandle DamageSnapshot;

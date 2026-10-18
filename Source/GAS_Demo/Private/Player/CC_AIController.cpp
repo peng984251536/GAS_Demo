@@ -5,9 +5,13 @@
 
 #include "GAS_Demo.h"
 #include "AbilitySystemComponent.h"
+#include "AI/Crowd/CC_CrowdAgentStatics.h"
+#include "AI/Engagement/CC_EngagementSubsystem.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "Character/Combat/CC_ArrowProjectile.h"
 #include "Data/CC_CharacterConfig.h"
 #include "GameplayTags/CC_Tags.h"
+#include "Navigation/CrowdFollowingComponent.h"
 #include "Team/CC_TeamStatics.h"
 #include "TimerManager.h"
 
@@ -16,11 +20,16 @@ namespace
 	/** 行为树读取的黑板键名，与黑板资产保持一致。 */
 	const FName TargetActorKey(TEXT("TargetActor"));
 	const FName LastKnownLocationKey(TEXT("LastKnownLocation"));
+	/** 围攻分配写入的黑板键名（见 Docs/AI-Engagement-Usage.zh-CN.md）。 */
+	const FName EngagementTierKey(TEXT("EngagementTier"));
+	const FName MoveLocationKey(TEXT("MoveLocation"));
+	const FName HasAttackTokenKey(TEXT("HasAttackToken"));
 }
 
 #pragma region
 // Sets default values
-ACC_AIController::ACC_AIController()
+ACC_AIController::ACC_AIController(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UCrowdFollowingComponent>(TEXT("PathFollowingComponent")))
 {
 	// 1. 创建感知组件
 	PerceptionComponent = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerception Component"));
@@ -41,6 +50,11 @@ void ACC_AIController::OnPossess(APawn* InPawn)
 	{
 		return;
 	}
+
+	// 避障默认参数与围攻事件不依赖角色配置，先于配置检查完成。
+	UCC_CrowdAgentStatics::ConfigureCrowdAgent(this);
+	BindEngagementEvents();
+
 	const UCC_CharacterConfig* CharacterConfig = BaseCharacter->GetCharacterConfig();
 	if (!CharacterConfig)
 	{
@@ -100,6 +114,10 @@ void ACC_AIController::OnUnPossess()
 	UnbindCharmedTagEvent();
 	CurrentTarget.Reset();
 
+	// 先注销（归还令牌、释放槽位），再解绑；注销产生的 None 通知仍能写入黑板。
+	UpdateEngagement(nullptr);
+	UnbindEngagementEvents();
+
 	BaseCharacter = nullptr;
 	Super::OnUnPossess();
 }
@@ -147,6 +165,13 @@ void ACC_AIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stim
 void ACC_AIController::ReevaluateTarget()
 {
 	ReevaluateTargetInternal(nullptr);
+
+	// 自愈：目标没变时 ApplyTarget 不会再调用，若子系统已把自己清理出组（例如短暂判定为非敌对），
+	// 这里重新注册。已在同一目标的组中时 RegisterAttacker 什么都不做，开销只有两次查表。
+	if (AActor* Target = CurrentTarget.Get())
+	{
+		UpdateEngagement(Target);
+	}
 }
 
 /**
@@ -283,6 +308,9 @@ void ACC_AIController::ApplyTarget(AActor* NewTarget, const FVector* LostLocatio
 		BaseCharacter->SetClosestActor(FClosestActorWithTagResult());
 		UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Targeting] Target cleared: Controller=%s"), *GetNameSafe(this));
 	}
+
+	// 目标变化同步到围攻子系统：魅惑导致的换目标也走这里。
+	UpdateEngagement(IsValid(NewTarget) ? NewTarget : nullptr);
 }
 
 /**
@@ -319,6 +347,143 @@ void ACC_AIController::UnbindCharmedTagEvent()
 	}
 	CharmedTagHandle.Reset();
 	CharmedTagASC.Reset();
+}
+
+#pragma endregion
+
+#pragma region 围攻与避障
+
+/**
+ * 目标变化后同步围攻注册。弓兵按是否配置了箭判断，与 CC_AttackIntend 的派发规则一致。
+ * @param NewTarget 新目标；为空表示注销。
+ */
+void ACC_AIController::UpdateEngagement(AActor* NewTarget)
+{
+	UCC_EngagementSubsystem* Subsystem = EngagementSubsystem.Get();
+	if (!Subsystem)
+	{
+		const UWorld* World = GetWorld();
+		Subsystem = World ? World->GetSubsystem<UCC_EngagementSubsystem>() : nullptr;
+	}
+	if (!Subsystem || !IsValid(BaseCharacter))
+	{
+		return;
+	}
+	if (!IsValid(NewTarget))
+	{
+		Subsystem->UnregisterAttacker(BaseCharacter);
+		return;
+	}
+	const UCC_CharacterConfig* Config = BaseCharacter->GetCharacterConfig();
+	const bool bRanged = IsValid(Config) && Config->ArrowProjectileClass != nullptr;
+	Subsystem->RegisterAttacker(BaseCharacter, NewTarget, bRanged);
+}
+
+/**
+ * 分配变化：写黑板（行为树据此选择分支），并按档位调整避障质量。
+ * MoveLocation 变化超过子系统的 NotifyDistance 才会到这里，行为树可在该键变化时重新触发 FollowTarget。
+ */
+void ACC_AIController::OnEngagementAssignmentChanged(AActor* Attacker, const FCC_EngagementAssignment& Assignment)
+{
+	if (!Attacker || Attacker != GetPawn())
+	{
+		return;
+	}
+	if (UBlackboardComponent* BlackboardComp = GetBlackboardComponent())
+	{
+		BlackboardComp->SetValueAsEnum(EngagementTierKey, static_cast<uint8>(Assignment.Tier));
+		BlackboardComp->SetValueAsBool(HasAttackTokenKey, Assignment.bHasToken);
+		if (Assignment.bLocationValid)
+		{
+			BlackboardComp->SetValueAsVector(MoveLocationKey, Assignment.MoveLocation);
+		}
+		else
+		{
+			BlackboardComp->ClearValue(MoveLocationKey);
+		}
+	}
+	UCC_CrowdAgentStatics::ApplyTier(this, Assignment.Tier);
+	UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Engagement] Assignment: Controller=%s Tier=%d Token=%d Valid=%d Generation=%d Location=%s"),
+		*GetNameSafe(this), static_cast<int32>(Assignment.Tier), Assignment.bHasToken, Assignment.bLocationValid,
+		Assignment.Generation, *Assignment.MoveLocation.ToCompactString());
+}
+
+/**
+ * Attack 标签计数变化。攻击能力（UCC_Primary / UCC_BowShoot）通过 ActivationOwnedTags 授予该标签，
+ * 能力以任何方式结束（播完、打断、取消、死亡）都会移除它；连段期间计数不会降到 0。
+ * 弓兵没有令牌，1→0 时的归还会被子系统忽略。
+ */
+void ACC_AIController::OnAttackTagChanged(const FGameplayTag Tag, int32 NewCount)
+{
+	UCC_EngagementSubsystem* Subsystem = EngagementSubsystem.Get();
+	if (NewCount > 0)
+	{
+		if (bAttackTagActive)
+		{
+			return;
+		}
+		bAttackTagActive = true;
+		HeldGeneration = Subsystem ? Subsystem->GetAssignment(BaseCharacter).Generation : 0;
+		UCC_CrowdAgentStatics::SetAttacking(this, true);
+		return;
+	}
+
+	if (!bAttackTagActive)
+	{
+		return;
+	}
+	bAttackTagActive = false;
+	// 先恢复避障（此时尚未开始新的移动），再归还令牌：归还会触发新的分配与移动。
+	UCC_CrowdAgentStatics::SetAttacking(this, false);
+	if (Subsystem && IsValid(BaseCharacter))
+	{
+		Subsystem->ReleaseToken(BaseCharacter, HeldGeneration);
+	}
+}
+
+void ACC_AIController::BindEngagementEvents()
+{
+	UnbindEngagementEvents();
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UCC_EngagementSubsystem* Subsystem = World->GetSubsystem<UCC_EngagementSubsystem>())
+		{
+			AssignmentChangedHandle = Subsystem->OnAssignmentChanged.AddUObject(
+				this, &ThisClass::OnEngagementAssignmentChanged);
+			EngagementSubsystem = Subsystem;
+		}
+	}
+
+	UAbilitySystemComponent* ASC = IsValid(BaseCharacter) ? BaseCharacter->GetAbilitySystemComponent() : nullptr;
+	if (IsValid(ASC))
+	{
+		AttackTagHandle = ASC->RegisterGameplayTagEvent(CCTags::CCAbilities::Attack, EGameplayTagEventType::NewOrRemoved)
+			.AddUObject(this, &ThisClass::OnAttackTagChanged);
+		AttackTagASC = ASC;
+	}
+	bAttackTagActive = false;
+	HeldGeneration = 0;
+}
+
+void ACC_AIController::UnbindEngagementEvents()
+{
+	if (UCC_EngagementSubsystem* Subsystem = EngagementSubsystem.Get())
+	{
+		Subsystem->OnAssignmentChanged.Remove(AssignmentChangedHandle);
+	}
+	AssignmentChangedHandle.Reset();
+	EngagementSubsystem.Reset();
+
+	if (UAbilitySystemComponent* ASC = AttackTagASC.Get())
+	{
+		ASC->RegisterGameplayTagEvent(CCTags::CCAbilities::Attack, EGameplayTagEventType::NewOrRemoved)
+			.Remove(AttackTagHandle);
+	}
+	AttackTagHandle.Reset();
+	AttackTagASC.Reset();
+	bAttackTagActive = false;
+	HeldGeneration = 0;
 }
 
 #pragma endregion

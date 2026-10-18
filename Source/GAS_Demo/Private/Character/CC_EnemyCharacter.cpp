@@ -65,13 +65,8 @@ void ACC_EnemyCharacter::BeginPlay()
 	//-----后续是服务器相关的初始化----//
 	if(!HasAuthority()) return;
 	
-	// RVO 在本地 AI 移动时处理其他正在移动的 Pawn；寻路位置仍由导航网格决定。
-	// 仅为配置了箭的弓兵启用，其他敌人的移动设置不受影响。
-	// if (IsValid(CharacterConfig) && CharacterConfig->ArrowProjectileClass)
-	// {
-	// 	// 用组件接口同时完成避障管理器注册，不能只修改布尔字段。
-	// 	GetCharacterMovement()->SetAvoidanceEnabled(true);
-	// }
+	// 避障由 ACC_AIController 的 UCrowdFollowingComponent（Detour Crowd）负责。
+	// 不要再开启 CharacterMovement 的 RVO：两套避障同时生效会互相打架。
 
 	// 加载能力 启动能力
 	GiveStartupAbilities();

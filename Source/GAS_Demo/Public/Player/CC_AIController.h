@@ -11,6 +11,8 @@
 #include "CC_AIController.generated.h"
 
 class UAbilitySystemComponent;
+class UCC_EngagementSubsystem;
+struct FCC_EngagementAssignment;
 
 // AI 的警戒等级枚举
 // 用于驱动行为树的 Selector 分支切换（巡逻 / 警觉 / 战斗 / 搜索）
@@ -33,6 +35,13 @@ enum class EAlertLevel : uint8
  *   3. 低频计时器（别人被魅惑、目标死亡等收不到通知的变化）。
  * 写入目标只有一个出口 ApplyTarget；行为树与技能只读黑板 / GetClosestActor。
  * 敌我判断全部交给 UCC_TeamStatics::IsHostile。
+ *
+ * 围攻与避障（见 Docs/AI-Engagement.zh-CN.md）：
+ *   - 寻路组件为 UCrowdFollowingComponent（Detour Crowd 避障）；
+ *   - ApplyTarget 中向 UCC_EngagementSubsystem 注册 / 注销，分配变化写入黑板
+ *     EngagementTier / MoveLocation / HasAttackToken，并按档位调整避障质量；
+ *   - 监听自己 ASC 的 CCAbilities.Attack 标签：0→1 记下分配编号并切 ObstacleOnly，
+ *     1→0 恢复避障并带编号归还令牌。
  */
 UCLASS()
 class GAS_DEMO_API ACC_AIController : public AAIController
@@ -40,8 +49,8 @@ class GAS_DEMO_API ACC_AIController : public AAIController
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this actor's properties
-	ACC_AIController();
+	/** 用 UCrowdFollowingComponent 替换默认的 PathFollowingComponent。 */
+	ACC_AIController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	// 当 Controller 附身到 Pawn 时调用：
 	// 在这里启动行为树、初始化黑板
@@ -138,6 +147,30 @@ private:
 	void BindCharmedTagEvent();
 	void UnbindCharmedTagEvent();
 
+	/**
+	 * 目标变化后同步围攻注册：有目标时注册（同一目标不重复），无目标时注销。
+	 * @param NewTarget 新目标；为空表示注销。
+	 */
+	void UpdateEngagement(AActor* NewTarget);
+
+	/**
+	 * 子系统的分配变化回调：只处理自己 Pawn 的分配，写黑板并按档位调整避障质量。
+	 * @param Attacker 分配变化的攻击者。
+	 * @param Assignment 新分配。
+	 */
+	void OnEngagementAssignmentChanged(AActor* Attacker, const FCC_EngagementAssignment& Assignment);
+
+	/**
+	 * 自己的 CCAbilities.Attack 标签计数变化（仅 0↔1 时触发）。
+	 * @param Tag 变化的标签。
+	 * @param NewCount 变化后的计数；大于 0 表示开始攻击，0 表示攻击（含整套连段）结束或被打断。
+	 */
+	void OnAttackTagChanged(const FGameplayTag Tag, int32 NewCount);
+
+	/** 绑定 / 解绑围攻相关事件：子系统的分配变化、自己 ASC 的 Attack 标签。 */
+	void BindEngagementEvents();
+	void UnbindEngagementEvents();
+
 	/** 当前目标。弱引用，目标被销毁后自动失效。 */
 	TWeakObjectPtr<AActor> CurrentTarget;
 	/** 低频重新选目标的计时器。 */
@@ -145,4 +178,15 @@ private:
 	/** 魅惑标签事件的订阅句柄及其所在 ASC，解绑时使用。 */
 	FDelegateHandle CharmedTagHandle;
 	TWeakObjectPtr<UAbilitySystemComponent> CharmedTagASC;
+
+	/** 围攻子系统的分配变化订阅。 */
+	FDelegateHandle AssignmentChangedHandle;
+	TWeakObjectPtr<UCC_EngagementSubsystem> EngagementSubsystem;
+	/** Attack 标签事件的订阅句柄及其所在 ASC。 */
+	FDelegateHandle AttackTagHandle;
+	TWeakObjectPtr<UAbilitySystemComponent> AttackTagASC;
+	/** 本次攻击开始（Attack 标签 0→1）时的分配编号，归还令牌时带上。 */
+	int32 HeldGeneration = 0;
+	/** 是否处于攻击中（已收到 0→1 且尚未收到 1→0）。 */
+	bool bAttackTagActive = false;
 };

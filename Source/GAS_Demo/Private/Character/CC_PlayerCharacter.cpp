@@ -1,4 +1,5 @@
 ﻿#include "Character/CC_PlayerCharacter.h"
+#include "AI/Crowd/CC_PlayerCrowdAgentComponent.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
 
@@ -47,7 +48,10 @@ ACC_PlayerCharacter::ACC_PlayerCharacter()
 	TopDownCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera1"));
 	TopDownCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	TopDownCamera->bUsePawnControlRotation = false;
-	
+
+	// 玩家作为 Crowd 障碍：敌人避让时会把玩家考虑进去。
+	CrowdAgent = CreateDefaultSubobject<UCC_PlayerCrowdAgentComponent>(TEXT("CrowdAgent"));
+
 }
 
 /**

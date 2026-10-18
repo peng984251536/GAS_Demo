@@ -7,6 +7,7 @@ UE5 + GAS 的动作战斗 Demo。C++ 源码在 `Source/GAS_Demo`，设计文档�
 - 设计原则与分层：`Docs/BuffSystem.zh-CN.md`
 - 目标架构、类关系与时序图：`Docs/BuffSystem-Architecture.zh-CN.md`
 - AI 寻敌与阵营：`Docs/AI-Targeting.zh-CN.md`
+- AI 包围寻路（槽位 + 令牌 + Detour Crowd）：设计 `Docs/AI-Engagement.zh-CN.md`，接入与调参 `Docs/AI-Engagement-Usage.zh-CN.md`。新增攻击能力必须授予 `CCTags.CCAbilities.Attack`。
 - 案例手册（分裂箭、爆炸箭、冻结、魅惑、反弹等）：`Docs/BuffSystem-Cookbook.zh-CN.md`
 - 基础设施现状与待办：`Docs/BuffSystem-Roadmap.zh-CN.md`
 - Buff 三选一（获取途径）：`Docs/BuffSelection.zh-CN.md`

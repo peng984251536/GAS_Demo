@@ -28,6 +28,9 @@ ACC_ArrowProjectile::ACC_ArrowProjectile()
     Collision->SetCollisionObjectType(ECC_WorldDynamic);
     Collision->SetCollisionResponseToAllChannels(ECR_Block);
     Collision->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+    // Pawn 改为重叠：在 OnArrowOverlap 中按 IsHostile 判断，友方穿过、敌方命中。
+    Collision->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+    Collision->SetGenerateOverlapEvents(true);
     Collision->SetNotifyRigidBodyCollision(true);
     RootComponent = Collision;
 
@@ -87,6 +90,7 @@ void ACC_ArrowProjectile::BeginPlay()
     // 即使出生点和射手胶囊相交，也不能让箭立即命中自己。
     Collision->IgnoreActorWhenMoving(GetInstigator(), true);
     Collision->OnComponentHit.AddDynamic(this, &ThisClass::OnArrowHit);
+    Collision->OnComponentBeginOverlap.AddDynamic(this, &ThisClass::OnArrowOverlap);
     UE_LOG(LogGAS_Demo, Log,
            TEXT("[BowAI][Arrow] BeginPlay: Arrow=%s Instigator=%s Location=%s Velocity=%s Authority=%d"),
            *GetNameSafe(this), *GetNameSafe(GetInstigator()), *GetActorLocation().ToCompactString(),
@@ -115,6 +119,33 @@ void ACC_ArrowProjectile::OnArrowHit(UPrimitiveComponent* HitComponent, AActor* 
                *GetNameSafe(this), *GetNameSafe(OtherActor), HasAuthority());
         return;
     }
+    ProcessImpact(OtherActor, Hit);
+}
+
+void ACC_ArrowProjectile::OnArrowOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+                                         UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
+                                         const FHitResult& SweepResult)
+{
+    if (!HasAuthority() || bHitProcessed || !IsValid(OtherActor) || OtherActor == this ||
+        OtherActor == GetInstigator())
+    {
+        return;
+    }
+    // 敌我统一由 IsHostile 判断（箭沿 Instigator 解析到射手，已包含魅惑）；非敌对的 Pawn 直接穿过。
+    if (!UCC_TeamStatics::IsHostile(this, OtherActor))
+    {
+        UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Arrow] Pass through: Arrow=%s Other=%s"), *GetNameSafe(this),
+               *GetNameSafe(OtherActor));
+        return;
+    }
+    // 移动扫掠产生的重叠带有命中信息；其他情况（例如出生时就重叠）用箭的当前位置构造。
+    const FHitResult Hit =
+        bFromSweep ? SweepResult : FHitResult(OtherActor, OtherComp, GetActorLocation(), -GetActorForwardVector());
+    ProcessImpact(OtherActor, Hit);
+}
+
+void ACC_ArrowProjectile::ProcessImpact(AActor* OtherActor, const FHitResult& Hit)
+{
     /**
 	 * 每支箭只结算第一次有效碰撞，防止同步回调再次提交伤害。
 	 */

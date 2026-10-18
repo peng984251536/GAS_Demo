@@ -31,6 +31,9 @@ class GAS_DEMO_API UCC_Primary : public UCC_GameplayAbility
 	GENERATED_BODY()
 
 public:
+	/** 激活期间授予 CCTags.CCAbilities.Attack（见构造函数注释）。 */
+	UCC_Primary();
+
 	UFUNCTION(BlueprintCallable,Category = "Crash|Abilities")
 	TArray<FHitResultAndActor> HitBoxOverlapText();
 	//UFUNCTION(BlueprintCallable,Category = "Crash|Abilities")

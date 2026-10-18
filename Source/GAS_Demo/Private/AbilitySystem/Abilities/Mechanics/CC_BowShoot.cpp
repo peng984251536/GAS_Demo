@@ -26,8 +26,9 @@ UCC_BowShoot::UCC_BowShoot()
     bRetriggerInstancedAbility = true;
     // 资产标签用于按 Tag 查找已授予的能力；它本身不等于“已经激活”。
     SetAssetTags(FGameplayTagContainer(CCTags::CCAbilityTrigger::BowShoot));
-    // 激活期间给 ASC 挂上 Attack 状态；KeepDistance 会据此暂缓后撤。
-    //ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
+    // 激活期间给 ASC 挂上 Attack 状态：KeepDistance 据此暂缓后撤；AI 控制器据此切换 Crowd ObstacleOnly。
+    // 弓兵不持有令牌，标签 1→0 时控制器的归还请求会被围攻子系统忽略。
+    ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
 
     // 收到 BowShoot 游戏事件时自动激活本能力，事件携带本次要播放的动作数据。
     FAbilityTriggerData Trigger;

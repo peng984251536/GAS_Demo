@@ -9,6 +9,8 @@
 
 #include "CC_PlayerCharacter.generated.h"
 
+class UCC_PlayerCrowdAgentComponent;
+
 
 UCLASS()
 class GAS_DEMO_API ACC_PlayerCharacter : public ACC_BaseCharacter
@@ -42,6 +44,9 @@ private:
 	/** Camera boom positioning the camera above the character */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr <USpringArmComponent> CameraBoom;
+	/** 把玩家注册为 Detour Crowd 的障碍 Agent，敌人会提前绕开玩家（仅服务器）。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UCC_PlayerCrowdAgentComponent> CrowdAgent;
 
 protected:
 	/** 默认从角色蓝图读取；子类可覆盖配置来源。返回只读配置，不存放角色实例状态。 */
