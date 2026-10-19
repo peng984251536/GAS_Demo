@@ -1,9 +1,10 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 
 #include "GameplayTags/CC_Tags.h"
+#include "GameFramework/Actor.h"
 
 
 // Sets default values for this component's properties
@@ -20,7 +21,7 @@ UCC_AbilitySystemComponent::UCC_AbilitySystemComponent()
 void UCC_AbilitySystemComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
 	// ActiveCount 已经减掉之后才会触发这个委托，
 	// 因此这里可以安全尝试激活排队能力。
 	// AbilityEndedCallbacks.AddUObject(
@@ -30,7 +31,7 @@ void UCC_AbilitySystemComponent::BeginPlay()
 
 /**
  * 加载时，顺便激活自动能力
- * @param AbilitySpec 
+ * @param AbilitySpec
  */
 void UCC_AbilitySystemComponent::OnGiveAbility(FGameplayAbilitySpec& AbilitySpec)
 {
@@ -41,7 +42,7 @@ void UCC_AbilitySystemComponent::OnGiveAbility(FGameplayAbilitySpec& AbilitySpec
 	// 	return;
 
 	HandleAutoActivatedAbility(AbilitySpec);
-	
+
 }
 
 void UCC_AbilitySystemComponent::OnRep_ActivateAbilities()
@@ -54,8 +55,8 @@ void UCC_AbilitySystemComponent::OnRep_ActivateAbilities()
 	{
 		HandleAutoActivatedAbility(AbilitySpec);
 	}
-	
-	
+
+
 }
 
 void UCC_AbilitySystemComponent::HandleAutoActivatedAbility(const FGameplayAbilitySpec& AbilitySpec)
@@ -102,8 +103,8 @@ void UCC_AbilitySystemComponent::AddAbilityLevel(TSubclassOf<UGameplayAbility> A
 
 /**
  * 判断某个能力是否在运行
- * @param AbilityTag 
- * @return 
+ * @param AbilityTag
+ * @return
  */
 bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 	const FGameplayTag& AbilityTag) const
@@ -131,9 +132,9 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 
 // /**
 //  * 输入缓存
-//  * @param AbilityTag 
-//  * @param WaitForAbilityTag 
-//  * @param LinkType 
+//  * @param AbilityTag
+//  * @param WaitForAbilityTag
+//  * @param LinkType
 //  */
 // void UCC_AbilitySystemComponent::CacheInput(
 // 	const FGameplayTag& AbilityTag,
@@ -150,7 +151,7 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 // 	// 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
 // 	// 	FString::Printf(TEXT("Cache Input")));
 // 	// }
-// 	
+//
 // 	BufferedInput.AbilityTag = AbilityTag;
 // 	BufferedInput.WaitForAbilityTag = WaitForAbilityTag;
 // 	BufferedInput.InputTime = GetWorld()->GetTimeSeconds();
@@ -159,9 +160,9 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 //
 // /**
 //  * 使用队列管理输入
-//  * @param WaitForAbilityTag 
-//  * @param NewAbilityTag 
-//  * @return 
+//  * @param WaitForAbilityTag
+//  * @param NewAbilityTag
+//  * @return
 //  */
 // bool UCC_AbilitySystemComponent::HandleQueuedInput(
 // 	const FGameplayTag& WaitForAbilityTag,
@@ -190,7 +191,7 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 //
 // /**
 //  * 当前能力结束后，执行队列的能力
-//  * @param EndedAbility 
+//  * @param EndedAbility
 //  */
 // void UCC_AbilitySystemComponent::HandleAbilityEnded(
 // 	UGameplayAbility* EndedAbility)
@@ -225,8 +226,8 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 //
 // /**
 //  * 缓存是否过期
-//  * @param MaxBufferTime 
-//  * @return 
+//  * @param MaxBufferTime
+//  * @return
 //  */
 // bool UCC_AbilitySystemComponent::IsBufferedInputFresh(
 // 	float MaxBufferTime) const
@@ -245,8 +246,8 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 //
 // /**
 //  * 攻击连击管理
-//  * @param AttackAbilityTag 
-//  * @return 
+//  * @param AttackAbilityTag
+//  * @return
 //  */
 // bool UCC_AbilitySystemComponent::HandleComboInput(
 // 	const FGameplayTag& AttackAbilityTag)
@@ -274,9 +275,9 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 //
 // /**
 //  * 消费连击
-//  * @param AttackAbilityTag 
-//  * @param MaxBufferTime 
-//  * @return 
+//  * @param AttackAbilityTag
+//  * @param MaxBufferTime
+//  * @return
 //  */
 // bool UCC_AbilitySystemComponent::ConsumeComboInput(
 // 	const FGameplayTag& AttackAbilityTag,
@@ -320,9 +321,9 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 //
 // /**
 //  * cancel 打断当前能力（用于闪避、受击等等）
-//  * @param CancelAbilityTag 
-//  * @param NewAbilityTag 
-//  * @return 
+//  * @param CancelAbilityTag
+//  * @param NewAbilityTag
+//  * @return
 //  */
 // bool UCC_AbilitySystemComponent::CancelAndActivate(
 // 	const FGameplayTag& CancelAbilityTag,
@@ -354,7 +355,7 @@ bool UCC_AbilitySystemComponent::IsAbilityWithTagActive(
 // {
 // 	BufferedInput.Reset();
 // }
-#pragma endregion  
+#pragma endregion
 
 #pragma region
 FActiveGameplayEffectHandle UCC_AbilitySystemComponent::ApplyEffectSpecToSelf(FGameplayTag& gameplayTag,UClass* gameplayEffect)
@@ -369,4 +370,4 @@ FActiveGameplayEffectHandle UCC_AbilitySystemComponent::ApplyEffectSpecToSelf(FG
 
 	return {};
 }
-#pragma endregion 
+#pragma endregion

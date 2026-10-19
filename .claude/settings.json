@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/Tools/HarnessChecks/check_buff_rules.sh\" --hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

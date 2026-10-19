@@ -30,6 +30,7 @@ public class GAS_Demo : ModuleRules
 			"SlateCore",
 			"GameplayAbilities",
 			"GameplayTasks",
+			"NetCore",
 			"ActorSequence",
 			"LevelSequence",
 			"MovieScene",
@@ -37,6 +38,8 @@ public class GAS_Demo : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"AssetRegistry",
+			// UCC_DamageSettings（项目设置 → CC Damage）。
+			"DeveloperSettings",
 			// OnlineRoom 通过经典 OnlineSubsystem 的 Session 接口实现房间发现与加入。
 			// OnlineSubsystemUtils 负责按 World 获取正确的 PIE 子系统实例。
 			"OnlineSubsystem",

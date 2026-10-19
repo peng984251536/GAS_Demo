@@ -44,7 +44,10 @@ void UCC_MainMenuController::OnDeactivated()
 	Super::OnDeactivated();
 }
 
-// 主菜单不保存房间数据，只在状态变化时读取房间服务的最新快照。
+/**
+ * 主菜单不保存房间数据，只在状态变化时读取房间服务的最新快照。
+ * @param NewState 
+ */
 void UCC_MainMenuController::HandleRoomState(ECC_RoomAsyncState NewState) { RefreshState(); }
 // 搜索和离房的完成结果由统一模型推给主菜单。
 void UCC_MainMenuController::HandleRoomResult(ECC_RoomOperation Operation, FCC_RoomOperationResult Result) { RefreshState(); }

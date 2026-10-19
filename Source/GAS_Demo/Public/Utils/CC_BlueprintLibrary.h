@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -55,31 +55,6 @@ public:
 		const FName& Tag
 	);
 
-	/**
-	 * 寻找最近的目标
-	 * @param WorldContextObject 
-	 * @param Origin 
-	 * @param Tag 
-	 * @return 
-	 */
-	UFUNCTION(BlueprintCallable)
-	static void ApplyGameplayEffectSpecByTag(
-		UAbilitySystemComponent* SourceASC,
-		UAbilitySystemComponent* TargetASC,
-		const TSubclassOf<UGameplayEffect> GAEffect,
-		//const FGameplayEffectSpecHandle& SpecHandle,
-		const FGameplayTag& SetByCallTag,
-		int Damage
-	);
-
-	UFUNCTION(BlueprintCallable)
-	// 在服务器确认命中后调用。
-	// SourceASC：攻击者的 ASC。
-	// TargetASC：受击者的 ASC。
-	void ApplyHeavyAttackDamage(
-		UAbilitySystemComponent* SourceASC,
-		UAbilitySystemComponent* TargetASC);
-	
 };
 
 
@@ -97,4 +72,3 @@ struct FGameplayTagRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FString DodgeAction = "CCTags.Event.DodgeAction";
 };
-

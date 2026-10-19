@@ -1,4 +1,5 @@
 ﻿#include "Character/CC_PlayerCharacter.h"
+#include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
 
 #include "AbilitySystemComponent.h"
@@ -69,9 +70,7 @@ void ACC_PlayerCharacter::PossessedBy(AController* PlayerController)
 	HandleRespawn();
 
 	// 广播委托 初始化
-	OnASCInitialized.Broadcast(
-	GetAbilitySystemComponent(),
-	GetAttributeSet());
+	BroadcastASCInitialized();
 	
 	FOnGameplayAttributeValueChange& ChangeDelegate =
 	GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(
@@ -103,7 +102,7 @@ void ACC_PlayerCharacter::OnRep_PlayerState()
 	GetAbilitySystemComponent()->InitAbilityActorInfo(GetPlayerState(),this);
 
 	// 广播委托 初始化
-	OnASCInitialized.Broadcast(GetAbilitySystemComponent(),GetAttributeSet());
+	BroadcastASCInitialized();
 
 
 }
@@ -167,3 +166,7 @@ UActionComponent* ACC_PlayerCharacter::GetUCombatActionComponent() const
 
 #pragma endregion 
 
+FGameplayTag ACC_PlayerCharacter::GetDefaultTeam() const
+{
+	return CCTags::Team::Player;
+}

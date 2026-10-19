@@ -1,0 +1,147 @@
+classDiagram
+    direction TB
+    class UGameplayEffect {
+        +DurationPolicy
+        +Modifiers
+        +StackingType
+        +Period
+        +GEComponents
+    }
+    class UGameplayEffectComponent
+    class UGameplayEffectUIData
+    class UCC_BuffUIData {
+        +DisplayName
+        +Description
+        +Icon
+        +bHiddenInUI
+    }
+    class UCC_BuffRulesComponent {
+        +Behaviors
+        +bRemoveOnDeath
+        +IsDataValid()
+    }
+    UGameplayEffectComponent <|-- UGameplayEffectUIData
+    UGameplayEffectUIData <|-- UCC_BuffUIData
+    UGameplayEffectComponent <|-- UCC_BuffRulesComponent
+    UGameplayEffect "1" *-- "0..1" UCC_BuffUIData : 显示组件
+    UGameplayEffect "1" *-- "0..1" UCC_BuffRulesComponent : 规则组件
+
+    class UCC_BuffComponent {
+        -Instances
+        -HookIndex
+        -ReplicatedBuffs
+        -BoundASC
+        +InitializeASC()
+        +ApplyBuff()
+        +ApplyBuffWithParameters()
+        +RemoveBuff()
+        +RemoveBuffsByQuery()
+        +ClearBuffs()
+        +RunHook()
+        +GetStackCountByTag()
+        +GetActiveBuffs()
+        +GetRemainingTime()
+        -RefreshFromGAS()
+        -FinishInstance()
+    }
+    class FCC_BuffInstance {
+        +View
+        +Behaviors
+        +bRemoveOnDeath
+        +bSuspendedForDeath
+    }
+    class FCC_BuffInstanceView {
+        +Owner
+        +Instigator
+        +TargetASC
+        +SourceASC
+        +Handle
+        +InstanceId
+        +StackCount
+        +Level
+        +SetByCaller
+    }
+    class UCC_BuffBehavior {
+        <<abstract>>
+        +HandledHooks
+        +HookPriority
+        -View
+        -State
+        -Component
+        -Subscriptions
+        -Timers
+        -Actors
+        -Effects
+        -Initialize()
+        -Enable()
+        -Disable()
+        -Shutdown()
+        #OnInitialized()
+        #OnEnabled()
+        #OnDisabled()
+        #OnStackChanged()
+        #OnRefreshed()
+        #OnShutdown()
+        #ModifyHook()
+        #OnGameplayEvent()
+        #ListenGameplayEvent()
+        #StartTimer()
+        #SpawnOwnedActor()
+        #ApplyChildEffect()
+        #ConsumeStacks()
+    }
+    class FHookEntry {
+        +Behavior
+        +Handle
+        +Priority
+        +InstanceId
+        +BehaviorIndex
+    }
+    class FInstancedStruct
+    class UAbilitySystemComponent {
+        +ActiveGameplayEffects
+        +MakeOutgoingSpec()
+        +ApplyGameplayEffectSpecToTarget()
+        +RemoveActiveGameplayEffect()
+    }
+    class FActiveGameplayEffect
+    class FCC_ReplicatedBuffArray {
+        +Items
+        +Owner
+        +NetDeltaSerialize()
+        +PostReplicatedReceive()
+    }
+    class FCC_ReplicatedBuffItem {
+        +InstanceId
+        +EffectClass
+        +BuffTags
+        +StackCount
+        +Level
+        +bIsInhibited
+        +EndServerTime
+        +Duration
+    }
+    class UCC_BuffBarWidget {
+        -Observed
+        +SetObservedCharacter()
+        -RefreshBuffs()
+        #NativeTick()
+    }
+
+    UCC_BuffRulesComponent "1" *-- "*" UCC_BuffBehavior : 只读模板
+    UCC_BuffComponent "1" *-- "*" FCC_BuffInstance : GE Handle 索引
+    FCC_BuffInstance "1" *-- "*" UCC_BuffBehavior : 运行实例
+    FCC_BuffInstance *-- FCC_BuffInstanceView : 状态快照
+    UCC_BuffBehavior *-- FCC_BuffInstanceView : 回调前更新的副本
+    UCC_BuffComponent *-- FHookEntry : HookIndex
+    FHookEntry ..> UCC_BuffBehavior : 弱引用
+    UCC_BuffComponent ..> UAbilitySystemComponent : 观察与施加
+    UAbilitySystemComponent *-- FActiveGameplayEffect : GAS 实际状态
+    FCC_BuffInstanceView ..> FActiveGameplayEffect : Handle 标识
+    UCC_BuffComponent *-- FCC_ReplicatedBuffArray
+    FCC_ReplicatedBuffArray "1" *-- "*" FCC_ReplicatedBuffItem
+    FCC_ReplicatedBuffItem ..> UGameplayEffect : 保存 GE 类
+    UCC_BuffComponent ..> FInstancedStruct : 通用钩子参数
+    UCC_BuffBehavior ..> FInstancedStruct : 按引用修改
+    UCC_BuffBarWidget ..> UCC_BuffComponent : 读取复制快照
+    UCC_BuffBarWidget ..> UCC_BuffUIData : 读取 GE 显示组件

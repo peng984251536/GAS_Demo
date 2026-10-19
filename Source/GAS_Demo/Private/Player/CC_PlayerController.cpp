@@ -15,7 +15,13 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 #include "Components/ActionComponent.h"
 #include "GameFramework/Character.h"
+#include "BuffSelection/CC_BuffSelectionComponent.h"
 
+
+ACC_PlayerController::ACC_PlayerController()
+{
+	BuffSelection = CreateDefaultSubobject<UCC_BuffSelectionComponent>(TEXT("BuffSelection"));
+}
 
 void ACC_PlayerController::BeginPlay()
 {

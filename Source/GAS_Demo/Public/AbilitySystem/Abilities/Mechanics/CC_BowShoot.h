@@ -10,31 +10,30 @@ class UAbilityTask_WaitGameplayEvent;
 
 /** 独立的弓箭攻击：播放动作、在放箭时刻生成箭，命中由箭 Actor 自己处理。 */
 UCLASS()
+
 class GAS_DEMO_API UCC_BowShoot : public UCC_GameplayAbility
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-public:
-	UCC_BowShoot();
+  public:
+    UCC_BowShoot();
 
-protected:
-	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
-		const FGameplayAbilityActorInfo* ActorInfo,
-		const FGameplayAbilityActivationInfo ActivationInfo,
-		const FGameplayEventData* TriggerEventData) override;
-	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle,
-		const FGameplayAbilityActorInfo* ActorInfo,
-		const FGameplayAbilityActivationInfo ActivationInfo,
-		bool bReplicateEndAbility, bool bWasCancelled) override;
+  protected:
+    virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+                                 const FGameplayAbilityActivationInfo ActivationInfo,
+                                 const FGameplayEventData* TriggerEventData) override;
+    virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+                            const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility,
+                            bool bWasCancelled) override;
 
-private:
-	/** 动画 Notify 发来放箭事件时调用；必须是 UFUNCTION 才能绑定动态委托。 */
-	UFUNCTION()
-	void OnBowRelease(FGameplayEventData Payload);
-	void ReleaseArrow();
+  private:
+    /** 动画 Notify 发来放箭事件时调用；必须是 UFUNCTION 才能绑定动态委托。 */
+    UFUNCTION()
+    void OnBowRelease(FGameplayEventData Payload);
+    /** 放箭决策点按 Build → Modify → Resolve → Execute 执行；默认一支箭。 */
+    void ReleaseArrow();
 
-	
-	UPROPERTY(Transient)
-	TObjectPtr<UAbilityTask_WaitGameplayEvent> ReleaseEventTask;
-	bool bArrowReleased = false;
+    UPROPERTY(Transient)
+    TObjectPtr<UAbilityTask_WaitGameplayEvent> ReleaseEventTask;
+    bool bArrowReleased = false;
 };

@@ -44,15 +44,15 @@ int32 UActionComponent::GetAttackIndex(UCombatActionData* Action)
 {
 	const ACC_BaseCharacter* Character = Cast<ACC_BaseCharacter>(ResolveASC()->GetAvatarActor());
 	const UCC_CharacterConfig* config = Character->GetCharacterConfig();
-	const UCombatActionSet* AttackActionSet = config->AttackActionSet; 
+	const UCombatActionSet* AttackActionSet = Character->GetEffectiveAttackActionSet();
 	
 	++CurrentGeneration;
 	//CurrentGeneration = CurrentGeneration%(AttackActionSet->GetComboLength()+1);
 	CurrentAction = Action;
 	bCanCombo = false;
 
-	const int32 ComboMaxLength = IsValid(config->AttackActionSet) ? AttackActionSet->GetComboLength() : 0;
-	const int32 index = AttackActionSet->FindActionIndexByCombo(Action);
+	const int32 ComboMaxLength = IsValid(AttackActionSet) ? AttackActionSet->GetComboLength() : 0;
+	const int32 index = IsValid(AttackActionSet) ? AttackActionSet->FindActionIndexByCombo(Action) : INDEX_NONE;
 	if (IsValid(Action) && index >= 0 && ComboMaxLength > 0)
 	{
 		NextComboIndex = (index + 1) % ComboMaxLength;
@@ -83,7 +83,7 @@ void UActionComponent::EndActionIfOwned(const UCombatActionData* ExpectedAction)
 	const ACC_BaseCharacter* Character = IsValid(ASC)
 		? Cast<ACC_BaseCharacter>(ASC->GetAvatarActor()) : nullptr;
 	const UCC_CharacterConfig* Config = IsValid(Character) ? Character->GetCharacterConfig() : nullptr;
-	const UCombatActionSet* AttackActionSet = IsValid(Config) ? Config->AttackActionSet : nullptr;
+	const UCombatActionSet* AttackActionSet = IsValid(Character) ? Character->GetEffectiveAttackActionSet() : nullptr;
 
 	if (CurrentAction != ExpectedAction
 		&& (!IsValid(AttackActionSet) || AttackActionSet->GetComboLength() != 1))
@@ -95,7 +95,7 @@ void UActionComponent::EndActionIfOwned(const UCombatActionData* ExpectedAction)
 	// {
 	// 	return;
 	// }
-	if (CurrentAction != ExpectedAction && AttackActionSet->GetComboLength() != 1)
+	if (CurrentAction != ExpectedAction && (!IsValid(AttackActionSet) || AttackActionSet->GetComboLength() != 1))
 	{
 		return;
 	}
@@ -171,7 +171,7 @@ bool UActionComponent::TryAttack(FGameplayTag GameplayTag)
 		UE_LOG(LogGAS_Demo, Warning, TEXT("[BowAI][Action] TryAttack failed: Character=%s Config missing"), *GetNameSafe(Character));
 		return false;
 	}
-	const UCombatActionSet* AttackActionSet = config->AttackActionSet; 
+	const UCombatActionSet* AttackActionSet = Character->GetEffectiveAttackActionSet();
 	if (!IsValid(AttackActionSet))
 	{
 		UE_LOG(LogGAS_Demo, Warning, TEXT("[BowAI][Action] TryAttack failed: Character=%s AttackActionSet missing"), *GetNameSafe(Character));
@@ -278,7 +278,8 @@ bool UActionComponent::TryGameplayAbilityByTag(FGameplayTag GameplayTag,
 	{
 		const ACC_BaseCharacter* HitCharacter = Cast<ACC_BaseCharacter>(TargetASC->GetAvatarActor());
 		if (!IsValid(HitCharacter) || !HitCharacter->IsAlive() || HitCharacter->IsActorBeingDestroyed()
-			|| TargetASC->HasMatchingGameplayTag(CCTags::Status::Death))
+			|| TargetASC->HasMatchingGameplayTag(CCTags::Status::Death)
+		|| TargetASC->HasMatchingGameplayTag(CCTags::Status::SuperArmor))
 		{
 			return false;
 		}
@@ -386,4 +387,3 @@ UCC_AbilitySystemComponent* UActionComponent::ResolveASC() const
 }
 
 #pragma endregion 
-

@@ -1,0 +1,60 @@
+flowchart TB
+    subgraph Config["只读配置：普通 GameplayEffect 资产"]
+        GE["UGameplayEffect<br/>数值 · 标签 · 持续时间 · 叠层 · 周期"]
+        Rules["UCC_BuffRulesComponent<br/>Behavior 模板 · bRemoveOnDeath"]
+        UIData["UCC_BuffUIData<br/>名称 · 描述 · 图标 · 隐藏"]
+        Template["UCC_BuffBehavior 模板"]
+        GE --- Rules
+        GE --- UIData
+        Rules --> Template
+    end
+
+    Pickup["ACC_BuffPickup<br/>拾取入口"]
+    Character["ACC_BaseCharacter<br/>ASC 初始化 · 死亡 · 重生"]
+
+    subgraph Server["服务器：实际 Buff 状态"]
+        Source["来源 ASC<br/>创建 Spec"]
+        ASC["目标 ASC / GAS<br/>持有 ActiveGE"]
+        BC["UCC_BuffComponent<br/>施加 · 查询 · 驱散 · 生命周期"]
+        Instances["Instances<br/>GE Handle → FCC_BuffInstance"]
+        View["FCC_BuffInstanceView<br/>来源 · 目标 · 层数 · 等级 · 参数"]
+        Behavior["独立 Behavior 实例<br/>生命周期回调 · 规则 · 资源登记"]
+        Hooks["HookIndex<br/>HookTag → 有序 Behavior 引用"]
+        Rep["FCC_ReplicatedBuffArray<br/>GE 类 · 编号 · 标签 · 层数 · 到期时间"]
+        BC -->|"创建 Spec"| Source
+        Source -->|"ApplyGameplayEffectSpecToTarget"| ASC
+        ASC -->|"增删 · 叠层 · 时间 · 抑制事件"| BC
+        BC --> Instances
+        Instances --> View
+        Instances --> Behavior
+        BC --> Hooks
+        Hooks -.-> Behavior
+        BC -->|"更新并标记 Dirty"| Rep
+        Behavior -->|"登记与回收"| Resources["订阅 · 计时器 · 持有 Actor · 子 GE"]
+    end
+
+    Pickup -->|"ApplyBuff"| BC
+    Character -->|"InitializeASC / ClearBuffs"| BC
+    GE -.->|"只读配置"| Source
+    Template -.->|"每个活动 GE 复制一份"| Behavior
+    Caller["通用钩子调用方<br/>传入 HookTag 与本次 Context"]
+    Caller -->|"RunHook"| BC
+    BC -->|"按序修改 Context"| Behavior
+    Behavior -.->|"修改后的 Context"| Caller
+
+    subgraph Client["客户端：Buff 展示"]
+        ClientBC["客户端 BuffComponent<br/>展示快照与 OnBuffsChanged"]
+        Widget["UCC_BuffBarWidget<br/>图标 · 层数 · 倒计时 · 抑制显示"]
+        ClientBC -->|"变化通知 / 查询"| Widget
+    end
+    Rep ==>|"FastArray 增量复制"| ClientBC
+    UIData -.->|"通过 GE 类读取本地配置"| Widget
+    ASC -->|"MoveSpeedMultiplier 属性变化"| Adapter["现有移速适配<br/>BuffComponent.UpdateMovementSpeed"]
+    Adapter --> Movement["CharacterMovement.MaxWalkSpeed"]
+
+    classDef asset fill:#edf2ff,stroke:#6478b8,color:#152747
+    classDef runtime fill:#edf9f1,stroke:#4e9470,color:#183d28
+    classDef client fill:#fff5e4,stroke:#b98b3a,color:#513b13
+    class GE,Rules,UIData,Template asset
+    class BC,Instances,View,Behavior,Hooks,Rep,Source,ASC runtime
+    class ClientBC,Widget client

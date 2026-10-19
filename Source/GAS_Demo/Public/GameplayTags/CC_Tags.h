@@ -40,6 +40,16 @@ namespace CCTags
 		
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
+		
+		/** 被魅惑：有效阵营临时变为施加该效果者的阵营，见 UCC_TeamStatics::GetEffectiveTeam。 */
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Charmed);
+	}
+
+	// 阵营。敌我关系只能通过 UCC_TeamStatics::IsHostile 判断，不要直接比较这些标签。
+	namespace Team
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Player);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy);
 	}
 
 	// UI 根布局的四个页面层。名称与 DefaultGameplayTags.ini 中的 UI.Layer.* 保持一致，

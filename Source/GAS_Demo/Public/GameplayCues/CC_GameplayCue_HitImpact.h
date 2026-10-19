@@ -1,4 +1,4 @@
-// 一次性受击表现入口：可同时播放特效、声音和飘字；仅处理 Executed 类型的 GameplayCue。
+// 一次性受击特效与声音；伤害数字由独立 DamageText Cue 处理。
 #pragma once
 
 #include "CoreMinimal.h"
@@ -43,15 +43,4 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Hit Impact", meta = (ClampMin = "0.0"))
     float SoundVolume = 0.7f;
 
-    /**
-     * 是否顺便弹出伤害飘字。
-     *
-     * 飘字的数值通过 FGameplayCueParameters::RawMagnitude 传入，
-     * 由技能侧在 ApplyGameplayEffectSpecToTarget 之后用
-     * UCC_DamageTextStatics::ApplyDamageWithText 或 ShowDamageText 设置。
-     *
-     * 关闭此项可以只保留受击特效，不显示数字（例如环境伤害、调试场景）。
-     */
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Hit Impact|Damage Text")
-    bool bShowDamageText = true;
 };

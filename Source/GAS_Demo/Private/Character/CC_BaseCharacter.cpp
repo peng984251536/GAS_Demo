@@ -18,8 +18,18 @@ namespace CrashTags
 }
 
 // Sets default values
+FCC_AnyCharacterReady ACC_BaseCharacter::OnAnyCharacterReady;
+
+void ACC_BaseCharacter::BroadcastASCInitialized()
+{
+	bASCInitialized = true;
+	OnASCInitialized.Broadcast(GetAbilitySystemComponent(), GetAttributeSet());
+	OnAnyCharacterReady.Broadcast(this);
+}
+
 ACC_BaseCharacter::ACC_BaseCharacter()
 {
+	BuffComponent = CreateDefaultSubobject<UCC_BuffComponent>(TEXT("BuffComponent"));
 	RuntimeData = CreateDefaultSubobject<UCC_CharacterRuntimeData>(TEXT("CharacterRuntimeData"));
 	bReplicateUsingRegisteredSubObjectList = true;
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
@@ -210,6 +220,7 @@ void ACC_BaseCharacter::HandleDeath()
 		return;
 	}
 	RuntimeData->SetAlive(false);
+	BuffComponent->ClearBuffs(ECC_BuffEndReason::OwnerDeath);
 	RuntimeData->SetHit(false);
 	RuntimeData->ClearClosestActor();
 
@@ -261,6 +272,7 @@ void ACC_BaseCharacter::HandleRespawn()
 		return;
 	}
 
+	BuffComponent->ClearBuffs();
 	RuntimeData->ResetForRespawn();
 	ForceNetUpdate();
 
@@ -287,3 +299,13 @@ void ACC_BaseCharacter::HandleRespawn()
 
 
 
+
+TArray<FCC_ReplicatedBuffItem> ACC_BaseCharacter::GetActiveBuffs() const
+{
+    return BuffComponent->GetActiveBuffs();
+}
+UCombatActionSet* ACC_BaseCharacter::GetEffectiveAttackActionSet() const
+{
+    const auto* Config = GetCharacterConfig();
+    return IsValid(Config) ? Config->AttackActionSet.Get() : nullptr;
+}

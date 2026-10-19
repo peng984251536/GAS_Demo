@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystem/Abilities/CC_GameplayAbilityBase.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "CC_CharacterConfig.generated.h"
 
 class UGameplayAbility;
@@ -10,6 +11,24 @@ class UGameplayEffect;
 class UCombatActionSet;
 class UCombatActionData;
 class ACC_ArrowProjectile;
+class UUserWidget;
+
+/** 头顶血条的配置。只是数据，玩法代码不读取；由 UI 侧的 UCC_HealthBarSource 读取。 */
+USTRUCT(BlueprintType)
+struct GAS_DEMO_API FCC_OverheadHealthBarConfig
+{
+	GENERATED_BODY()
+	/** 血条控件（任意实现 CC World Indicator Widget 的 UserWidget，推荐派生 CC_HealthBarWidget）。
+	 *  留空使用 项目设置 → CC World Indicator 中的默认血条。软引用，专用服务器不会加载。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health Bar", meta = (MustImplement = "/Script/GAS_Demo.CC_WorldIndicatorWidget"))
+	TSoftClassPtr<UUserWidget> WidgetClass;
+	/** 叠加在角色位置上的世界偏移（厘米），控件底边中点对齐这里。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health Bar")
+	FVector WorldOffset = FVector(0.f, 0.f, 80.f);
+	/** 超过这个距离不显示（厘米）；0 表示不限。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health Bar", meta = (ClampMin = "0"))
+	float MaxDistance = 5000.f;
+};
 
 
 /** 一项初始技能配置。以后可在这里添加输入标签等“每个技能各不相同”的配置。 */
@@ -57,7 +76,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Montage")
 	TObjectPtr<UCombatActionData> DeathActionData;
 
-	/** 索敌时查找的 Actor Tag；带该 Tag 的存活角色会成为目标。默认 Player，改它即可改变索敌目标。 */
+	/**
+	 * 角色的基础阵营。为空时使用角色类的默认阵营（玩家角色为 CCTags.Team.Player，敌人为 CCTags.Team.Enemy）。
+	 * 站在玩家一边的 AI 随从在这里填 CCTags.Team.Player。敌我判断统一走 UCC_TeamStatics::IsHostile。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Team", meta = (Categories = "CCTags.Team"))
+	FGameplayTag Team;
+
+	/** 旧索敌方案（CC_FindRangedTarget）使用的 Actor Tag；AI 控制器已改为按阵营选目标，不再读取它。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Character|Targeting")
 	FName TargetingActorTag = FName("Player");
 	/** 最大射程；目标距离不超过它时无需移动。 */
@@ -80,6 +106,13 @@ public:
 	float ArrowSpeed = 1800.0f;
 	UPROPERTY(EditDefaultsOnly,BlueprintReadWrite,Category="Crash|AI")
 	float AttackDelay{1.0f};
+
+	/** 是否显示头顶血条。本地玩家自己的角色始终不显示（自身血量在 HUD 上）。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI")
+	bool bShowOverheadHealthBar = true;
+	/** 头顶血条用哪个控件、挂在哪、多远隐藏；满血 / 死亡隐藏在血条控件上配置。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI", meta = (EditCondition = "bShowOverheadHealthBar"))
+	FCC_OverheadHealthBarConfig OverheadHealthBar;
 	
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;

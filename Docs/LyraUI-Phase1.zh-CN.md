@@ -41,7 +41,7 @@ GameInstance 创建 UIManager → Manager 监听引擎 LocalPlayer 加入与 Con
 - 绑定后立即用 Get Root Layout For Player 查询已有布局；若非空，执行相同装配函数，避免错过首次通知。
 - 装配函数校验 Player 所在 World 是当前地图，检查本地图是否已完成装配，再将主菜单/HUD/大厅页面放入对应 Layer。
 - EndPlay 解除事件绑定；切图清理由框架完成。
-- 使用原生 CC_PlayerHUDWidget、CC_MainMenuWidget 或自己的派生蓝图作为页面类。
+- 使用原生 CC_CombatMainWidget、CC_MainMenuWidget 或自己的派生蓝图作为页面类。
 
 Esc/Start 首次打开暂停菜单的旧硬编码也已删除。玩法输入动作中查询 Root，确认 HasMenu=false 且 IsInputBlocked=false，再 ShowScreen(Menu, 暂停页面类)。菜单内返回仍由 CommonUI 管理。
 

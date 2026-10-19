@@ -95,14 +95,14 @@ void UCC_FindRangedTarget::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 		return;
 	}
 
-	const FName TargetTag = CharacterConfig->TargetingActorTag.IsNone()
+	const FName TargetTag = CharacterConfig->TargetingActorTag.IsNone()  // harness:allow R4 旧索敌方案，行为树已不再激活此能力
 		? CrashTags::Player
-		: CharacterConfig->TargetingActorTag;
+		: CharacterConfig->TargetingActorTag;  // harness:allow R4 旧索敌方案，行为树已不再激活此能力
 
 	AActor* PreviousTarget = Enemy->GetClosestActor().Actor.Get();
 	//const float PreviousDistance = Enemy->GetClosestActor().Distance;
 	FClosestActorWithTagResult Target =
-		UCC_BlueprintLibrary::FindClosestActorWithTag(
+		UCC_BlueprintLibrary::FindClosestActorWithTag(  // harness:allow R4 旧索敌方案，行为树已不再激活此能力
 			Enemy, Enemy->GetActorLocation(), TargetTag);
 	const float TargetDistance = FVector::Distance(Target.LastKnownLocation,BaseCharacter->GetActorLocation());
 	
