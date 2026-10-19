@@ -6,6 +6,7 @@
 
 class UUserWidget;
 
+// 通过修改编辑器的设置修改配置信息
 /** 项目设置 → Game → CC World Indicator：世界空间 UI 的默认控件与显示规则。 */
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="CC World Indicator"))
 class GAS_DEMO_API UCC_WorldIndicatorSettings : public UDeveloperSettings

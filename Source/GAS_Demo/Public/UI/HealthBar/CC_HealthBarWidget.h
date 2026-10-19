@@ -53,6 +53,7 @@ protected:
 	/** 绑定到新角色时调用（含对象池复用），可在这里读取名字、等级等。 */
 	UFUNCTION(BlueprintImplementableEvent, Category="Health Bar")
 	void OnHealthBarBound(AActor* Target);
+	
 	/** 血量或显示比例变化时调用；插值期间每帧调用。 */
 	UFUNCTION(BlueprintImplementableEvent, Category="Health Bar")
 	void OnHealthBarUpdated(float CurrentHealth, float CurrentMaxHealth, float Fraction);
