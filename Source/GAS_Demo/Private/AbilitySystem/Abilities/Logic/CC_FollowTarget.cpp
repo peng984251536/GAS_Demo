@@ -3,7 +3,7 @@
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
 #include "AI/Engagement/CC_EngagementSubsystem.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GAS_Demo.h"

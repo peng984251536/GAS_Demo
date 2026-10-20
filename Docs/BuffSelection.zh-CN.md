@@ -8,8 +8,8 @@
 
 | 类 | 位置 | 职责 |
 |---|---|---|
-| `UCC_BuffOfferPool` | `BuffSelection/` | 数据资产：候选 Buff 列表 + 每轮数量；运行时只读 |
-| `UCC_BuffSelectionComponent` | `BuffSelection/` | 挂在 PlayerController 上（已在 `ACC_PlayerController` 构造函数里创建）。服务器抽取、排队、校验、施加；客户端发请求、自动打开界面 |
+| `UCC_BuffOfferPool` | `Data/Buff/` | 数据资产：候选 Buff 列表 + 每轮数量；运行时只读 |
+| `UCC_BuffSelectionComponent` | `Components/` | 挂在 PlayerController 上（已在 `ACC_PlayerController` 构造函数里创建）。服务器抽取、排队、校验、施加；客户端发请求、自动打开界面 |
 | `UCC_BuffSelectionScreen` | `UI/BuffSelection/` | 页面基类（`CC_ActivatableWidget`），自动生成卡片，选完自动关闭 |
 | `UCC_BuffSelectionController` / `Model` | `UI/BuffSelection/` | 监听选择组件，把当前一轮转成卡片快照；转发点击 |
 | `UCC_BuffOfferCardWidget` | `UI/BuffSelection/` | 单张卡片，继承 `CommonButtonBase`，点击即选择 |

@@ -1,6 +1,6 @@
 #include "AbilitySystem/Abilities/Reaction/CC_Death.h"
 
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "GAS_Demo.h"
 #include "Engine/World.h"
 #include "TimerManager.h"

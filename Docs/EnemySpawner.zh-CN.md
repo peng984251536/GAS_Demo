@@ -1,6 +1,6 @@
 # 场景怪物生成点
 
-类：`CC_EnemySpawner`。头文件和实现分别放在 `Public/Character/Spawner`、`Private/Character/Spawner`。
+类：`CC_EnemySpawner`。头文件和实现分别放在 `Public/Actors/Spawners`、`Private/Actors/Spawners`。
 
 1. 编译项目后，在内容浏览器的 C++ Classes 中找到 `CC_EnemySpawner`，拖进关卡；也可以先创建它的蓝图子类。
 2. 在 Details → Spawner 设置 `Enemy Class`，例如 `BP_CC_Enemy02` 或 `BP_Enemy_Warrior`。

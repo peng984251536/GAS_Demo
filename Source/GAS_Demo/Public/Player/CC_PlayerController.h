@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayTagContainer.h"
-#include "Data/GASInputTypes.h"
+#include "Input/GASInputTypes.h"
 #include "CC_PlayerController.generated.h"
 
 class UInputAction;

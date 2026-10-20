@@ -231,7 +231,7 @@ log LogGAS_Demo Verbose
 | `AI/Engagement/Tokens/CC_AttackTokenPool` | 令牌池（纯逻辑） |
 | `AI/Crowd/CC_CrowdAgentStatics` | 避障参数、按档位调质量、攻击时切 `ObstacleOnly` |
 | `AI/Crowd/CC_PlayerCrowdAgentComponent` | 玩家注册为 Crowd 障碍 |
-| `Player/CC_AIController` | 注册 / 注销、写黑板、监听 `Attack` 标签 |
+| `AI/CC_AIController` | 注册 / 注销、写黑板、监听 `Attack` 标签 |
 | `AbilitySystem/Abilities/Logic/CC_FollowTarget` | 走到分配位置 |
 
 模块依赖规则：`Slots` 和 `Tokens` 互不依赖，也不依赖任何 Actor；`Crowd` 只依赖档位枚举，不知道槽位和令牌；能力不依赖 `Crowd`。

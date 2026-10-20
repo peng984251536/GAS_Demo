@@ -2,13 +2,13 @@
 
 #include "AbilitySystemComponent.h"
 
-#include "Character/CC_EnemyCharacter.h"
-#include "Character/Combat/CC_ArrowProjectile.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
+#include "Actors/Projectiles/CC_ArrowProjectile.h"
 #include "Components/ActionComponent.h"
 #include "Components/CC_BuffComponent.h"
 #include "Data/Buff/CC_BuffTags.h"
 #include "Data/Buff/CC_BuffDebug.h"
-#include "Character/Combat/CC_ProjectileFireContext.h"
+#include "Actors/Projectiles/CC_ProjectileFireContext.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/AbilityData/CombatActionData.h"
 #include "Data/CC_CharacterConfig.h"

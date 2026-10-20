@@ -1,6 +1,6 @@
 #include "UI/HealthBar/CC_HealthBarWidget.h"
 #include "UI/WorldIndicator/CC_WorldIndicator.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "Blueprint/WidgetTree.h"

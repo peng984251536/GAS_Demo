@@ -112,7 +112,7 @@ done < <(grep -rnE --include=*.cpp "UCC_GE_[A-Za-z0-9_]*Damage[A-Za-z0-9_]*::Sta
 
 # ---------------------------------------------------------------------------
 # 规则 1：系统代码不判断具体 Buff（只认标签 / 属性 / 上下文）
-SYSTEM_DIRS="$SRC/Private/AbilitySystem $SRC/Private/Character $SRC/Private/Components $SRC/Private/Damage $SRC/Private/AI"
+SYSTEM_DIRS="$SRC/Private/AbilitySystem $SRC/Private/Actors $SRC/Private/Components $SRC/Private/Damage $SRC/Private/AI"
 R1_PATTERN='HasBuff\(|GetBuffStackCount\(|BuffConfiguration|GetAttackActionSetOverride\(|Cast<UCC_BuffDefinition>|Cast<UCC_GE_Buff>|IsA<UCC_GE_Buff>|FindComponent<UCC_BuffRulesComponent>|UCC_BuffBehavior_[A-Za-z0-9]+'
 while IFS= read -r HIT; do
   [ -z "$HIT" ] && continue
@@ -122,7 +122,7 @@ while IFS= read -r HIT; do
     *) err R1 "$HIT  系统代码在判断具体 Buff；请改为读取标签 / 属性 / 钩子上下文" ;;
   esac
 done < <(grep -rnE --include=*.cpp --include=*.h "$R1_PATTERN" $SYSTEM_DIRS 2>/dev/null \
-         | grep -v "/Components/CC_BuffComponent" | grep -v "/Tests/" | grep -vE ":[0-9]+:[[:space:]]*(//|\*)")
+         | grep -v "/Components/CC_BuffComponent" | grep -v "/Tests/" | grep -v "/AbilitySystem/Effects/Buff/" | grep -vE ":[0-9]+:[[:space:]]*(//|\*)")
 
 # ---------------------------------------------------------------------------
 # 规则 4：敌我判断不写死在 Actor Tag 上；阵营系统完成后由 LEGACY 升级为 ERROR

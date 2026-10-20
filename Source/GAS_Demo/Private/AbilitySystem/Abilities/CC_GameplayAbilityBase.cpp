@@ -4,7 +4,7 @@
 #include "AbilitySystem/Abilities/CC_GameplayAbilityBase.h"
 
 #include "GAS_Demo.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Components/ActionComponent.h"
 
 void UCC_GameplayAbilityBase::PreActivate(const FGameplayAbilitySpecHandle Handle,

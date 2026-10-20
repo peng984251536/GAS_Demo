@@ -2,7 +2,7 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Data/CC_CharacterConfig.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -10,7 +10,7 @@
 #include "GAS_Demo.h"
 #include "HAL/IConsoleManager.h"
 #include "NavigationSystem.h"
-#include "Team/CC_TeamStatics.h"
+#include "Utils/Team/CC_TeamStatics.h"
 
 namespace
 {
@@ -83,6 +83,12 @@ void UCC_EngagementSubsystem::Tick(float DeltaTime)
 
 #pragma region 对外接口
 
+/**
+ * 
+ * @param Attacker 
+ * @param Target 
+ * @param bRanged 
+ */
 void UCC_EngagementSubsystem::RegisterAttacker(AActor* Attacker, AActor* Target, bool bRanged)
 {
 	if (!IsValid(Attacker))

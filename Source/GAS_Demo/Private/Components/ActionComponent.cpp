@@ -7,8 +7,8 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/Combat/CC_ArrowProjectile.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Projectiles/CC_ArrowProjectile.h"
 #include "Data/CC_CharacterConfig.h"
 #include "GameplayTags/CC_Tags.h"
 

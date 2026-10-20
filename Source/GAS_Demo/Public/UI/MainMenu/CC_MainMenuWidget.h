@@ -1,7 +1,7 @@
 #pragma once
 
 #include "UI/Framework/CC_ActivatableWidget.h"
-#include "OnlineRoom/CC_RoomTypes.h"
+#include "Subsystems/CC_RoomTypes.h"
 #include "UI/MainMenu/CC_MainMenuController.h"
 #include "CC_MainMenuWidget.generated.h"
 

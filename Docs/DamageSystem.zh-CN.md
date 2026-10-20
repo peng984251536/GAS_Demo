@@ -30,13 +30,13 @@
 | `Damage/CC_DamageStatics` | 唯一入口（CLAUDE.md 规则 3） |
 | `Damage/CC_DamageTypes.h` | `FCC_DamageRequest`、暴击策略、应用结果 |
 | `Damage/CC_DamageTags` | 全部伤害相关标签 |
-| `Effects/Damage/CC_GE_Damage`、`CC_GE_Healing` | 伤害 / 治疗 GE |
+| `AbilitySystem/Effects/Damage/CC_GE_Damage`、`CC_GE_Healing` | 伤害 / 治疗 GE |
 | `Damage/CC_DamageExecution` | 读属性、暴击、调用公式 |
 | `Damage/CC_DamageFormula.h` | 纯公式，可独立测试 |
 | `Damage/CC_GameplayEffectContext` | Context 只多一个暴击标记 |
 | `Damage/CC_DamageSettings` | 项目设置：使用哪个伤害 / 治疗 GE |
-| `Attribute/CC_AttributeSet` | 扣血、加血、发伤害事件 |
-| `GameplayCues/CC_GameplayCue_DamageText` | 伤害 / 治疗数字的客户端表现 |
+| `AbilitySystem/Attributes/CC_AttributeSet` | 扣血、加血、发伤害事件 |
+| `AbilitySystem/GameplayCues/CC_GameplayCue_DamageText` | 伤害 / 治疗数字的客户端表现 |
 
 ## 调用
 

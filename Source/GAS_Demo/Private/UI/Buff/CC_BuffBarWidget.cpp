@@ -1,5 +1,5 @@
 #include "UI/Buff/CC_BuffBarWidget.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Components/CC_BuffComponent.h"
 #include "Data/Buff/CC_BuffUIData.h"
 #include "Blueprint/WidgetTree.h"

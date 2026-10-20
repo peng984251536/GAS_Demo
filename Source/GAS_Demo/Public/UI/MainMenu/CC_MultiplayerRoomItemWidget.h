@@ -2,7 +2,7 @@
 
 #include "Blueprint/IUserObjectListEntry.h"
 #include "Blueprint/UserWidget.h"
-#include "OnlineRoom/CC_RoomTypes.h"
+#include "Subsystems/CC_RoomTypes.h"
 #include "CC_MultiplayerRoomItemWidget.generated.h"
 
 class UCommonButtonBase;

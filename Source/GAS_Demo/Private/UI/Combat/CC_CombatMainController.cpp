@@ -1,8 +1,8 @@
 #include "UI/Combat/CC_CombatMainController.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Attribute/CC_AttributeSet.h"
-#include "Character/CC_BaseCharacter.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "GameFramework/PlayerController.h"
 
 void UCC_CombatMainModel::SetVitals(const FCC_PlayerVitals& Value)

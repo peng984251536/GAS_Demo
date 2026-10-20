@@ -6,8 +6,8 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/CC_PlayerCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_PlayerCharacter.h"
 #include "Engine/OverlapResult.h"
 #include "Components/ActionComponent.h"
 #include "Components/PrimitiveComponent.h"

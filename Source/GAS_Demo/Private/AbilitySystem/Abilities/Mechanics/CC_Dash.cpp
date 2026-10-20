@@ -1,6 +1,6 @@
 #include "AbilitySystem/Abilities/Mechanics/CC_Dash.h"
 #include "Abilities/Tasks/AbilityTask_ApplyRootMotionConstantForce.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameplayTags/CC_Tags.h"
 #include "Data/Buff/CC_BuffTags.h"

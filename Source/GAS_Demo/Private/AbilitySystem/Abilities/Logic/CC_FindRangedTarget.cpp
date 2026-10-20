@@ -1,7 +1,7 @@
 #include "AbilitySystem/Abilities/Logic/CC_FindRangedTarget.h"
 
 #include "AbilitySystemComponent.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Data/CC_CharacterConfig.h"
 #include "Engine/Engine.h"
 #include "GAS_Demo.h"

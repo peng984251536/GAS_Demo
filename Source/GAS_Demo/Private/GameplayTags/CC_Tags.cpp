@@ -30,6 +30,9 @@ namespace CCTags
 			"CCTags.CCAbilities.Move",
 			"移动。"
 		);
+		UE_DEFINE_GAMEPLAY_TAG(Death, "CCTags.CCAbilities.Death");
+		UE_DEFINE_GAMEPLAY_TAG(FindActor, "CCTags.CCAbilities.FindActor");
+		UE_DEFINE_GAMEPLAY_TAG(Respawn, "CCTags.CCAbilities.Respawn");
 		UE_DEFINE_GAMEPLAY_TAG_COMMENT(
 			Projectile,
 			"CCTags.SetByCaller.Projectile",
@@ -106,6 +109,49 @@ namespace CCTags
 			"CCTags.Status.Charmed",
 			"角色被魅惑，有效阵营变为施加者的阵营"
 		);
+		UE_DEFINE_GAMEPLAY_TAG(Dead, "CCTags.Status.Dead");
+	}
+
+	namespace Attack
+	{
+		UE_DEFINE_GAMEPLAY_TAG(Attacking, "CCTags.Attack.Attacking");
+		UE_DEFINE_GAMEPLAY_TAG(InputQueued, "CCTags.Attack.InputQueued");
+		UE_DEFINE_GAMEPLAY_TAG(ReAttacking, "CCTags.Attack.ReAttacking");
+		UE_DEFINE_GAMEPLAY_TAG(WindowOpen, "CCTags.Attack.WindowOpen");
+	}
+
+	namespace Attacking
+	{
+		UE_DEFINE_GAMEPLAY_TAG(Root, "CCTags.Attacking");
+		UE_DEFINE_GAMEPLAY_TAG(AttackEnd, "CCTags.Attacking.AttackEnd");
+		UE_DEFINE_GAMEPLAY_TAG(AttackStart, "CCTags.Attacking.AttackStart");
+		UE_DEFINE_GAMEPLAY_TAG(ComboCheck, "CCTags.Attacking.ComboCheck");
+		UE_DEFINE_GAMEPLAY_TAG(Comboing, "CCTags.Attacking.Comboing");
+	}
+
+	namespace Event
+	{
+		UE_DEFINE_GAMEPLAY_TAG(Attack, "CCTags.Event.Attack");
+		UE_DEFINE_GAMEPLAY_TAG(AttackInput, "CCTags.Event.AttackInput");
+		UE_DEFINE_GAMEPLAY_TAG(BeHit, "CCTags.Event.BeHit");
+		UE_DEFINE_GAMEPLAY_TAG(CanMoveInput, "CCTags.Event.CanMoveInput");
+		UE_DEFINE_GAMEPLAY_TAG(ComboFinished, "CCTags.Event.ComboFinished");
+		UE_DEFINE_GAMEPLAY_TAG(LevelUp, "CCTags.Event.LevelUp");
+		UE_DEFINE_GAMEPLAY_TAG(MoveInput, "CCTags.Event.MoveInput");
+	}
+
+	UE_DEFINE_GAMEPLAY_TAG(Input, "CCTags.Input");
+
+	namespace GameplayCue
+	{
+		UE_DEFINE_GAMEPLAY_TAG(HitReact, "GameplayCue.HitReact");
+	}
+
+	namespace PlayerInput
+	{
+		UE_DEFINE_GAMEPLAY_TAG(Attack, "Input.Attack");
+		UE_DEFINE_GAMEPLAY_TAG(Dodge, "Input.Dodge");
+		UE_DEFINE_GAMEPLAY_TAG(Move, "Input.Move");
 	}
 
 	namespace Team

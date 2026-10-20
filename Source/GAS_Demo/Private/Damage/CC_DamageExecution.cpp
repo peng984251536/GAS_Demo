@@ -2,7 +2,7 @@
 #include "Damage/CC_DamageFormula.h"
 #include "Damage/CC_DamageTags.h"
 #include "Damage/CC_GameplayEffectContext.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffect.h"
 

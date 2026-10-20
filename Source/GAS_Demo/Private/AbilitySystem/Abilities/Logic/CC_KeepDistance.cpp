@@ -2,7 +2,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Data/CC_CharacterConfig.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"

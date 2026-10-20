@@ -6,12 +6,12 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "AbilitySystemComponent.h"
-#include "Character/CC_EnemyCharacter.h"
-#include "Character/CC_PlayerCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_PlayerCharacter.h"
 #include "Data/CC_CharacterRuntimeData.h"
 #include "GameplayTags/CC_Tags.h"
-#include "Player/CC_AIController.h"
-#include "Team/CC_TeamStatics.h"
+#include "AI/CC_AIController.h"
+#include "Utils/Team/CC_TeamStatics.h"
 
 namespace CCTeamTests
 {

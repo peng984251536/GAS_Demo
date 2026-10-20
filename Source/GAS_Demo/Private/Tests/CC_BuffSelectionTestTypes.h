@@ -1,5 +1,5 @@
 #pragma once
-#include "BuffSelection/CC_BuffSelectionComponent.h"
+#include "Components/CC_BuffSelectionComponent.h"
 #include "CC_BuffSelectionTestTypes.generated.h"
 
 /**

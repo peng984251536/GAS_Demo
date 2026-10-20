@@ -1,12 +1,12 @@
 ﻿#include "Player/CC_PlayerController.h"
 #include "GAS_Demo.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/CC_PlayerCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_PlayerCharacter.h"
 #include "GameplayTags/CC_Tags.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Data/GASInputConfig.h"
+#include "Input/GASInputConfig.h"
 #include "Utils/CC_BlueprintLibrary.h"
 
 #include "EnhancedInputComponent.h"
@@ -15,7 +15,7 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 #include "Components/ActionComponent.h"
 #include "GameFramework/Character.h"
-#include "BuffSelection/CC_BuffSelectionComponent.h"
+#include "Components/CC_BuffSelectionComponent.h"
 
 
 ACC_PlayerController::ACC_PlayerController()

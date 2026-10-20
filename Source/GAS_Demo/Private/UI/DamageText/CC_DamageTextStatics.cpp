@@ -1,7 +1,7 @@
 #include "UI/DamageText/CC_DamageTextStatics.h"
 #include "AbilitySystemComponent.h"
 #include "Damage/CC_GameplayEffectContext.h"
-#include "GameplayCues/CC_GameplayCue_DamageText.h"
+#include "AbilitySystem/GameplayCues/CC_GameplayCue_DamageText.h"
 #include "Damage/CC_DamageTags.h"
 #include "GameFramework/Actor.h"
 

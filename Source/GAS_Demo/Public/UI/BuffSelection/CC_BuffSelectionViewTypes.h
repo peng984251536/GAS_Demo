@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "BuffSelection/CC_BuffSelectionTypes.h"
+#include "Components/CC_BuffSelectionTypes.h"
 #include "CC_BuffSelectionViewTypes.generated.h"
 
 class UGameplayEffect;

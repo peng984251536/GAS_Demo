@@ -1,7 +1,7 @@
 #include "Data/Buff/CC_BuffBehavior_SplitArrow.h"
 #include "Data/Buff/CC_BuffTags.h"
 #include "Data/Buff/CC_BuffDebug.h"
-#include "Character/Combat/CC_ProjectileFireContext.h"
+#include "Actors/Projectiles/CC_ProjectileFireContext.h"
 
 UCC_BuffBehavior_SplitArrow::UCC_BuffBehavior_SplitArrow()
 {

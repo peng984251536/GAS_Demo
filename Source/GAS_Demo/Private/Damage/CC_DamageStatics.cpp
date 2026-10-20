@@ -2,9 +2,9 @@
 #include "Damage/CC_DamageSettings.h"
 #include "Damage/CC_DamageTags.h"
 #include "Damage/CC_GameplayEffectContext.h"
-#include "Effects/Damage/CC_GE_Damage.h"
-#include "Effects/Damage/CC_GE_Healing.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Effects/Damage/CC_GE_Damage.h"
+#include "AbilitySystem/Effects/Damage/CC_GE_Healing.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "AbilitySystemComponent.h"
 
 namespace
