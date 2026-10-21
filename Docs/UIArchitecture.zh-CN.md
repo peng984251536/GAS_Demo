@@ -59,6 +59,8 @@
 
 暂停与退出确认的按钮也改为调用各自 Controller。普通按钮和通知不强制增加控制器。未来背包可仿照 HUD 新建 InventoryController + InventoryModel，不在 RootLayout 中增加背包规则。
 
+角色面板为 `GAS + CC_BuffComponent → CC_CharacterScreenController → CC_CharacterScreenModel → CC_CharacterScreenWidget`，在 GameMenu 层打开。Buff 显示信息来自 GE 上的 `CC_BuffUIData`，与 Buff 栏使用同一套过滤规则。结构图、时序图和 WBP 接线见 [CharacterScreen.zh-CN.md](CharacterScreen.zh-CN.md)。
+
 ## 世界覆盖层（头顶血条、伤害飘字）
 
 世界空间 UI 不使用 Controller/Model：数据每帧都在变，多一层快照只增加开销。它们统一走世界指示器系统——数据源（`CC_HealthBarSource`、`CC_DamageNumberSource`）向 `CC_WorldIndicatorSubsystem` 增删指示器，RootLayout 的 `CC_WorldIndicatorLayer` 负责投影和控件池，控件通过 `ICC_WorldIndicatorWidget` 自己绑定数据。详见 [WorldIndicator.zh-CN.md](WorldIndicator.zh-CN.md)。
