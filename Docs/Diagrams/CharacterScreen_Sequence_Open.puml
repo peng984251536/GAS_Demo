@@ -1,0 +1,120 @@
+@startuml CharacterScreen_Sequence_Open
+' 时序图 1：打开角色面板 → 绑定数据源 → 首次推送 → 关闭。
+
+skinparam defaultFontName "Noto Sans CJK SC"
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 10
+skinparam BoxPadding 8
+
+title 角色面板 · 时序图 1：打开与关闭
+
+actor 玩家 as User
+participant "PlayerController\n(玩法输入)" as PC
+participant "UCC_RootLayout" as Root
+box "角色面板" #F4F7FD
+  participant "UCC_CharacterScreenWidget\n(WBP_CharacterScreen)" as View
+  participant "UCC_CharacterScreenController" as Ctrl
+  participant "UCC_CharacterScreenModel" as Model
+end box
+participant "ACC_BaseCharacter" as Char
+participant "UCC_BuffComponent" as Buffs
+participant "UAbilitySystemComponent" as ASC
+
+== 打开 ==
+User -> PC : 按下 C
+PC -> Root : ShowScreen(UI.Layer.GameMenu, WBP_CharacterScreen)
+activate Root
+Root -> View ** : 创建或从对象池取出
+Root -> View : PrepareForDisplay(Context = null)
+activate View
+View -> Ctrl ** : NewObject(ControllerClass)
+View -> Ctrl : Initialize(View, Context)
+Ctrl -> Model ** : NewObject(ModelClass)
+View -> View : BP_OnScreenOpened
+deactivate View
+Root -> Root : 入栈 GameMenu 层\n单机暂停世界、切换 Menu 输入
+Root -> View : NativeOnActivated()
+activate View
+note right of View : CommonUI 已先置 bIsActive = true，\n此后的模型通知会立即刷新界面
+View -> View : SeenStatsRevision = SeenBuffsRevision = -1
+View -> Model : OnChanged.AddUniqueDynamic
+View -> Ctrl : Activate()
+activate Ctrl
+Ctrl -> PC : OnPossessedPawnChanged.AddUniqueDynamic
+Ctrl -> Ctrl : HandlePawnChanged(null, 当前 Pawn)
+Ctrl -> Char : OnASCInitialized.AddUniqueDynamic
+Ctrl -> Char : GetBuffComponent()
+
+group BindBuffComponent（组件是角色默认子对象，立即可用）
+  Ctrl -> Buffs : OnBuffsChanged.AddUniqueDynamic
+  Ctrl -> Buffs : GetActiveBuffs()
+  Buffs --> Ctrl : TArray<FCC_ReplicatedBuffItem>
+  loop 每个条目
+    Ctrl -> Ctrl : EffectClass CDO → FindComponent<UCC_BuffUIData>\n无 UIData 或 bHiddenInUI → 跳过\nBuffTags 含 DebuffTag → bIsDebuff
+  end
+  Ctrl -> Model : SetBuffs(列表)
+  Model -> View : OnChanged（Buff 版本变化）
+  View -> View : SyncBuffList + OnBuffsChanged
+end
+
+alt ASC 已就绪
+  group BindASC
+    loop 血蓝四项 + DisplayedStats 中的属性
+      Ctrl -> ASC : GetGameplayAttributeValueChangeDelegate(属性).AddUObject
+      ASC --> Ctrl : FDelegateHandle
+    end
+    Ctrl -> ASC : GetNumericAttribute(…)
+    Ctrl -> Ctrl : 按 Format 生成 ValueText\n名字取自 PlayerState
+    Ctrl -> Model : SetStats(Name, Vitals, Stats)
+    Model -> View : OnChanged（属性版本变化）
+    View -> View : OnStatsChanged(Name, Vitals, Stats)
+  end
+else ASC 尚未初始化
+  Ctrl -> Model : SetStats(零值)
+  Model -> View : OnChanged → OnStatsChanged(零值)
+  note over Ctrl, ASC : 等 OnASCInitialized → HandleASCReady → BindASC，流程同上
+end
+deactivate Ctrl
+
+group SyncBuffList（每次 Buff 版本变化时）
+  loop 每条 Buff
+    alt 已有该 InstanceId 的条目
+      View -> View : 复用
+    else 新条目
+      create participant "UCC_CharacterBuffEntryWidget\n(WBP_CharacterBuffEntry)" as Entry
+      View -> Entry : CreateWidget(BuffEntryClass)
+    end
+    View -> Entry : SetBuff(Buff)
+    Entry -> Entry : 图标、名称（含层数）、描述\nUpdateTime() → OnBuffSet
+  end
+end
+
+View -> View : HandleModelChanged()（框架兜底推送）\n版本号已读过，不重复刷新
+View -> View : Super::NativeOnActivated()\n→ 蓝图 On Activated
+deactivate View
+deactivate Root
+
+== 关闭 ==
+User -> View : Esc / 关闭按钮
+View -> Root : CloseScreen(this)
+activate Root
+Root -> View : NativeOnDeactivated()
+activate View
+View -> Model : OnChanged.RemoveDynamic
+View -> Ctrl : Deactivate()
+activate Ctrl
+Ctrl -> PC : OnPossessedPawnChanged.RemoveDynamic
+Ctrl -> Char : OnASCInitialized.RemoveDynamic
+Ctrl -> Buffs : OnBuffsChanged.RemoveDynamic
+Ctrl -> ASC : 按句柄移除属性委托
+deactivate Ctrl
+deactivate View
+Root -> Root : 退出过渡，恢复游戏输入\n最后一个菜单关闭后取消暂停
+Root -> View : 释放 Slate → NativeDestruct()
+View -> Ctrl : Release()
+note right of View : 下次打开新建 Controller 和 Model
+deactivate Root
+
+@enduml
