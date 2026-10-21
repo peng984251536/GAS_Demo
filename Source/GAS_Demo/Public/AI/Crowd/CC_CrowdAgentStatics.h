@@ -2,13 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "AI/Engagement/CC_EngagementTypes.h"
 #include "CC_CrowdAgentStatics.generated.h"
 
 class AAIController;
 
 /**
- * Detour Crowd 避障层的辅助函数。只认档位枚举，不知道槽位和令牌的存在；
+ * Detour Crowd 避障层的辅助函数。不依赖选目标与登记表；
  * 控制器的 PathFollowingComponent 不是 UCrowdFollowingComponent 时全部静默跳过。
  */
 UCLASS()
@@ -21,9 +20,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "AI|Crowd")
 	static void ConfigureCrowdAgent(AAIController* Controller);
 
-	/** 按档位设置避障质量：None / Queue → Low，Surround → Medium，Engaged → High。 */
+	/**
+	 * 按离最近玩家的距离设置避障质量（2 High / 1 Medium / 0 Low），只在等级变化时调用引擎接口。
+	 * @param Controller AI 控制器。
+	 * @param DistanceToNearestPlayer 离最近玩家 Pawn 的距离（厘米）；没有玩家时传一个很大的数。
+	 * @param CurrentLOD 当前等级，-1 表示尚未设置。
+	 * @param HighDistance 小于它为 High。
+	 * @param MediumDistance 小于它为 Medium，否则 Low。
+	 * @return 新的等级；控制器不是 Crowd 控制器时原样返回 CurrentLOD。
+	 */
 	UFUNCTION(BlueprintCallable, Category = "AI|Crowd")
-	static void ApplyTier(AAIController* Controller, ECC_EngagementTier Tier);
+	static int32 UpdateAvoidanceLOD(AAIController* Controller, float DistanceToNearestPlayer, int32 CurrentLOD,
+		float HighDistance = 1500.f, float MediumDistance = 4000.f);
 
 	/**
 	 * 攻击开始时切到 ObstacleOnly（别人绕开它，它不被推动），结束时恢复 Enabled。

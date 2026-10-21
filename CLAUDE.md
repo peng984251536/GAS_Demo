@@ -7,10 +7,12 @@ UE5 + GAS 的动作战斗 Demo。C++ 源码在 `Source/GAS_Demo`，设计文档�
 - 设计原则与分层：`Docs/BuffSystem.zh-CN.md`
 - 目标架构、类关系与时序图：`Docs/BuffSystem-Architecture.zh-CN.md`
 - AI 寻敌与阵营：`Docs/AI-Targeting.zh-CN.md`
-- AI 包围寻路（槽位 + 令牌 + Detour Crowd）：设计 `Docs/AI-Engagement.zh-CN.md`，接入与调参 `Docs/AI-Engagement-Usage.zh-CN.md`。新增攻击能力必须授予 `CCTags.CCAbilities.Attack`。
+- AI 群体战斗（个体自由交战 + 攻击者登记表 + Detour Crowd，编队接口预留）：设计与接入 `Docs/AI-Combat.zh-CN.md`（取代旧的 `AI-Engagement*`）。新增攻击能力必须授予 `CCTags.CCAbilities.Attack`（攻击期间切 Crowd ObstacleOnly）。
 - 案例手册（分裂箭、爆炸箭、冻结、魅惑、反弹等）：`Docs/BuffSystem-Cookbook.zh-CN.md`
 - 基础设施现状与待办：`Docs/BuffSystem-Roadmap.zh-CN.md`
 - Buff 三选一（获取途径）：`Docs/BuffSelection.zh-CN.md`
+- 选点召唤随从（地面高亮选点、召唤物继承阵营 `SetTeamOverride`）：`Docs/SummonAlly.zh-CN.md`
+- 生存模式（波次刷怪、共享经验、倒计时复活、结算）：设计 `Docs/SurvivalMode.zh-CN.md`（第 0 节为实现偏差），接入与调参 `Docs/SurvivalMode-Usage.zh-CN.md`。死亡判定统一走 `UCC_AttributeSet::OnOutOfHealth` → `UCC_GameEventSubsystem::OnCharacterDied`，不要再在 Health 变化回调里判定死亡。
 - 新增或修改 Buff 时，按 `.claude/skills/add-buff/SKILL.md` 的流程执行。
 
 ## 硬性规则（违反即视为错误）

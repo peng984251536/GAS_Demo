@@ -131,8 +131,14 @@ void UCC_BuffSelectionComponent::ClearOffers()
 
 void UCC_BuffSelectionComponent::SetCurrentOffer(FCC_BuffOffer&& Offer)
 {
+    const bool bWasPending = HasPendingOffer();
     CurrentOffer = MoveTemp(Offer);
     GetOwner()->ForceNetUpdate();
+    if (bWasPending != HasPendingOffer())
+    {
+        // 只有服务器会调用 SetCurrentOffer（客户端走 OnRep），这里即服务器广播。
+        OnServerPendingChanged.Broadcast(HasPendingOffer());
+    }
     // 服务器不会收到自己的 OnRep；监听服务器主机与单机玩家在这里处理。
     if (IsLocalPlayer())
     {
@@ -192,6 +198,7 @@ ECC_BuffChoiceResult UCC_BuffSelectionComponent::ResolveChoice(int32 OfferId, in
            *GetNameSafe(Option.Effect.Get()), *UEnum::GetValueAsString(Result));
     if (Result == ECC_BuffChoiceResult::Accepted)
     {
+        OnServerChoiceAccepted.Broadcast(Option);
         AdvanceQueue();
     }
     return Result;

@@ -3,11 +3,15 @@
 #include "UI/Framework/CC_UIController.h"
 #include "UI/Framework/CC_UIModel.h"
 #include "UI/Combat/CC_CombatTypes.h"
+#include "UI/Survival/CC_SurvivalUITypes.h"
 #include "AttributeSet.h"
 #include "CC_CombatMainController.generated.h"
 
 class UAbilitySystemComponent;
 class ACC_BaseCharacter;
+class ACC_SurvivalGameState;
+class ACC_SurvivalPlayerState;
+class AGameStateBase;
 class APawn;
 struct FOnAttributeChangeData;
 
@@ -23,11 +27,17 @@ public:
 	/** 蓝图以一份快照读取玩家血蓝数据。 */
 	UFUNCTION(BlueprintPure, Category="UI|Combat")
 	FCC_PlayerVitals GetVitals() const { return Vitals; }
+	/** 生存模式数据（波次、经验、击杀、复活倒计时）；不在生存模式地图时 bActive 为 false。 */
+	UFUNCTION(BlueprintPure, Category="UI|Combat")
+	FCC_SurvivalHUDSnapshot GetSurvival() const { return Survival; }
 private:
 	/** 控制器一次性写入四项属性，有变化时广播。 */
 	void SetVitals(const FCC_PlayerVitals& Value);
+	/** 控制器写入生存模式快照，有变化时广播。 */
+	void SetSurvival(const FCC_SurvivalHUDSnapshot& Value);
 	/** 本地展示副本，真实属性仍由 GAS 管理。 */
 	UPROPERTY(Transient) FCC_PlayerVitals Vitals;
+	UPROPERTY(Transient) FCC_SurvivalHUDSnapshot Survival;
 	friend class UCC_CombatMainController;
 };
 
@@ -65,4 +75,16 @@ private:
 	TWeakObjectPtr<UAbilitySystemComponent> BoundASC;
 	/** 本控制器创建的四项属性委托句柄。 */
 	TMap<FGameplayAttribute, FDelegateHandle> AttributeHandles;
+
+	// --- 生存模式（可选：地图不是生存模式时不绑定） ---
+	/** 绑定生存模式 GameState 与本地 PlayerState；GameState 尚未复制到达时等待 GameStateSetEvent。 */
+	void BindSurvival();
+	void UnbindSurvival();
+	void HandleGameStateSet(AGameStateBase* GameState);
+	UFUNCTION() void HandleSurvivalChanged();
+	UFUNCTION() void HandleSurvivalPhaseChanged(ECC_MatchPhase NewPhase);
+	void RefreshSurvival();
+	TWeakObjectPtr<ACC_SurvivalGameState> BoundSurvivalState;
+	TWeakObjectPtr<ACC_SurvivalPlayerState> BoundSurvivalPlayer;
+	FDelegateHandle GameStateSetHandle;
 };

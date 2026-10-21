@@ -5,6 +5,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Data/CC_CharacterRuntimeData.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Player/CC_PlayerState.h"
 
@@ -72,6 +73,8 @@ void ACC_PlayerCharacter::PossessedBy(AController* PlayerController)
 	GiveStartupAbilities();
 	// 重生时：重新启动能力、重新初始化属性能力
 	HandleRespawn();
+	// 属性集在 PlayerState 上，每次被控制都重新绑定生命耗尽事件到当前 Pawn。
+	BindOutOfHealth(GetAttributeSet());
 
 	// 广播委托 初始化
 	BroadcastASCInitialized();
@@ -173,4 +176,47 @@ UActionComponent* ACC_PlayerCharacter::GetUCombatActionComponent() const
 FGameplayTag ACC_PlayerCharacter::GetDefaultTeam() const
 {
 	return CCTags::Team::Player;
+}
+
+bool ACC_PlayerCharacter::Revive(const FVector& Location, TSubclassOf<UGameplayEffect> ReviveEffect)
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!HasAuthority() || !IsValid(ASC) || IsAlive())
+	{
+		return false;
+	}
+
+	// 先标记存活，再取消死亡能力：CC_Death 结束时看到角色已活着就不会再上报 DeathFinished。
+	RuntimeData->ResetForRespawn();
+	ResetDeathReport();
+	const FGameplayTagContainer DeathAbilityTags(CCTags::CCAbilityTrigger::Death);
+	ASC->CancelAbilities(&DeathAbilityTags);
+
+	TeleportTo(Location, GetActorRotation(), false, true);
+	SetActorEnableCollision(true);
+	SetActorHiddenInGame(false);
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement(); Movement && Movement->MovementMode == MOVE_None)
+	{
+		Movement->SetMovementMode(MOVE_Walking);
+	}
+
+	if (ReviveEffect)
+	{
+		const FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(ReviveEffect, 1.f, Context);
+		if (Spec.IsValid())
+		{
+			ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+		}
+	}
+	// 兜底：没有配置复活 GE 或它没有回血时回满，避免"复活即死亡"。
+	if (const UCC_AttributeSet* Attributes = GetAttributeSet(); Attributes && Attributes->GetHealth() < UCC_AttributeSet::OutOfHealthThreshold)
+	{
+		ASC->SetNumericAttributeBase(UCC_AttributeSet::GetHealthAttribute(), Attributes->GetMaxHealth());
+	}
+
+	BuffComponent->ResumeAfterRevive();
+	ForceNetUpdate();
+	UE_LOG(LogGAS_Demo, Log, TEXT("[Revive] %s at %s"), *GetName(), *Location.ToCompactString());
+	return true;
 }

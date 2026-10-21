@@ -1,0 +1,48 @@
+@startuml 共享经验与升级
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+autonumber
+
+participant "ACC_SurvivalGameMode" as GM
+participant "UCC_TeamStatics" as TEAM
+participant "UCC_WaveDirector" as WD
+participant "ACC_SurvivalPlayerState\n(击杀者)" as KPS
+participant "ACC_SurvivalGameState" as GS
+participant "UCC_TeamProgression" as TP
+participant "UCC_BuffSelection\n(每个玩家)" as BS
+
+[-> GM : HandleCharacterDied(Info)，Victim 是敌人
+activate GM
+opt Phase != Playing
+  GM -> GM : 忽略
+end
+GM -> WD : NotifyEnemyRemoved(Victim)
+GM -> TEAM : ShouldCreditKill：IsHostile(Killer, Victim) 且\n（Killer 有 PlayerState，或与任一玩家不敌对）
+alt 玩家方击杀（含被魅惑的友军、以后的召唤物）
+  opt KillerPlayerState 有效
+    GM -> KPS : Stats[Kills]++
+  end
+  GM -> GS : TeamStats[Kills]++
+  GM -> TP : AddExperience(ExperienceReward × ExperienceMultiplier × XPScale)
+  activate TP
+  TP -> TP : ApplyExperience：while 经验 ≥ 升级所需（未达 MaxLevel）\n扣除并 TeamLevel++
+  opt 升了 N 级
+    loop 每个 PlayerController（含阵亡玩家）
+      TP -> BS : OfferBuffs(BuffPool) × N（自带排队）
+    end
+    TP -> GS : MulticastMatchMessage(Survival.Msg.LevelUp)
+  end
+  deactivate TP
+else 非玩家方击杀 / 无击杀者
+  GM -> GM : 不计数、不给经验
+end
+deactivate GM
+
+== 选卡期间保护（联机；单机打开三选一会暂停世界，不施加） ==
+BS -> GM : OnServerPendingChanged(true)
+GM -> GM : 施加 ChoosingProtectionEffect，记录句柄
+BS -> GM : OnServerChoiceAccepted(Option)
+GM -> KPS : Stats[BuffsChosen]++
+BS -> GM : OnServerPendingChanged(false)（选完 / ClearOffers）
+GM -> GM : 移除保护 GE（与施加对称）
+@enduml

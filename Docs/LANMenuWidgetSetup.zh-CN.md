@@ -25,18 +25,18 @@
 
 | 页面 | 控件名 | 操作 |
 |---|---|---|
-| 主菜单 | `Button_SinglePlayer` | `StartSinglePlayer` |
-| 主菜单 | `Button_HostRoom` | `HostLANRoom` |
-| 主菜单 | `Button_Multiplayer` | `SearchRooms`，打开多人页并搜索 |
-| 主菜单 | `Button_LeaveRoom` | `LeaveCurrentRoom` |
-| 主菜单 | `Button_Quit` | `RequestQuit`，打开确认框 |
-| 多人页 | `List_Rooms`（ListView） | 显示并滚动当前搜索结果 |
-| 多人页 | `Button_Refresh` | `RefreshRooms` |
-| 多人页 | `Button_Back` | `GoBack` |
-| 房间条目 | `Button_JoinRoom` | 加入该条目代表的房间 |
+| 主菜单 | `CommonButtonBase_SinglePlayer` | `StartSinglePlayer` |
+| 主菜单 | `CommonButtonBase_HostRoom` | `HostLANRoom` |
+| 主菜单 | `CommonButtonBase_Multiplayer` | `SearchRooms`，打开多人页并搜索 |
+| 主菜单 | `CommonButtonBase_LeaveRoom` | `LeaveCurrentRoom` |
+| 主菜单 | `CommonButtonBase_Quit` | `RequestQuit`，打开确认框 |
+| 多人页 | `ListView_Rooms`（ListView） | 显示并滚动当前搜索结果 |
+| 多人页 | `CommonButtonBase_Refresh` | `RefreshRooms` |
+| 多人页 | `CommonButtonBase_Back` | `GoBack` |
+| 房间条目 | `CommonButtonBase_JoinRoom` | 加入该条目代表的房间 |
 
 代码自动更新忙碌/可加入/可恢复状态对应的按钮禁用状态，并在释放时解绑。
-默认焦点是主菜单 Button_SinglePlayer、多人页 Button_Refresh；可修改 Default Focus Widget Name。
+默认焦点是主菜单 CommonButtonBase_SinglePlayer、多人页 CommonButtonBase_Refresh；可修改 Default Focus Widget Name。
 
 ## Class Defaults
 
@@ -58,7 +58,7 @@
 主菜单实现 `On Main Menu State Changed`，使用 State.ActionError、State.LastRoomResult.Message、State.bBusy。
 也可主动调用 GetMainMenuState。
 
-在 `WBP_Multiplayer` 中放置 `ListView` 并命名为 `List_Rooms`，将它的
+在 `WBP_Multiplayer` 中放置 `ListView` 并命名为 `ListView_Rooms`，将它的
 `Entry Widget Class` 设置为 `WBP_RoomItem`。ListView 自己负责滚动与行复用，页面 C++ 负责填充数据。
 
 多人页实现 `On Multiplayer State Changed(State)`，用于更新加载动画、空列表提示和错误文字。
@@ -66,7 +66,7 @@
 
 1. 用 Room 显示 DisplayName、HostName、CurrentPlayers/MaxPlayers、PingMs。
 2. 用 bCanJoin 表现按钮禁用样式；实际启用状态已经由 C++ 设置。
-3. 行内 `Button_JoinRoom` 自动加入本行房间，无需保存索引或手动传 RoomId。
+3. 行内 `CommonButtonBase_JoinRoom` 自动加入本行房间，无需保存索引或手动传 RoomId。
 4. 多人页忙碌时显示等待；空列表显示“未发现局域网世界”。
 5. 错误优先使用非空 ActionError，否则使用 LastRoomResult.Message。
 

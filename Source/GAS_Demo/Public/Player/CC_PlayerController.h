@@ -13,6 +13,7 @@ class UGASInputConfig;
 class UCC_AbilitySystemComponent;
 class ACC_PlayerCharacter;
 class UCC_BuffSelectionComponent;
+class UAbilitySystemComponent;
 
 UCLASS()
 class ACC_PlayerController : public APlayerController
@@ -67,5 +68,15 @@ private:
 	void Input_Move(const FInputActionValue& InputActionValue);
 	void Input_Dodge(const FInputActionValue& InputActionValue);
 	void Input_Attack(const FInputActionValue& InputActionValue);
+
+	/**
+	 * 绑定 InputConfig.AbilityInputActions：按下时按 InputTag 激活 Asset Tag 匹配的能力（例如 CCTags.CCAbilities.Summon）。
+	 * 未配置任何条目时什么也不做。
+	 */
+	void BindAbilityInputActions(UEnhancedInputComponent* EnhancedInputComponent);
+	/** 技能键按下：选点瞄准中则取消瞄准，否则按标签激活能力。 */
+	void Input_AbilityPressed(FGameplayTag InputTag);
+	/** 当前控制角色的 ASC（玩家的 ASC 在 PlayerState 上，经由角色接口获取）。 */
+	UAbilitySystemComponent* GetControlledASC() const;
 	
 };

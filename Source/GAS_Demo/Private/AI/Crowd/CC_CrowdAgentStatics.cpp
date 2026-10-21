@@ -29,25 +29,35 @@ void UCC_CrowdAgentStatics::ConfigureCrowdAgent(AAIController* Controller)
 	Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::Low);
 }
 
-void UCC_CrowdAgentStatics::ApplyTier(AAIController* Controller, ECC_EngagementTier Tier)
+int32 UCC_CrowdAgentStatics::UpdateAvoidanceLOD(AAIController* Controller, float DistanceToNearestPlayer,
+	int32 CurrentLOD, float HighDistance, float MediumDistance)
 {
 	UCrowdFollowingComponent* Crowd = GetCrowdComponent(Controller);
 	if (!Crowd)
 	{
-		return;
+		return CurrentLOD;
 	}
-	switch (Tier)
+	const int32 NewLOD = DistanceToNearestPlayer < HighDistance ? 2
+		: (DistanceToNearestPlayer < MediumDistance ? 1 : 0);
+	if (NewLOD == CurrentLOD)
 	{
-	case ECC_EngagementTier::Engaged:
+		return CurrentLOD;
+	}
+	switch (NewLOD)
+	{
+	case 2:
 		Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::High);
 		break;
-	case ECC_EngagementTier::Surround:
+	case 1:
 		Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::Medium);
 		break;
 	default:
 		Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::Low);
 		break;
 	}
+	UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Crowd] %s avoidance LOD %d -> %d (distance %.0f)"),
+		*GetNameSafe(Controller), CurrentLOD, NewLOD, DistanceToNearestPlayer);
+	return NewLOD;
 }
 
 void UCC_CrowdAgentStatics::SetAttacking(AAIController* Controller, bool bAttacking)

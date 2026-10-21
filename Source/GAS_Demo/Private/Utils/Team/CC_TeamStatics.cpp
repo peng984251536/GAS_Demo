@@ -25,7 +25,7 @@ const ACC_BaseCharacter* ResolveCharacter(const AActor* Actor)
 }
 
 /**
- * 角色自身的基础阵营：配置优先，其次角色类默认值。
+ * 角色自身的基础阵营：实例覆盖（召唤物等）优先，其次配置，最后角色类默认值。
  * @param Character 已解析的角色，可为空。
  * @return 基础阵营，没有时为空标签。
  */
@@ -34,6 +34,11 @@ FGameplayTag GetCharacterBaseTeam(const ACC_BaseCharacter* Character)
 	if (!IsValid(Character))
 	{
 		return FGameplayTag();
+	}
+	const FGameplayTag Override = Character->GetTeamOverride();
+	if (Override.IsValid())
+	{
+		return Override;
 	}
 	const UCC_CharacterConfig* Config = Character->GetCharacterConfig();
 	if (Config && Config->Team.IsValid())

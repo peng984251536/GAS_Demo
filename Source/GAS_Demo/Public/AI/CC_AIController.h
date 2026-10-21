@@ -7,12 +7,13 @@
 #include "Actors/Character/CC_BaseCharacter.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
+#include "AI/Squad/CC_SquadTypes.h"
+#include "AI/Targeting/CC_TargetScoring.h"
 
 #include "CC_AIController.generated.h"
 
 class UAbilitySystemComponent;
 class UCC_EngagementSubsystem;
-struct FCC_EngagementAssignment;
 
 // AI 的警戒等级枚举
 // 用于驱动行为树的 Selector 分支切换（巡逻 / 警觉 / 战斗 / 搜索）
@@ -36,12 +37,15 @@ enum class EAlertLevel : uint8
  * 写入目标只有一个出口 ApplyTarget；行为树与技能只读黑板 / GetClosestActor。
  * 敌我判断全部交给 UCC_TeamStatics::IsHostile。
  *
- * 围攻与避障（见 Docs/AI-Engagement.zh-CN.md）：
- *   - 寻路组件为 UCrowdFollowingComponent（Detour Crowd 避障）；
- *   - ApplyTarget 中向 UCC_EngagementSubsystem 注册 / 注销，分配变化写入黑板
- *     EngagementTier / MoveLocation / HasAttackToken，并按档位调整避障质量；
- *   - 监听自己 ASC 的 CCAbilities.Attack 标签：0→1 记下分配编号并切 ObstacleOnly，
- *     1→0 恢复避障并带编号归还令牌。
+ * 群体战斗（见 Docs/AI-Combat.zh-CN.md）——个体只锁目标、自由交战，包围由避障与推挤自然形成：
+ *   - 选目标评分：距离 + 拥挤惩罚 − 回敬优惠 + 被挡惩罚（FCC_TargetScoring），带切换迟滞；
+ *   - ApplyTarget 中向 UCC_EngagementSubsystem（攻击者登记表）登记「谁在打谁」，供别人计算拥挤与回敬；
+ *   - 被挡检测（近战）：离目标不远但持续挤不进去时，惩罚该目标并重选；没有更好的目标时写黑板 IsBlocked，
+ *     行为树原地等待，不硬挤；
+ *   - 寻路组件为 UCrowdFollowingComponent；监听自己 ASC 的 CCAbilities.Attack 标签：
+ *     攻击期间切 ObstacleOnly（站稳不被推，后到的人被挤到侧面），结束后恢复；
+ *   - 避障质量按离最近玩家的距离分级；
+ *   - 编队命令 SetSquadOrder 只预留接口：v3 中所有命令都按自由交战处理。
  */
 UCLASS()
 class GAS_DEMO_API ACC_AIController : public AAIController
@@ -93,6 +97,18 @@ public:
 	static AActor* SelectBestTarget(const AActor* Self, const TArray<AActor*>& Candidates,
 		AActor* Current, float SwitchHysteresis);
 
+	/**
+	 * 接收编队命令（编队层接口预留）。保存命令、写入黑板 SquadOrder（键不存在时忽略）并立即重选目标。
+	 * v3 中 Follow / Hold / Retreat 尚未实现，会打印警告并按自由交战处理。
+	 * @param NewOrder 新命令。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "AI|Squad")
+	void SetSquadOrder(const FCC_SquadOrder& NewOrder);
+
+	/** @return 当前编队命令；从未下达过时为 Free。 */
+	UFUNCTION(BlueprintPure, Category = "AI|Squad")
+	const FCC_SquadOrder& GetSquadOrder() const { return SquadOrder; }
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -109,9 +125,41 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Targeting", meta = (ClampMin = "0.05"))
 	float TargetReevaluateInterval = 0.5f;
 
-	/** 切换目标所需的最小距离优势（厘米）：新目标必须比当前目标近这么多才切换。 */
+	/** 切换目标所需的最小分数优势（只看距离时即厘米）：新目标的分数必须比当前目标低这么多才切换。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Targeting", meta = (ClampMin = "0"))
 	float TargetSwitchHysteresis = 200.f;
+
+	/** 选目标评分参数：拥挤软上限与惩罚、回敬优惠、被挡惩罚。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Targeting")
+	FCC_TargetScoringParams TargetScoring;
+
+	/** 近战离目标不远、但持续这么久（秒）没有靠近，视为被人群挡住。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Blocked", meta = (ClampMin = "0.1"))
+	float BlockedTimeout = 1.5f;
+
+	/** 被挡住的目标在这段时间（秒）内选目标时加 BlockedPenalty。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Blocked", meta = (ClampMin = "0"))
+	float BlockedMemory = 3.f;
+
+	/** 没有更好的目标时，原地等待（黑板 IsBlocked = true）多久（秒）后再尝试靠近。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Blocked", meta = (ClampMin = "0"))
+	float BlockedWaitTime = 1.f;
+
+	/** 边缘距离比最近记录缩短这么多（厘米）才算有进展。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Blocked", meta = (ClampMin = "0"))
+	float BlockedProgressStep = 25.f;
+
+	/** 目标水平速度超过它（厘米/秒）时视为在逃跑，追不上不算被挡。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Blocked", meta = (ClampMin = "0"))
+	float TargetFastSpeed = 300.f;
+
+	/** 离最近玩家小于这个距离（厘米）时避障质量为 High。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Crowd", meta = (ClampMin = "0"))
+	float HighAvoidanceDistance = 1500.f;
+
+	/** 离最近玩家小于这个距离（厘米）时避障质量为 Medium，更远为 Low。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Crowd", meta = (ClampMin = "0"))
+	float MediumAvoidanceDistance = 4000.f;
 
 	/**
 	 * 感知更新回调：只记录"当前目标是否离开视野"，选目标交给 ReevaluateTarget。
@@ -148,17 +196,40 @@ private:
 	void UnbindCharmedTagEvent();
 
 	/**
-	 * 目标变化后同步围攻注册：有目标时注册（同一目标不重复），无目标时注销。
+	 * 目标变化后同步登记表：有目标时登记（同一目标不重复），无目标时注销。
 	 * @param NewTarget 新目标；为空表示注销。
 	 */
 	void UpdateEngagement(AActor* NewTarget);
 
+	/** @return 攻击者登记表；子系统不存在时返回 nullptr。 */
+	UCC_EngagementSubsystem* GetEngagementSubsystem() const;
+
 	/**
-	 * 子系统的分配变化回调：只处理自己 Pawn 的分配，写黑板并按档位调整避障质量。
-	 * @param Attacker 分配变化的攻击者。
-	 * @param Assignment 新分配。
+	 * 编队约束挂点：候选是否满足当前编队命令（例如跟随时只打锚点附近的敌人）。
+	 * v3 永远返回 true；实现编队层时只需要改这里。
 	 */
-	void OnEngagementAssignmentChanged(AActor* Attacker, const FCC_EngagementAssignment& Assignment);
+	bool PassesSquadConstraint(const AActor* Candidate) const;
+
+	/**
+	 * 被挡检测（只对近战、有目标、未在攻击的单位）。在重选目标之前调用。
+	 * @return 本次判定为被挡（已记录被挡目标），调用方重选后需要决定换目标还是原地等待。
+	 */
+	bool UpdateBlockedState();
+
+	/** 清空被挡检测的进展记录。 */
+	void ResetBlockedProgress();
+
+	/**
+	 * 设置黑板 IsBlocked。进入等待时停止当前移动，让 FollowTarget 结束、行为树进入等待分支。
+	 * @param bBlocked 是否进入等待。
+	 */
+	void SetBlockedWaiting(bool bBlocked);
+
+	/** 按离最近玩家的距离更新避障质量。 */
+	void UpdateAvoidanceLOD();
+
+	/** 调试绘制自己的被挡状态（cc.Engagement.Debug 1）。 */
+	void DrawBlockedDebug() const;
 
 	/**
 	 * 自己的 CCAbilities.Attack 标签计数变化（仅 0↔1 时触发）。
@@ -167,7 +238,7 @@ private:
 	 */
 	void OnAttackTagChanged(const FGameplayTag Tag, int32 NewCount);
 
-	/** 绑定 / 解绑围攻相关事件：子系统的分配变化、自己 ASC 的 Attack 标签。 */
+	/** 绑定 / 解绑自己 ASC 的 Attack 标签事件。 */
 	void BindEngagementEvents();
 	void UnbindEngagementEvents();
 
@@ -179,14 +250,28 @@ private:
 	FDelegateHandle CharmedTagHandle;
 	TWeakObjectPtr<UAbilitySystemComponent> CharmedTagASC;
 
-	/** 围攻子系统的分配变化订阅。 */
-	FDelegateHandle AssignmentChangedHandle;
-	TWeakObjectPtr<UCC_EngagementSubsystem> EngagementSubsystem;
 	/** Attack 标签事件的订阅句柄及其所在 ASC。 */
 	FDelegateHandle AttackTagHandle;
 	TWeakObjectPtr<UAbilitySystemComponent> AttackTagASC;
-	/** 本次攻击开始（Attack 标签 0→1）时的分配编号，归还令牌时带上。 */
-	int32 HeldGeneration = 0;
 	/** 是否处于攻击中（已收到 0→1 且尚未收到 1→0）。 */
 	bool bAttackTagActive = false;
+
+	/** 当前编队命令。 */
+	UPROPERTY(Transient)
+	FCC_SquadOrder SquadOrder;
+
+	/** 被挡检测：正在统计进展的目标、最近的边缘距离、无进展累计时间、上次检测时间。 */
+	TWeakObjectPtr<AActor> ProgressTarget;
+	float BestEdgeDistance = TNumericLimits<float>::Max();
+	float NoProgressTime = 0.f;
+	float LastProgressCheckTime = -1.f;
+	/** 最近被挡住的目标及惩罚截止时间。 */
+	TWeakObjectPtr<AActor> BlockedTarget;
+	float BlockedUntil = 0.f;
+	/** 是否处于原地等待（黑板 IsBlocked）及等待截止时间。 */
+	bool bBlockedWaiting = false;
+	float BlockedWaitUntil = 0.f;
+
+	/** 当前避障质量等级（0 Low / 1 Medium / 2 High），-1 表示尚未设置。 */
+	int32 AvoidanceLOD = -1;
 };

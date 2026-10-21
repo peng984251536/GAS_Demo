@@ -15,7 +15,7 @@ class UCC_DamageNumberIndicator;
  * 伤害 / 治疗数字控件（世界指示器控件）。
  *
  * 默认：C++ 驱动上飘、淡入淡出和暴击缩放，Lifetime 秒后自己移除。设计树为空时创建一个 TextBlock；
- * 蓝图设计树里名为 DamageText 的 TextBlock 会自动收到文字、字号和颜色。
+ * 蓝图设计树里名为 TextBlock_Damage 的 TextBlock 会自动收到文字、字号和颜色。
  *
  * 想用 UMG 动画：派生蓝图，关闭 Drive Animation In Code，在 On Damage Number Shown 里播放动画，
  * 动画结束时调用 Finish Damage Number。动画只作用在内部控件上，不要改根控件位置（由指示器层负责）。
@@ -54,8 +54,8 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="Damage Number")
 	void OnDamageNumberShown(float Amount, ECC_DamageTextStyle Style, FGameplayTag DamageType);
 
-	/** 蓝图里名为 DamageText 的 TextBlock 自动绑定。 */
-	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> DamageText;
+	/** 必需绑定：蓝图必须提供名为 TextBlock_Damage 的 TextBlock，否则蓝图编译报错。 */
+	UPROPERTY(meta=(BindWidget)) TObjectPtr<UTextBlock> TextBlock_Damage;
 private:
 	/** C++ 动画作用在设计树根控件上（不碰本控件的渲染平移）。 */
 	void ApplyCodeAnimation(float T);

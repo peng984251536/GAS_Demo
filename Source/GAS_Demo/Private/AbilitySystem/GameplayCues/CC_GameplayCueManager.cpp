@@ -17,18 +17,18 @@ namespace
 void UCC_GameplayCueManager::RouteGameplayCue(AActor* Target, FGameplayTag Tag, EGameplayCueEvent::Type Event,
 	const FGameplayCueParameters& Params, EGameplayCueExecutionOptions Options)
 {
-	if (UClass* NativeClass = FindNativeCueClass(Tag))
+	if (UClass* CueClass = FindNativeCueClass(Tag))
 	{
 		// CueSet 用 GetDefaultObject(false) 取 Notify，不会主动创建 CDO，所以先确保它存在。
-		NativeClass->GetDefaultObject();
+		CueClass->GetDefaultObject();
 		UGameplayCueSet* Set = GetRuntimeCueSet();
 		const int32* Index = Set->GameplayCueDataMap.Find(Tag);
 		if (!Index || *Index == INDEX_NONE)
 		{
-			Set->AddCues({FGameplayCueReferencePair(Tag, FSoftObjectPath(NativeClass))});
+			Set->AddCues({FGameplayCueReferencePair(Tag, FSoftObjectPath(CueClass))});
 			Index = Set->GameplayCueDataMap.Find(Tag);
 		}
-		if (Index && Set->GameplayCueData.IsValidIndex(*Index)) Set->GameplayCueData[*Index].LoadedGameplayCueClass = NativeClass;
+		if (Index && Set->GameplayCueData.IsValidIndex(*Index)) Set->GameplayCueData[*Index].LoadedGameplayCueClass = CueClass;
 	}
 	Super::RouteGameplayCue(Target, Tag, Event, Params, Options);
 }

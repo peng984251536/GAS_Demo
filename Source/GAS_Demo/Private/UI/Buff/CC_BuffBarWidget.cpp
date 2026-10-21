@@ -14,8 +14,8 @@ TSharedRef<SWidget> UCC_BuffBarWidget::RebuildWidget()
 {
     if (!WidgetTree->RootWidget)
     {
-        BuffBox = WidgetTree->ConstructWidget<UHorizontalBox>();
-        WidgetTree->RootWidget = BuffBox;
+        HorizontalBox_Buffs = WidgetTree->ConstructWidget<UHorizontalBox>();
+        WidgetTree->RootWidget = HorizontalBox_Buffs;
     }
     return Super::RebuildWidget();
 }
@@ -50,16 +50,16 @@ void UCC_BuffBarWidget::SetObservedCharacter(ACC_BaseCharacter* Character)
 
 /**
  * 按复制快照重建显示项；只读取 GE 的 UIData，不在客户端创建规则实例或施加效果。
- * Timers 与 InstanceIds 保持相同顺序，后续 Tick 只更新倒计时文本。
+ * TextBlocks_Timers 与 InstanceIds 保持相同顺序，后续 Tick 只更新倒计时文本。
  */
 void UCC_BuffBarWidget::RefreshBuffs()
 {
-    if (!BuffBox)
+    if (!HorizontalBox_Buffs)
     {
         return;
     }
-    BuffBox->ClearChildren();
-    Timers.Reset();
+    HorizontalBox_Buffs->ClearChildren();
+    TextBlocks_Timers.Reset();
     InstanceIds.Reset();
     if (!Observed.IsValid())
     {
@@ -74,7 +74,7 @@ void UCC_BuffBarWidget::RefreshBuffs()
             continue;
         }
         UVerticalBox* Cell = WidgetTree->ConstructWidget<UVerticalBox>();
-        UHorizontalBoxSlot* CellSlot = BuffBox->AddChildToHorizontalBox(Cell);
+        UHorizontalBoxSlot* CellSlot = HorizontalBox_Buffs->AddChildToHorizontalBox(Cell);
         CellSlot->SetPadding(FMargin(6.f));
         Cell->SetToolTipText(Definition->Description);
         Cell->SetRenderOpacity(Info.bIsInhibited ? 0.4f : 1.f);
@@ -95,7 +95,7 @@ void UCC_BuffBarWidget::RefreshBuffs()
         Cell->AddChildToVerticalBox(Name);
         UTextBlock* Timer = WidgetTree->ConstructWidget<UTextBlock>();
         Cell->AddChildToVerticalBox(Timer);
-        Timers.Add(Timer);
+        TextBlocks_Timers.Add(Timer);
         InstanceIds.Add(Info.InstanceId);
     }
 }
@@ -105,16 +105,16 @@ void UCC_BuffBarWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
     Super::NativeTick(Geometry, DeltaTime);
     if (!Observed.IsValid())
     {
-        if (!Timers.IsEmpty())
+        if (!TextBlocks_Timers.IsEmpty())
         {
             RefreshBuffs();
         }
         return;
     }
-    for (int32 Index = 0; Index < Timers.Num(); ++Index)
+    for (int32 Index = 0; Index < TextBlocks_Timers.Num(); ++Index)
     {
         const float Remaining = Observed->GetRemainingTime(InstanceIds[Index]);
-        Timers[Index]->SetText(Remaining < 0.f ? FText::FromString(TEXT("∞"))
+        TextBlocks_Timers[Index]->SetText(Remaining < 0.f ? FText::FromString(TEXT("∞"))
                                                : FText::AsNumber(FMath::CeilToInt(Remaining)));
     }
 }

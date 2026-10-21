@@ -10,7 +10,7 @@ class UCC_PlayerVitalsWidget;
  * GAS 绑定和角色切换由 CC_CombatMainController 管理，数据保存在 CC_CombatMainModel。
  *
  * 子控件：
- *   - PlayerVitals（UCC_PlayerVitalsWidget）：玩家血蓝条。蓝图中放一个同名控件即自动绑定。
+ *   - PlayerVitalsWidget_PlayerVitals（UCC_PlayerVitalsWidget）：玩家血蓝条。蓝图中放一个同名控件即自动绑定。
  *   - 技能栏、Buff、目标信息等以后都作为子控件放在这里。
  *   头顶血条与伤害飘字属于根布局的世界覆盖层，不放在本界面。
  * 没有蓝图设计树时生成最小原生布局（左上角血蓝条）。
@@ -29,12 +29,12 @@ protected:
 	virtual void NativeOnModelChanged() override;
 	/**
 	 * 蓝图展示事件：首次绑定和四项属性任意变化时触发。
-	 * 保留原 PlayerHUD 的签名，已有蓝图无需改动；新蓝图建议直接使用 PlayerVitals 子控件。
+	 * 保留原 PlayerHUD 的签名，已有蓝图无需改动；新蓝图建议直接使用 PlayerVitalsWidget_PlayerVitals 子控件。
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category="UI|Combat")
 	void OnVitalsChanged(float Health, float MaxHealth, float Mana, float MaxMana);
 
-	/** 玩家血蓝条子控件；蓝图中同名控件自动绑定，可为空。 */
-	UPROPERTY(BlueprintReadOnly, Category="UI|Combat", meta=(BindWidgetOptional))
-	TObjectPtr<UCC_PlayerVitalsWidget> PlayerVitals;
+	/** 玩家血蓝条子控件；蓝图中同名控件自动绑定；缺失或类型不匹配时蓝图编译报错。 */
+	UPROPERTY(BlueprintReadOnly, Category="UI|Combat", meta=(BindWidget))
+	TObjectPtr<UCC_PlayerVitalsWidget> PlayerVitalsWidget_PlayerVitals;
 };

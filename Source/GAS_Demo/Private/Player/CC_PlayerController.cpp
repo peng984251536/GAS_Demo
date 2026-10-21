@@ -20,6 +20,7 @@
 
 ACC_PlayerController::ACC_PlayerController()
 {
+	//TODO-
 	BuffSelection = CreateDefaultSubobject<UCC_BuffSelectionComponent>(TEXT("BuffSelection"));
 }
 
@@ -50,6 +51,47 @@ void ACC_PlayerController::SetupInputComponent()
 	}
 
 	BindNativeInputActions(EnhancedInputComponent);
+	BindAbilityInputActions(EnhancedInputComponent);
+}
+
+void ACC_PlayerController::BindAbilityInputActions(UEnhancedInputComponent* EnhancedInputComponent)
+{
+	if (!EnhancedInputComponent || !InputConfig)
+	{
+		return;
+	}
+	for (const FGASTaggedInputAction& Entry : InputConfig->AbilityInputActions)
+	{
+		if (!Entry.InputAction || !Entry.InputTag.IsValid())
+		{
+			UE_LOG(LogGAS_Demo, Warning, TEXT("%s: skipping incomplete AbilityInputActions entry in %s"),
+				*GetName(), *GetNameSafe(InputConfig.Get()));
+			continue;
+		}
+		EnhancedInputComponent->BindAction(Entry.InputAction, ETriggerEvent::Started, this,
+			&ThisClass::Input_AbilityPressed, Entry.InputTag);
+	}
+}
+
+UAbilitySystemComponent* ACC_PlayerController::GetControlledASC() const
+{
+	return UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(GetPawn());
+}
+
+void ACC_PlayerController::Input_AbilityPressed(FGameplayTag InputTag)
+{
+	UAbilitySystemComponent* ASC = GetControlledASC();
+	if (!ASC)
+	{
+		return;
+	}
+	// 选点瞄准中再按技能键 = 取消瞄准（WaitTargetData 的 Target Actor 订阅了本地取消回调）。
+	if (ASC->HasMatchingGameplayTag(CCTags::Status::Targeting))
+	{
+		ASC->LocalInputCancel();
+		return;
+	}
+	ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(InputTag));
 }
 
 
@@ -255,6 +297,13 @@ void ACC_PlayerController::Input_Attack(const FInputActionValue& InputActionValu
 		return;
 	}
 
+	// 选点能力瞄准中：攻击键改为确认落点，不发起攻击。
+	UAbilitySystemComponent* TargetingASC = GetControlledASC();
+	if (TargetingASC && TargetingASC->HasMatchingGameplayTag(CCTags::Status::Targeting))
+	{
+		TargetingASC->LocalInputConfirm();
+		return;
+	}
 	
 	// UAbilitySystemComponent* ASC =
 	// 	UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(GetPawn());

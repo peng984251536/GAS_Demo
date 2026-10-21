@@ -2,7 +2,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
-#include "AI/Engagement/CC_EngagementSubsystem.h"
+#include "AI/CC_CombatRangeStatics.h"
 #include "Actors/Character/CC_BaseCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -17,7 +17,7 @@ UCC_FollowTarget::UCC_FollowTarget()
 {
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated;
-	// 分配位置变化后需要重新出发：再次触发时 GAS 会先结束当前实例（EndAbility 清理旧移动任务）再重新激活。
+	// 允许重新出发：再次触发时 GAS 会先结束当前实例（EndAbility 清理旧移动任务）再重新激活。
 	bRetriggerInstancedAbility = true;
 
 	SetAssetTags(FGameplayTagContainer(CCTags::CCAbilityTrigger::FollowTarget));
@@ -41,10 +41,9 @@ void UCC_FollowTarget::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 
-	// 优先走到围攻子系统分配的位置。
-	FVector Destination;
-	float AcceptanceRadius = DefaultAcceptanceRadius;
-	if (TryGetEngagementDestination(Destination, AcceptanceRadius))
+	// 近战：直接追目标 Actor，走到攻击距离（边缘距离）即停。
+	AActor* TargetActor = BaseCharacter->GetClosestActor().Actor.Get();
+	if (IsValid(TargetActor) && !UCC_CombatRangeStatics::IsRangedCharacter(BaseCharacter))
 	{
 		AAIController* AIController = Cast<AAIController>(BaseCharacter->GetController());
 		if (!IsValid(AIController))
@@ -53,13 +52,14 @@ void UCC_FollowTarget::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 			EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 			return;
 		}
-		UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Follow] %s: move to assignment %s (acceptance %.1f)"),
-			*GetNameSafe(BaseCharacter), *Destination.ToCompactString(), AcceptanceRadius);
-		StartMoveTask(AIController, Destination, AcceptanceRadius);
+		const float MeleeReach = UCC_CombatRangeStatics::GetMeleeReach(BaseCharacter);
+		UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Follow] %s: chase %s (melee reach %.1f)"),
+			*GetNameSafe(BaseCharacter), *GetNameSafe(TargetActor), MeleeReach);
+		StartMoveTask(AIController, FVector::ZeroVector, MeleeReach, TargetActor);
 		return;
 	}
 
-	// 回退：没有围攻分配（例如子系统不存在或尚未注册），沿用旧的环绕选点逻辑。
+	// 弓兵，或近战只剩最后已知位置：围绕已知位置按角度候选选点。
 	const FVector knownLocation = BaseCharacter->GetClosestActor().LastKnownLocation;
 	if (knownLocation == FVector::ZeroVector)
 	{
@@ -85,28 +85,8 @@ void UCC_FollowTarget::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	StartMoveToTarget(*BaseCharacter,knownLocation);
 }
 
-bool UCC_FollowTarget::TryGetEngagementDestination(FVector& OutDestination, float& OutAcceptanceRadius) const
-{
-	const UWorld* World = GetWorld();
-	const UCC_EngagementSubsystem* Subsystem = World ? World->GetSubsystem<UCC_EngagementSubsystem>() : nullptr;
-	if (!Subsystem || !IsValid(BaseCharacter))
-	{
-		return false;
-	}
-	const FCC_EngagementAssignment Assignment = Subsystem->GetAssignment(BaseCharacter);
-	if (Assignment.Tier == ECC_EngagementTier::None || !Assignment.bLocationValid)
-	{
-		return false;
-	}
-	OutDestination = Assignment.MoveLocation;
-	OutAcceptanceRadius = Assignment.Tier == ECC_EngagementTier::Engaged
-		? EngagedAcceptanceRadius
-		: DefaultAcceptanceRadius;
-	return true;
-}
-
 /**
- * 回退逻辑：围绕已知位置按角度候选选出可达点。
+ * 弓兵（或近战只剩已知位置时）：围绕已知位置按角度候选选出可达点。
  * @param Enemy
  * @param knownLocation
  */
@@ -181,9 +161,12 @@ void UCC_FollowTarget::StartMoveToTarget(const ACC_BaseCharacter& Enemy, const F
 	StartMoveTask(AIController, Destination, DefaultAcceptanceRadius);
 }
 
-void UCC_FollowTarget::StartMoveTask(AAIController* AIController, const FVector& Destination, float AcceptanceRadius)
+void UCC_FollowTarget::StartMoveTask(AAIController* AIController, const FVector& Destination, float AcceptanceRadius,
+	AActor* GoalActor)
 {
-	MoveTask = UAITask_MoveTo::AIMoveTo(AIController, Destination, nullptr, AcceptanceRadius);
+	// 以 Actor 为终点时开启 StopOnOverlap：到达判定包含双方碰撞半径，与 UCC_CombatRangeStatics 的边缘距离一致。
+	MoveTask = UAITask_MoveTo::AIMoveTo(AIController, Destination, GoalActor, AcceptanceRadius,
+		GoalActor ? EAIOptionFlag::Enable : EAIOptionFlag::Default);
 	if (!IsValid(MoveTask))
 	{
 		UE_LOG(LogGAS_Demo, Warning, TEXT("[BowAI][Follow] MoveTask nullptr"));

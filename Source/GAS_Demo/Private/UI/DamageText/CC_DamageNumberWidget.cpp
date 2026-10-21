@@ -16,9 +16,9 @@ void UCC_DamageNumberWidget::NativeOnInitialized()
 	Super::NativeOnInitialized();
 	if (!WidgetTree->RootWidget)
 	{
-		DamageText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DamageText"));
-		DamageText->SetJustification(ETextJustify::Center);
-		WidgetTree->RootWidget = DamageText;
+		TextBlock_Damage = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TextBlock_Damage"));
+		TextBlock_Damage->SetJustification(ETextJustify::Center);
+		WidgetTree->RootWidget = TextBlock_Damage;
 	}
 	if (UWidget* Root = WidgetTree->RootWidget) Root->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 }
@@ -31,17 +31,17 @@ void UCC_DamageNumberWidget::BindIndicator_Implementation(UCC_WorldIndicator* In
 	bCritical = BoundNumber->Style == ECC_DamageTextStyle::Critical;
 	const bool bHeal = BoundNumber->Style == ECC_DamageTextStyle::Heal;
 
-	if (DamageText)
+	if (TextBlock_Damage)
 	{
 		FNumberFormattingOptions Options;
 		Options.SetUseGrouping(false);
 		Options.SetMaximumFractionalDigits(0);
 		const FText Number = FText::AsNumber(FMath::RoundToDouble(BoundNumber->Amount), &Options);
-		DamageText->SetText(bHeal ? FText::Format(NSLOCTEXT("DamageNumber", "Heal", "+{0}"), Number) : Number);
+		TextBlock_Damage->SetText(bHeal ? FText::Format(NSLOCTEXT("DamageNumber", "Heal", "+{0}"), Number) : Number);
 		FSlateFontInfo StyledFont = Font;
 		StyledFont.Size = bCritical ? CriticalFontSize : FontSize;
-		DamageText->SetFont(StyledFont);
-		DamageText->SetColorAndOpacity(FSlateColor(bHeal ? HealingColor : (bCritical ? CriticalColor : DamageColor)));
+		TextBlock_Damage->SetFont(StyledFont);
+		TextBlock_Damage->SetColorAndOpacity(FSlateColor(bHeal ? HealingColor : (bCritical ? CriticalColor : DamageColor)));
 	}
 	if (bDriveAnimationInCode) ApplyCodeAnimation(0.f);
 	OnDamageNumberShown(BoundNumber->Amount, BoundNumber->Style, BoundNumber->DamageType);

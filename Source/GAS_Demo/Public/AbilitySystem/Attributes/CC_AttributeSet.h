@@ -14,6 +14,17 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FAttributesInitialized);
 
 /**
+ * 生命耗尽（只在服务器广播）。参考 Lyra 的 ULyraHealthSet::OnOutOfHealth：
+ * 在让生命归零的那一次 GE 执行里广播，带上来源，因此能可靠拿到击杀者。
+ * @param Instigator 来源角色（Context 的 OriginalInstigator 对应的 Avatar）；无来源时为空。
+ * @param DamageCauser 直接造成伤害的 Actor（箭等），无则为空。
+ * @param EffectSpec 让生命归零的 GE。
+ * @param Magnitude 该次 GE 的修改量。
+ */
+DECLARE_MULTICAST_DELEGATE_FourParams(FCC_OutOfHealthEvent, AActor* /*Instigator*/, AActor* /*DamageCauser*/,
+	const FGameplayEffectSpec& /*EffectSpec*/, float /*Magnitude*/);
+
+/**
  * 保存角色资源和战斗属性，统一限制数值范围，并消费 Damage / Healing 中间属性完成扣血和治疗。
  * 伤害公式在 UCC_DamageExecution；扣血后在服务器发送 Event.Combat.DamageDealt / DamageTaken。
  * 这里不做任何表现（飘字由伤害 GE 上的 GameplayCue 负责）。
@@ -71,6 +82,21 @@ public:
 	 */
 	UPROPERTY(BlueprintAssignable)
 	FAttributesInitialized OnAttributesInitialized;
+
+	/**
+	 * 生命从正值变为 0 时广播一次；生命回到正值（复活、重新初始化）后才会再次广播。
+	 * 只在服务器触发，死亡判定与击杀归属统一从这里开始（见 Docs/SurvivalMode.zh-CN.md 7.1）。
+	 */
+	FCC_OutOfHealthEvent OnOutOfHealth;
+
+	/** 当前是否处于生命耗尽状态（服务器）。 */
+	bool IsOutOfHealth() const { return bOutOfHealth; }
+
+	/**
+	 * 生命低于此值即视为耗尽。与 UCC_ListenToHealth::DeathHealthThreshold 的默认值、
+	 * 以及原 OnHealthChange 的判定（<= 0.1）保持一致，避免暴击留下 0.05 血时播放死亡动作却不上报死亡。
+	 */
+	static constexpr float OutOfHealthThreshold = 0.1f;
 
 	// 基础资源与攻击属性
 
@@ -169,4 +195,7 @@ private:
 	 * @param Value 待写入的值，按引用原地修改。
 	 */
 	void ClampAttribute(const FGameplayAttribute& Attribute, float& Value) const;
+
+	/** 已广播过生命耗尽且生命尚未回到正值；防止补刀、DoT 重复广播。不复制。 */
+	bool bOutOfHealth = false;
 };

@@ -34,6 +34,11 @@ namespace CCTags
 		UE_DEFINE_GAMEPLAY_TAG(FindActor, "CCTags.CCAbilities.FindActor");
 		UE_DEFINE_GAMEPLAY_TAG(Respawn, "CCTags.CCAbilities.Respawn");
 		UE_DEFINE_GAMEPLAY_TAG_COMMENT(
+			Summon,
+			"CCTags.CCAbilities.Summon",
+			"选点召唤随从"
+		);
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(
 			Projectile,
 			"CCTags.SetByCaller.Projectile",
 			"Tag for Set by Caller Magnitude for Projectiles"
@@ -110,6 +115,11 @@ namespace CCTags
 			"角色被魅惑，有效阵营变为施加者的阵营"
 		);
 		UE_DEFINE_GAMEPLAY_TAG(Dead, "CCTags.Status.Dead");
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(
+			Targeting,
+			"CCTags.Status.Targeting",
+			"正在用鼠标选点，攻击键改为确认"
+		);
 	}
 
 	namespace Attack

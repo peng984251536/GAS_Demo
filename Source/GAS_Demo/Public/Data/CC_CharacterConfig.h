@@ -65,6 +65,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Attributes")
 	TSubclassOf<UGameplayEffect> InitializeAttributesEffect;
 
+	/**
+	 * 被玩家方击杀时给予的基础经验（生存模式会再乘以波次档位的倍率）。玩家角色填 0。
+	 * 这是角色配置，不是 Buff 定义字段。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Progression", meta = (ClampMin = "0"))
+	float ExperienceReward = 10.f;
+
 	/** 该角色可用动作。每种怪物可以配置不同的 ActionSet。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Montage")
 	TObjectPtr<UCombatActionSet> AttackActionSet;
@@ -79,6 +86,7 @@ public:
 	/**
 	 * 角色的基础阵营。为空时使用角色类的默认阵营（玩家角色为 CCTags.Team.Player，敌人为 CCTags.Team.Enemy）。
 	 * 站在玩家一边的 AI 随从在这里填 CCTags.Team.Player。敌我判断统一走 UCC_TeamStatics::IsHostile。
+	 * 同一个蓝图既当敌人又当召唤物时不要改这里，生成时用 ACC_BaseCharacter::SetTeamOverride 设置实例阵营。
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Team", meta = (Categories = "CCTags.Team"))
 	FGameplayTag Team;
@@ -106,6 +114,14 @@ public:
 	float ArrowSpeed = 1800.0f;
 	UPROPERTY(EditDefaultsOnly,BlueprintReadWrite,Category="Crash|AI")
 	float AttackDelay{1.0f};
+
+	/**
+	 * 近战攻击距离（厘米），按双方胶囊体边缘计算，不是中心距离。
+	 * 近战的 FollowTarget 走到这个距离内即停下；行为树判断「在攻击距离内」与控制器的被挡检测也用它。
+	 * 按 UCC_Primary::HitBoxRadius 和攻击蒙太奇的前冲距离调整。弓兵不使用。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Crash|AI", meta = (ClampMin = "0"))
+	float MeleeReach = 80.0f;
 
 	/** 是否显示头顶血条。本地玩家自己的角色始终不显示（自身血量在 HUD 上）。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|UI")

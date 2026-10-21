@@ -68,8 +68,8 @@ private:
 	FDelegateHandle HealthHandle, MaxHealthHandle;
 	float Health = 0.f, MaxHealth = 0.f, DisplayedFraction = 0.f;
 
-	UPROPERTY(Transient) TObjectPtr<UBorder> Frame;
-	UPROPERTY(Transient) TObjectPtr<USizeBox> BarBox;
-	UPROPERTY(Transient) TObjectPtr<USizeBox> FillBox;
-	UPROPERTY(Transient) TObjectPtr<UImage> Fill;
+	UPROPERTY(Transient) TObjectPtr<UBorder> Border_Frame;
+	UPROPERTY(Transient) TObjectPtr<USizeBox> SizeBox_Bar;
+	UPROPERTY(Transient) TObjectPtr<USizeBox> SizeBox_Fill;
+	UPROPERTY(Transient) TObjectPtr<UImage> Image_Fill;
 };

@@ -42,7 +42,7 @@ protected:
 	virtual void NativeOnInitialized() override;
 private:
 	/** 按钮的文字控件，由内部 WidgetTree 持有。 */
-	UPROPERTY(Transient) TObjectPtr<UTextBlock> Label;
+	UPROPERTY(Transient) TObjectPtr<UTextBlock> TextBlock_Label;
 };
 
 /** 最小暂停菜单示例：继续游戏，或打开退出确认框。 */

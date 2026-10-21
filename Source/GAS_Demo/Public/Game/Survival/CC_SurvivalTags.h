@@ -1,0 +1,25 @@
+// 生存模式使用的全部原生标签。只声明标签，不依赖任何玩法类。
+#pragma once
+
+#include "NativeGameplayTags.h"
+
+namespace CCSurvivalTags
+{
+	// --- 统计（TagStack 计数），个人存在 PlayerState，全队存在 GameState ---
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatKills);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatDeaths);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatRevives);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatDamageDealt);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatDamageTaken);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatBuffsChosen);
+	/** 全队：波次系统实际刷出的怪物数。 */
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(StatEnemiesSpawned);
+
+	// --- 客户端提示消息（FCC_MatchMessage.Verb） ---
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(MsgMatchStarted);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(MsgWaveStarted);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(MsgLevelUp);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(MsgPlayerDown);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(MsgPlayerRevived);
+	GAS_DEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(MsgMatchEnded);
+}

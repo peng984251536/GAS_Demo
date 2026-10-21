@@ -72,7 +72,9 @@ void ACC_EnemyCharacter::BeginPlay()
 	GiveStartupAbilities();
 	// 重生时：重新启动能力、重新初始化属性能力
 	HandleRespawn();
-	
+	// 死亡判定入口：生命耗尽事件带击杀者（见 ACC_BaseCharacter::HandleOutOfHealth）。
+	BindOutOfHealth(AttributeSet);
+
 	FOnGameplayAttributeValueChange& ChangeDelegate =
 	GetAbilitySystemComponent()->GetGameplayAttributeValueChangeDelegate(
 		GetAttributeSet()->GetHealthAttribute());
@@ -233,7 +235,54 @@ void ACC_EnemyCharacter::HandleDeath()
 void ACC_EnemyCharacter::HandleRespawn()
 {
 	Super::HandleRespawn();
-	
+
+}
+
+void ACC_EnemyCharacter::SetSpawnParams(const FCC_EnemySpawnParams& InParams)
+{
+	// 只在出生前（FinishSpawning 之前）写入才会影响属性初始化。
+	ensureMsgf(!HasActorBegunPlay(), TEXT("%s: SpawnParams must be set before FinishSpawning."), *GetName());
+	SpawnParams = InParams;
+	SpawnParams.bIsSet = true;
+}
+
+float ACC_EnemyCharacter::GetExperienceReward() const
+{
+	const float Base = IsValid(CharacterConfig) ? CharacterConfig->ExperienceReward : 0.f;
+	return FMath::Max(0.f, Base * (SpawnParams.bIsSet ? SpawnParams.ExperienceMultiplier : 1.f));
+}
+
+void ACC_EnemyCharacter::InitializeAttributes() const
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!SpawnParams.bIsSet || !HasAuthority() || !IsValid(ASC))
+	{
+		Super::InitializeAttributes();
+		return;
+	}
+
+	if (SpawnParams.InitEffect)
+	{
+		const FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(
+			SpawnParams.InitEffect, FMath::Max(1.f, SpawnParams.EffectLevel), Context);
+		if (Spec.IsValid())
+		{
+			ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+		}
+	}
+	else
+	{
+		Super::InitializeAttributes();
+	}
+
+	// 人数缩放：直接改基础值并回满，不需要额外的 GE 资产。先改上限，再写当前值，避免被裁剪。
+	if (!FMath::IsNearlyEqual(SpawnParams.HealthScale, 1.f) && SpawnParams.HealthScale > 0.f)
+	{
+		const float ScaledMax = ASC->GetNumericAttributeBase(UCC_AttributeSet::GetMaxHealthAttribute()) * SpawnParams.HealthScale;
+		ASC->SetNumericAttributeBase(UCC_AttributeSet::GetMaxHealthAttribute(), ScaledMax);
+		ASC->SetNumericAttributeBase(UCC_AttributeSet::GetHealthAttribute(), ScaledMax);
+	}
 }
 
 

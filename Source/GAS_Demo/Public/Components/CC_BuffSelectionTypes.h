@@ -1,10 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayEffect.h"
 #include "Templates/SubclassOf.h"
 #include "CC_BuffSelectionTypes.generated.h"
-
-class UGameplayEffect;
 
 /**
  * 三选一中的一个候选项：施加哪个 Buff GE、用什么等级。

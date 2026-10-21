@@ -75,14 +75,26 @@ void UCC_AttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, f
 
 namespace
 {
+	/** 解析一次 GE 的来源 ASC；Context 没记录 ASC 时从 OriginalInstigator 上查找。 */
+	UAbilitySystemComponent* ResolveSourceASC(const FGameplayEffectContextHandle& Context)
+	{
+		UAbilitySystemComponent* SourceASC = Context.GetOriginalInstigatorAbilitySystemComponent();
+		return SourceASC ? SourceASC : UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Context.GetOriginalInstigator());
+	}
+
+	/** 来源角色：优先取来源 ASC 的 Avatar（玩家 ASC 在 PlayerState 上，Avatar 才是角色）。 */
+	AActor* ResolveInstigatorAvatar(const FGameplayEffectContextHandle& Context, UAbilitySystemComponent* SourceASC)
+	{
+		return SourceASC ? SourceASC->GetAvatarActor() : Context.GetOriginalInstigator();
+	}
+
 	/** 把一次伤害结算以 GameplayEvent 发给受击者和来源，供 Buff / 技能（Ability Trigger）使用。 */
 	void SendDamageEvents(const FGameplayEffectModCallbackData& Data, float HealthDamage)
 	{
 		const FGameplayEffectContextHandle& Context = Data.EffectSpec.GetContext();
-		UAbilitySystemComponent* SourceASC = Context.GetOriginalInstigatorAbilitySystemComponent();
-		if (!SourceASC) SourceASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Context.GetOriginalInstigator());
+		UAbilitySystemComponent* SourceASC = ResolveSourceASC(Context);
 		FGameplayEventData Payload;
-		Payload.Instigator = SourceASC ? SourceASC->GetAvatarActor() : Context.GetOriginalInstigator();
+		Payload.Instigator = ResolveInstigatorAvatar(Context, SourceASC);
 		Payload.Target = Data.Target.GetAvatarActor();
 		Payload.EventMagnitude = HealthDamage;
 		Payload.ContextHandle = Context; // 暴击、命中点
@@ -129,6 +141,17 @@ void UCC_AttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbac
 	{
 		bAttributesInitialized = true;
 		OnAttributesInitialized.Broadcast();
+	}
+
+	// 生命耗尽：放在本次 GE 的全部处理（含 DamageTaken/Dealt 事件）之后，
+	// 让"受到致命伤害"类规则先于死亡流程执行。SetHealth 内同步触发的属性回调（如 ListenToHealth
+	// 激活死亡能力）早于这里，所以角色侧的死亡清理与"带击杀者的死亡广播"必须分开处理。
+	if (GetHealth() < OutOfHealthThreshold && !bOutOfHealth)
+	{
+		bOutOfHealth = true;
+		const FGameplayEffectContextHandle& Context = Data.EffectSpec.GetContext();
+		AActor* Instigator = ResolveInstigatorAvatar(Context, ResolveSourceASC(Context));
+		OnOutOfHealth.Broadcast(Instigator, Context.GetEffectCauser(), Data.EffectSpec, Data.EvaluatedData.Magnitude);
 	}
 }
 
@@ -214,6 +237,8 @@ void UCC_AttributeSet::OnRep_MoveSpeedMultiplier(const FGameplayAttributeData& O
 void UCC_AttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
 {
     Super::PostAttributeChange(Attribute, OldValue, NewValue);
+    // 生命回到正值（复活回血、重新初始化）后允许再次广播生命耗尽。
+    if (Attribute == GetHealthAttribute() && NewValue >= OutOfHealthThreshold) bOutOfHealth = false;
     if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue) SetHealth(FMath::Max(0.f, NewValue));
     if (Attribute == GetMaxManaAttribute() && GetMana() > NewValue) SetMana(FMath::Max(0.f, NewValue));
 }

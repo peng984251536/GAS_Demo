@@ -1,0 +1,68 @@
+@startuml 生存模式总体架构
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+
+package "服务器" {
+  package "ACC_SurvivalGameMode : ACC_RoomGameMode" {
+    [GameMode\n阶段切换 / 事件路由\n击杀归属 / 全灭判定\n统计订阅 / 选卡保护] as GM
+    [UCC_RespawnComponent\n复活倒计时 / 选复活点] as RC
+  }
+  [UCC_GameEventSubsystem\nOnCharacterDied\nOnCharacterDeathFinished] as GES
+  [ACC_EnemySpawner × N\nbManagedByWaveDirector] as SP
+  [ACC_EnemyCharacter\nSpawnParams(Transient)] as EN
+  [ACC_PlayerCharacter\nRevive()] as PC
+  [UCC_AttributeSet\nOnOutOfHealth（Health < 0.1）] as AS
+  [CC_Death\n结束时 HandleDeathFinished] as DA
+  [UCC_BuffSelectionComponent\nOnServerPendingChanged\nOnServerChoiceAccepted] as BS
+  [UCC_BuffComponent\nResumeAfterRevive] as BC
+}
+
+package "复制状态" {
+  package "ACC_SurvivalGameState" {
+    [Phase / 开始结束时间\nTeamStats（TagStack）\nMulticastMatchMessage] as GS
+    [UCC_WaveDirectorComponent\n服务器：计时 / 刷怪队列 / 回收 / CSV\n复制：CurrentWave / NextWaveServerTime / AliveEnemyCount] as WD
+    [UCC_TeamProgressionComponent\n服务器：加经验 / 升级\n复制：TeamLevel / TeamExperience] as TP
+  }
+  [ACC_SurvivalPlayerState\nStats（TagStack）\nLifeState / RespawnServerTime\nServerRequestPlayAgain / ReturnToLobby] as PS
+}
+
+package "客户端（每个本地玩家）" {
+  [CC_CombatMainController\nGetSurvival 快照] as HUD
+  [结算页\nCC_SurvivalResultController] as RES
+  [UCC_SurvivalSaveGame\n本地最佳纪录] as SAVE
+  [三选一界面（已有）] as SEL
+}
+
+database "UCC_SurvivalModeConfig\n(DataAsset，只读)" as CFG
+
+AS --> EN : OnOutOfHealth
+AS --> PC : OnOutOfHealth
+EN --> GES : 死亡广播
+PC --> GES : 死亡广播
+DA --> GES : DeathFinished
+GES --> GM
+GM --> WD : NotifyEnemyRemoved
+GM --> TP : AddExperience
+GM --> RC : SchedulePlayer / NotifyDeathFinished
+GM --> GS
+GM --> PS
+BS --> GM : 选卡开始/结束、已选
+WD --> SP : FindSpawnLocation\nSpawnEnemyAt（分帧）
+SP --> EN : Deferred Spawn + SpawnParams
+TP --> BS : OfferBuffs(Pool)
+RC --> PC : Revive(Location)
+PC --> BC : ResumeAfterRevive
+WD ..> CFG
+TP ..> CFG
+RC ..> CFG
+
+GS ..> HUD : OnRep / 消息
+WD ..> HUD : OnRep
+TP ..> HUD : OnRep
+PS ..> HUD : OnRep（复活倒计时）
+GS ..> RES : Phase = GameOver
+RES --> SAVE : 异步读写
+RES --> PS : Server RPC
+BS ..> SEL : 复制当前一轮
+@enduml

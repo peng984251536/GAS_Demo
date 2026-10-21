@@ -18,8 +18,7 @@ UCC_Primary::UCC_Primary()
 {
 	// 激活期间给 ASC 挂上「正在攻击」状态，能力以任何方式结束都会自动移除；连段期间计数不归零。
 	// 使用者：
-	//   - ACC_AIController：0→1 记下围攻分配编号并切 Crowd ObstacleOnly，1→0 恢复避障并带编号归还令牌；
-	//   - UCC_EngagementSubsystem：攻击中不算「卡住」；
+	//   - ACC_AIController：0→1 切 Crowd ObstacleOnly（站稳不被推），1→0 恢复避障；攻击中不做被挡检测；
 	//   - CC_KeepDistance / CC_Dash：ActivationBlockedTags，攻击期间不后撤 / 不冲刺。
 	ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
 }

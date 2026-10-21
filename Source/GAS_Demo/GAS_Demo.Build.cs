@@ -46,6 +46,10 @@ public class GAS_Demo : ModuleRules
 			"OnlineSubsystemUtils"
 		});
 
+		// 生存模式的波次 / 经验组件继承 UGameStateComponent（ModularGameplay 插件，已在 .uproject 启用）。
+		// 组件头文件在 Public 下，因此作为公共依赖。
+		PublicDependencyModuleNames.Add("ModularGameplay");
+
 		// 普通 UObject 子对象在启用 Iris 的构建中注册复制片段。
 		SetupIrisSupport(Target);
 

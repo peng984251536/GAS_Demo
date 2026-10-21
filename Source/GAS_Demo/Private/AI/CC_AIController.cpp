@@ -5,11 +5,14 @@
 
 #include "GAS_Demo.h"
 #include "AbilitySystemComponent.h"
+#include "AI/CC_CombatRangeStatics.h"
 #include "AI/Crowd/CC_CrowdAgentStatics.h"
 #include "AI/Engagement/CC_EngagementSubsystem.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "Actors/Projectiles/CC_ArrowProjectile.h"
 #include "Data/CC_CharacterConfig.h"
+#include "DrawDebugHelpers.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "GameplayTags/CC_Tags.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Utils/Team/CC_TeamStatics.h"
@@ -20,10 +23,9 @@ namespace
 	/** 行为树读取的黑板键名，与黑板资产保持一致。 */
 	const FName TargetActorKey(TEXT("TargetActor"));
 	const FName LastKnownLocationKey(TEXT("LastKnownLocation"));
-	/** 围攻分配写入的黑板键名（见 Docs/AI-Engagement-Usage.zh-CN.md）。 */
-	const FName EngagementTierKey(TEXT("EngagementTier"));
-	const FName MoveLocationKey(TEXT("MoveLocation"));
-	const FName HasAttackTokenKey(TEXT("HasAttackToken"));
+	/** 群体战斗写入的黑板键名（见 Docs/AI-Combat.zh-CN.md 第 7 节）。键不存在时写入静默失败。 */
+	const FName IsBlockedKey(TEXT("IsBlocked"));
+	const FName SquadOrderKey(TEXT("SquadOrder"));
 }
 
 #pragma region
@@ -51,7 +53,7 @@ void ACC_AIController::OnPossess(APawn* InPawn)
 		return;
 	}
 
-	// 避障默认参数与围攻事件不依赖角色配置，先于配置检查完成。
+	// 避障默认参数与 Attack 标签事件不依赖角色配置，先于配置检查完成。
 	UCC_CrowdAgentStatics::ConfigureCrowdAgent(this);
 	BindEngagementEvents();
 
@@ -114,9 +116,13 @@ void ACC_AIController::OnUnPossess()
 	UnbindCharmedTagEvent();
 	CurrentTarget.Reset();
 
-	// 先注销（归还令牌、释放槽位），再解绑；注销产生的 None 通知仍能写入黑板。
+	// 从登记表注销，清空被挡状态（不写黑板：行为树随 Pawn 一起停止）。
 	UpdateEngagement(nullptr);
 	UnbindEngagementEvents();
+	ResetBlockedProgress();
+	BlockedTarget.Reset();
+	bBlockedWaiting = false;
+	AvoidanceLOD = -1;
 
 	BaseCharacter = nullptr;
 	Super::OnUnPossess();
@@ -164,18 +170,38 @@ void ACC_AIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stim
 
 void ACC_AIController::ReevaluateTarget()
 {
+	// 被挡检测在重选之前：判定被挡时当前目标会被加上惩罚，这次重选就有机会换到别的目标。
+	const bool bJustBlocked = UpdateBlockedState();
+	const AActor* BlockedBefore = bJustBlocked ? CurrentTarget.Get() : nullptr;
+
 	ReevaluateTargetInternal(nullptr);
 
-	// 自愈：目标没变时 ApplyTarget 不会再调用，若子系统已把自己清理出组（例如短暂判定为非敌对），
-	// 这里重新注册。已在同一目标的组中时 RegisterAttacker 什么都不做，开销只有两次查表。
-	if (AActor* Target = CurrentTarget.Get())
+	AActor* Target = CurrentTarget.Get();
+	const UWorld* World = GetWorld();
+	if (bJustBlocked && Target && Target == BlockedBefore)
+	{
+		// 附近没有更好的目标：原地等一会儿再试，不往人堆里硬挤。
+		SetBlockedWaiting(true);
+	}
+	else if (bBlockedWaiting && World && World->GetTimeSeconds() >= BlockedWaitUntil)
+	{
+		// 等待结束，让行为树重新尝试靠近；仍挤不进去时 BlockedTimeout 后会再次判定。
+		SetBlockedWaiting(false);
+	}
+
+	// 自愈：目标没变时 ApplyTarget 不会再调用，若登记表已把自己清理掉（例如短暂判定为非敌对），
+	// 这里重新登记。已登记同一目标时 RegisterAttacker 只查一次表。
+	if (Target)
 	{
 		UpdateEngagement(Target);
 	}
+
+	UpdateAvoidanceLOD();
+	DrawBlockedDebug();
 }
 
 /**
- * 选目标的实际实现：取视野内候选 → SelectBestTarget → 有变化才 ApplyTarget。
+ * 选目标的实际实现：取视野内候选 → 构建评分候选（拥挤、回敬、被挡）→ FCC_TargetScoring → 有变化才 ApplyTarget。
  * 黑板尚未就绪时（行为树还没运行）不修改 CurrentTarget，等下一次触发再试，
  * 否则 CurrentTarget 已更新而黑板没写入，之后会因"目标没变"一直跳过。
  * @param LostLocation 当前目标刚离开视野时的最后位置；其他情况为 nullptr。
@@ -195,8 +221,42 @@ void ACC_AIController::ReevaluateTargetInternal(const FVector* LostLocation)
 	TArray<AActor*> Perceived;
 	PerceptionComponent->GetCurrentlyPerceivedActors(nullptr, Perceived);
 
-	AActor* Best = SelectBestTarget(BaseCharacter, Perceived, CurrentTarget.Get(), TargetSwitchHysteresis);
-	if (Best == CurrentTarget.Get())
+	ACC_BaseCharacter* Self = BaseCharacter.Get();
+	const UCC_EngagementSubsystem* Registry = GetEngagementSubsystem();
+	const bool bSelfIsMelee = !UCC_CombatRangeStatics::IsRangedCharacter(Self);
+	const UWorld* World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : 0.f;
+	const AActor* Blocked = Now < BlockedUntil ? BlockedTarget.Get() : nullptr;
+	const FVector SelfLocation = Self->GetActorLocation();
+	AActor* Current = CurrentTarget.Get();
+
+	TArray<FCC_TargetCandidate, TInlineAllocator<16>> Candidates;
+	int32 CurrentIndex = INDEX_NONE;
+	for (AActor* Actor : Perceived)
+	{
+		if (!IsValidTarget(Self, Actor) || !PassesSquadConstraint(Actor))
+		{
+			continue;
+		}
+		if (Actor == Current)
+		{
+			CurrentIndex = Candidates.Num();
+		}
+		FCC_TargetCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+		Candidate.Actor = Actor;
+		Candidate.Distance = FVector::Dist2D(SelfLocation, Actor->GetActorLocation());
+		Candidate.bBlocked = Actor == Blocked;
+		if (Registry)
+		{
+			Candidate.MeleeAttackers = Registry->GetMeleeAttackerCount(Actor, Self);
+			Candidate.bTargetsSelf = Registry->GetTargetOf(Actor) == Self;
+		}
+	}
+
+	const int32 BestIndex = FCC_TargetScoring::SelectBest(Candidates, CurrentIndex, TargetScoring,
+		TargetSwitchHysteresis, bSelfIsMelee);
+	AActor* Best = Candidates.IsValidIndex(BestIndex) ? Candidates[BestIndex].Actor : nullptr;
+	if (Best == Current)
 	{
 		return;
 	}
@@ -216,7 +276,8 @@ bool ACC_AIController::IsValidTarget(const AActor* Self, const AActor* Candidate
 }
 
 /**
- * 选出最近的有效目标，并对当前目标做迟滞保护。
+ * 只按距离选目标（不考虑拥挤、回敬、被挡），并对当前目标做迟滞保护。
+ * 与控制器内部使用同一个 FCC_TargetScoring，只是候选只填距离；供自动化测试与不需要群体信息的调用方使用。
  * @param Self 发起索敌的角色。
  * @param Candidates 视野内的候选。
  * @param Current 当前目标，可为空。
@@ -232,9 +293,8 @@ AActor* ACC_AIController::SelectBestTarget(const AActor* Self, const TArray<AAct
 	}
 	const FVector SelfLocation = Self->GetActorLocation();
 
-	AActor* Best = nullptr;
-	float BestDistSq = TNumericLimits<float>::Max();
-	bool bCurrentStillValid = false;
+	TArray<FCC_TargetCandidate, TInlineAllocator<16>> Valid;
+	int32 CurrentIndex = INDEX_NONE;
 	for (AActor* Candidate : Candidates)
 	{
 		if (!IsValidTarget(Self, Candidate))
@@ -243,27 +303,16 @@ AActor* ACC_AIController::SelectBestTarget(const AActor* Self, const TArray<AAct
 		}
 		if (Candidate == Current)
 		{
-			bCurrentStillValid = true;
+			CurrentIndex = Valid.Num();
 		}
-		const float DistSq = FVector::DistSquared(SelfLocation, Candidate->GetActorLocation());
-		if (DistSq < BestDistSq)
-		{
-			BestDistSq = DistSq;
-			Best = Candidate;
-		}
+		FCC_TargetCandidate& Entry = Valid.AddDefaulted_GetRef();
+		Entry.Actor = Candidate;
+		Entry.Distance = FVector::Dist2D(SelfLocation, Candidate->GetActorLocation());
 	}
 
-	// 当前目标仍在视野内且有效时，新目标的距离优势不足迟滞距离就不切换
-	if (bCurrentStillValid && Best != Current)
-	{
-		const float CurrentDist = FVector::Dist(SelfLocation, Current->GetActorLocation());
-		const float BestDist = FMath::Sqrt(BestDistSq);
-		if (CurrentDist - BestDist < SwitchHysteresis)
-		{
-			return Current;
-		}
-	}
-	return Best;
+	const int32 BestIndex = FCC_TargetScoring::SelectBest(Valid, CurrentIndex, FCC_TargetScoringParams(),
+		SwitchHysteresis, true);
+	return Valid.IsValidIndex(BestIndex) ? Valid[BestIndex].Actor : nullptr;
 }
 
 /**
@@ -280,6 +329,9 @@ void ACC_AIController::ApplyTarget(AActor* NewTarget, const FVector* LostLocatio
 		return;
 	}
 	CurrentTarget = NewTarget;
+	// 换目标后被挡检测重新开始；新目标还没尝试过靠近，不需要等待。
+	ResetBlockedProgress();
+	SetBlockedWaiting(false);
 
 	if (IsValid(NewTarget))
 	{
@@ -309,7 +361,7 @@ void ACC_AIController::ApplyTarget(AActor* NewTarget, const FVector* LostLocatio
 		UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Targeting] Target cleared: Controller=%s"), *GetNameSafe(this));
 	}
 
-	// 目标变化同步到围攻子系统：魅惑导致的换目标也走这里。
+	// 目标变化同步到登记表：魅惑导致的换目标也走这里。
 	UpdateEngagement(IsValid(NewTarget) ? NewTarget : nullptr);
 }
 
@@ -351,20 +403,21 @@ void ACC_AIController::UnbindCharmedTagEvent()
 
 #pragma endregion
 
-#pragma region 围攻与避障
+#pragma region 群体战斗
+
+UCC_EngagementSubsystem* ACC_AIController::GetEngagementSubsystem() const
+{
+	const UWorld* World = GetWorld();
+	return World ? World->GetSubsystem<UCC_EngagementSubsystem>() : nullptr;
+}
 
 /**
- * 目标变化后同步围攻注册。弓兵按是否配置了箭判断，与 CC_AttackIntend 的派发规则一致。
+ * 目标变化后同步登记表。弓兵按是否配置了箭判断，与 CC_AttackIntend 的派发规则一致。
  * @param NewTarget 新目标；为空表示注销。
  */
 void ACC_AIController::UpdateEngagement(AActor* NewTarget)
 {
-	UCC_EngagementSubsystem* Subsystem = EngagementSubsystem.Get();
-	if (!Subsystem)
-	{
-		const UWorld* World = GetWorld();
-		Subsystem = World ? World->GetSubsystem<UCC_EngagementSubsystem>() : nullptr;
-	}
+	UCC_EngagementSubsystem* Subsystem = GetEngagementSubsystem();
 	if (!Subsystem || !IsValid(BaseCharacter))
 	{
 		return;
@@ -374,51 +427,172 @@ void ACC_AIController::UpdateEngagement(AActor* NewTarget)
 		Subsystem->UnregisterAttacker(BaseCharacter);
 		return;
 	}
-
-	
-	const UCC_CharacterConfig* Config = BaseCharacter->GetCharacterConfig();
-	const bool bRanged = IsValid(Config) && Config->ArrowProjectileClass != nullptr;
-	// 刷新攻击目标后，注册进围攻组群 FCC_EngagementGroup
-	Subsystem->RegisterAttacker(BaseCharacter, NewTarget, bRanged);
+	Subsystem->RegisterAttacker(BaseCharacter, NewTarget, UCC_CombatRangeStatics::IsRangedCharacter(BaseCharacter));
 }
 
 /**
- * 分配变化：写黑板（行为树据此选择分支），并按档位调整避障质量。
- * MoveLocation 变化超过子系统的 NotifyDistance 才会到这里，行为树可在该键变化时重新触发 FollowTarget。
+ * 编队约束挂点。v3 不实现编队行为，所有候选都满足。
+ * 实现编队层时在这里按 SquadOrder 过滤：
+ *   Follow / Hold：只接受离锚点（或坚守位置）EngageRadius 以内的敌人；
+ *   Retreat：不接受任何目标。
  */
-void ACC_AIController::OnEngagementAssignmentChanged(AActor* Attacker, const FCC_EngagementAssignment& Assignment)
+bool ACC_AIController::PassesSquadConstraint(const AActor* /*Candidate*/) const
 {
-	if (!Attacker || Attacker != GetPawn())
+	return true;
+}
+
+void ACC_AIController::SetSquadOrder(const FCC_SquadOrder& NewOrder)
+{
+	SquadOrder = NewOrder;
+	if (UBlackboardComponent* BlackboardComp = GetBlackboardComponent())
+	{
+		BlackboardComp->SetValueAsEnum(SquadOrderKey, static_cast<uint8>(NewOrder.Order));
+	}
+
+	const bool bImplemented = NewOrder.Order == ECC_SquadOrder::Free || NewOrder.Order == ECC_SquadOrder::Charge;
+	if (bImplemented)
+	{
+		UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Squad] Order: Controller=%s Order=%s"),
+			*GetNameSafe(this), *UEnum::GetValueAsString(NewOrder.Order));
+	}
+	else
+	{
+		UE_LOG(LogGAS_Demo, Warning, TEXT("[AI][Squad] Order %s is not implemented yet, treated as Free: Controller=%s"),
+			*UEnum::GetValueAsString(NewOrder.Order), *GetNameSafe(this));
+	}
+	ReevaluateTarget();
+}
+
+/**
+ * 被挡检测，只对近战、有目标、未在攻击的单位。每次重选目标之前调用（0.5 秒计时器、魅惑事件等）。
+ *   - 已在攻击距离内，或边缘距离比最近记录缩短 BlockedProgressStep 以上：有进展，清零；
+ *   - 目标在快速移动：追逃，不计时；
+ *   - 其他情况累计，超过 BlockedTimeout 判定为被挡：记下被挡目标，BlockedMemory 秒内选目标时加惩罚。
+ * @return 本次判定为被挡。
+ */
+bool ACC_AIController::UpdateBlockedState()
+{
+	const UWorld* World = GetWorld();
+	AActor* Target = CurrentTarget.Get();
+	if (!World || !IsValid(BaseCharacter) || !IsValid(Target) || bAttackTagActive
+		|| UCC_CombatRangeStatics::IsRangedCharacter(BaseCharacter))
+	{
+		ResetBlockedProgress();
+		SetBlockedWaiting(false);
+		return false;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (ProgressTarget.Get() != Target)
+	{
+		ResetBlockedProgress();
+		ProgressTarget = Target;
+	}
+	const float DeltaTime = LastProgressCheckTime < 0.f ? 0.f : FMath::Clamp(Now - LastProgressCheckTime, 0.f, 1.f);
+	LastProgressCheckTime = Now;
+
+	const float EdgeDistance = UCC_CombatRangeStatics::GetEdgeDistance2D(BaseCharacter, Target);
+	if (EdgeDistance <= UCC_CombatRangeStatics::GetMeleeReach(BaseCharacter)
+		|| EdgeDistance < BestEdgeDistance - BlockedProgressStep)
+	{
+		BestEdgeDistance = EdgeDistance;
+		NoProgressTime = 0.f;
+		SetBlockedWaiting(false);
+		return false;
+	}
+	if (Target->GetVelocity().Size2D() > TargetFastSpeed)
+	{
+		return false;
+	}
+
+	NoProgressTime += DeltaTime;
+	if (NoProgressTime < BlockedTimeout)
+	{
+		return false;
+	}
+
+	NoProgressTime = 0.f;
+	BestEdgeDistance = EdgeDistance;
+	BlockedTarget = Target;
+	BlockedUntil = Now + BlockedMemory;
+	UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Blocked] Blocked: Controller=%s Target=%s EdgeDistance=%.0f"),
+		*GetNameSafe(this), *GetNameSafe(Target), EdgeDistance);
+	return true;
+}
+
+void ACC_AIController::ResetBlockedProgress()
+{
+	ProgressTarget.Reset();
+	BestEdgeDistance = TNumericLimits<float>::Max();
+	NoProgressTime = 0.f;
+	LastProgressCheckTime = -1.f;
+}
+
+void ACC_AIController::SetBlockedWaiting(bool bBlocked)
+{
+	if (bBlockedWaiting == bBlocked)
 	{
 		return;
 	}
+	bBlockedWaiting = bBlocked;
+	if (bBlocked)
+	{
+		const UWorld* World = GetWorld();
+		BlockedWaitUntil = (World ? World->GetTimeSeconds() : 0.f) + BlockedWaitTime;
+		// 停下当前移动：FollowTarget 随之结束，行为树进入 IsBlocked 等待分支。
+		StopMovement();
+	}
 	if (UBlackboardComponent* BlackboardComp = GetBlackboardComponent())
 	{
-		BlackboardComp->SetValueAsEnum(EngagementTierKey, static_cast<uint8>(Assignment.Tier));
-		BlackboardComp->SetValueAsBool(HasAttackTokenKey, Assignment.bHasToken);
-		if (Assignment.bLocationValid)
+		BlackboardComp->SetValueAsBool(IsBlockedKey, bBlocked);
+	}
+	UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Blocked] Waiting=%d: Controller=%s"), bBlocked, *GetNameSafe(this));
+}
+
+void ACC_AIController::UpdateAvoidanceLOD()
+{
+	const UWorld* World = GetWorld();
+	if (!World || !IsValid(BaseCharacter))
+	{
+		return;
+	}
+	const FVector SelfLocation = BaseCharacter->GetActorLocation();
+	float NearestDistSq = TNumericLimits<float>::Max();
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PlayerController = It->Get();
+		const APawn* PlayerPawn = PlayerController ? PlayerController->GetPawn() : nullptr;
+		if (PlayerPawn)
 		{
-			BlackboardComp->SetValueAsVector(MoveLocationKey, Assignment.MoveLocation);
-		}
-		else
-		{
-			BlackboardComp->ClearValue(MoveLocationKey);
+			NearestDistSq = FMath::Min(NearestDistSq, FVector::DistSquared(SelfLocation, PlayerPawn->GetActorLocation()));
 		}
 	}
-	UCC_CrowdAgentStatics::ApplyTier(this, Assignment.Tier);
-	UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Engagement] Assignment: Controller=%s Tier=%d Token=%d Valid=%d Generation=%d Location=%s"),
-		*GetNameSafe(this), static_cast<int32>(Assignment.Tier), Assignment.bHasToken, Assignment.bLocationValid,
-		Assignment.Generation, *Assignment.MoveLocation.ToCompactString());
+	const float NearestDistance = NearestDistSq < TNumericLimits<float>::Max()
+		? FMath::Sqrt(NearestDistSq)
+		: TNumericLimits<float>::Max();
+	AvoidanceLOD = UCC_CrowdAgentStatics::UpdateAvoidanceLOD(this, NearestDistance, AvoidanceLOD,
+		HighAvoidanceDistance, MediumAvoidanceDistance);
+}
+
+void ACC_AIController::DrawBlockedDebug() const
+{
+#if ENABLE_DRAW_DEBUG
+	if (!bBlockedWaiting || !IsValid(BaseCharacter) || !UCC_EngagementSubsystem::IsDebugDrawEnabled())
+	{
+		return;
+	}
+	DrawDebugString(GetWorld(), BaseCharacter->GetActorLocation() + FVector(0.f, 0.f, 120.f), TEXT("Blocked"),
+		nullptr, FColor::Orange, TargetReevaluateInterval);
+#endif
 }
 
 /**
  * Attack 标签计数变化。攻击能力（UCC_Primary / UCC_BowShoot）通过 ActivationOwnedTags 授予该标签，
  * 能力以任何方式结束（播完、打断、取消、死亡）都会移除它；连段期间计数不会降到 0。
- * 弓兵没有令牌，1→0 时的归还会被子系统忽略。
+ * 攻击期间切 ObstacleOnly：自己站稳不被推，后到的同伴绕开或被挤到侧面。
  */
 void ACC_AIController::OnAttackTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
-	UCC_EngagementSubsystem* Subsystem = EngagementSubsystem.Get();
 	if (NewCount > 0)
 	{
 		if (bAttackTagActive)
@@ -426,7 +600,8 @@ void ACC_AIController::OnAttackTagChanged(const FGameplayTag Tag, int32 NewCount
 			return;
 		}
 		bAttackTagActive = true;
-		HeldGeneration = Subsystem ? Subsystem->GetAssignment(BaseCharacter).Generation : 0;
+		ResetBlockedProgress();
+		SetBlockedWaiting(false);
 		UCC_CrowdAgentStatics::SetAttacking(this, true);
 		return;
 	}
@@ -436,27 +611,12 @@ void ACC_AIController::OnAttackTagChanged(const FGameplayTag Tag, int32 NewCount
 		return;
 	}
 	bAttackTagActive = false;
-	// 先恢复避障（此时尚未开始新的移动），再归还令牌：归还会触发新的分配与移动。
 	UCC_CrowdAgentStatics::SetAttacking(this, false);
-	if (Subsystem && IsValid(BaseCharacter))
-	{
-		Subsystem->ReleaseToken(BaseCharacter, HeldGeneration);
-	}
 }
 
 void ACC_AIController::BindEngagementEvents()
 {
 	UnbindEngagementEvents();
-
-	if (UWorld* World = GetWorld())
-	{
-		if (UCC_EngagementSubsystem* Subsystem = World->GetSubsystem<UCC_EngagementSubsystem>())
-		{
-			AssignmentChangedHandle = Subsystem->OnAssignmentChanged.AddUObject(
-				this, &ThisClass::OnEngagementAssignmentChanged);
-			EngagementSubsystem = Subsystem;
-		}
-	}
 
 	UAbilitySystemComponent* ASC = IsValid(BaseCharacter) ? BaseCharacter->GetAbilitySystemComponent() : nullptr;
 	if (IsValid(ASC))
@@ -466,23 +626,10 @@ void ACC_AIController::BindEngagementEvents()
 		AttackTagASC = ASC;
 	}
 	bAttackTagActive = false;
-	HeldGeneration = 0;
 }
 
-/**
- * 清除旧目标
- * 
- */
 void ACC_AIController::UnbindEngagementEvents()
 {
-	// 移除订阅 AssignmentChangedHandle（围攻改变）
-	if (UCC_EngagementSubsystem* Subsystem = EngagementSubsystem.Get())
-	{
-		Subsystem->OnAssignmentChanged.Remove(AssignmentChangedHandle);
-	}
-	AssignmentChangedHandle.Reset();
-	EngagementSubsystem.Reset();
-
 	if (UAbilitySystemComponent* ASC = AttackTagASC.Get())
 	{
 		ASC->RegisterGameplayTagEvent(CCTags::CCAbilities::Attack, EGameplayTagEventType::NewOrRemoved)
@@ -491,7 +638,6 @@ void ACC_AIController::UnbindEngagementEvents()
 	AttackTagHandle.Reset();
 	AttackTagASC.Reset();
 	bAttackTagActive = false;
-	HeldGeneration = 0;
 }
 
 #pragma endregion

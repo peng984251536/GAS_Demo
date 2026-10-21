@@ -1,10 +1,30 @@
 # 生存模式（波次刷怪 + 共享经验 + 倒计时复活）设计
 
-状态：**设计稿 v2，尚未实现**。实现时以本文档为准；有偏差先改文档。
+状态：**v2.1，C++ 已实现（尚未在 UE 中编译与实机验证）**。实现与下文图示的差异见第 0 节，以第 0 节为准。接入、调参与排错见 [SurvivalMode-Usage.zh-CN.md](SurvivalMode-Usage.zh-CN.md)。
 
 玩法：地图按波次定时刷怪，怪物属性随波次变强；全队共享经验，升级时每个玩家各自 Buff 三选一；玩家阵亡后倒计时复活在存活队友身边；全员阵亡则游戏结束，结算击杀数。
 
-v2 相对 v1 的变化见第 15 节。
+v2 相对 v1 的变化见第 18 节。
+
+## 0. 实现状态与偏差（以本节为准）
+
+| 设计稿写法 | 实际实现 | 原因 |
+|---|---|---|
+| 生命耗尽判定 `Health <= 0` | `Health < UCC_AttributeSet::OutOfHealthThreshold`（0.1） | 与 `UCC_ListenToHealth` 默认阈值、原 `OnHealthChange` 一致；否则暴击留下 0.05 血会播放死亡动作却不上报死亡 |
+| 死亡由 Health 变化回调触发 | `OnHealthChange` 保留但不再调用 `HandleDeath`；死亡清理在 `HandleDeath`（幂等），带击杀者的广播在 `HandleOutOfHealth`（每次死亡一次） | 死亡能力（`ListenToHealth → CC_Death`）在 `SetHealth` 内同步执行，早于来源解析，两件事必须分开 |
+| DeathFinished | `CC_Death::FinishOwnedAction` 在角色仍死亡时调用 `HandleDeathFinished`；复活取消死亡能力时不会误报 | |
+| 作弊命令 `UCC_SurvivalCheatExtension` | 控制台命令 `cc.Survival.*`（`FAutoConsoleCommandWithWorldAndArgs`），只在服务器生效 | 不依赖 CheatManager 是否创建，监听服务器与单机都能用 |
+| `ULocalPlayerSaveGame` | 普通 `USaveGame` + `AsyncLoadGameFromSlot / AsyncSaveGameToSlot`，用户索引 = 本地玩家 ControllerId | 接口稳定、无需额外配置 |
+| 人数缩放用 `ScalingEffect` GE | 不需要 GE：`ACC_EnemyCharacter::InitializeAttributes` 在初始化 GE 之后直接把 MaxHealth / Health 基础值乘 `HealthScale` | 少一个资产 |
+| 复活无敌用 `Status.Invincible` | 用 `Status.DamageImmunity`（`CCDamageTags::Immunity`）——伤害 GE 已按它拒绝施加；`Status.Invincible` 在本项目用于抑制 Buff | 检查项 9 已确认 |
+| 离屏刷怪 `bPreferOffscreen` | `PreferredDistanceToPlayers`：优先离所有玩家都超过该距离的刷怪器（俯视角近似离屏） | 服务器不知道客户端相机 |
+| 落点"寻路可达" | 只做 `ProjectPointToNavigation`（`bProjectToNavigation`），不做路径查询 | 路径查询开销大，先观察是否需要 |
+| 选卡保护在 BuffSelection 配置 | `UCC_BuffSelectionComponent` 新增服务器事件 `OnServerPendingChanged / OnServerChoiceAccepted`，保护 GE 由 GameMode 施加与移除 | BuffSelection 保持与玩法无关 |
+| 结算页按钮 RPC | 走 `ACC_SurvivalPlayerState::ServerRequestPlayAgain / ServerRequestReturnToLobby`（PlayerState 归本连接所有） | 不需要新的 PlayerController 子类 |
+| 怪物类软引用 | 同设计；预加载当前档与下一档，未加载完成时同步加载并打警告 | |
+| 平衡 CSV | `Saved/Survival/Survival_<时间>.csv`，开发构建 | |
+
+检查项结论：7（寻敌跳过阵亡者）`ACC_AIController` 已按 `IsAlive()` 过滤；8（玩家死亡能力）`CC_Death` 只销毁敌人，玩家可复用；9 见上表。包围系统（Engagement）重构后已复查：`UCC_EngagementSubsystem` 每 0.5 秒清理目标或攻击者已死亡的登记；`ACC_AIController` 定期重新选目标时用 `IsValidTarget`（要求 `IsAlive()`）过滤，阵亡玩家会被放弃。死亡不注销感知（StimuliSource），复活后会自然重新成为目标，无需额外处理。
 
 ## 1. 规则
 
@@ -51,41 +71,41 @@ v2 相对 v1 的变化见第 15 节。
 
 ## 3. 模块划分与依赖
 
+> 本文所有 PlantUML 图的源文件在 [`Docs/Survival/`](Survival/)（01～11，图内"见 09 / 10"指该目录的文件编号），已按 v2.1 实现更新；改图时两处同步。
+
 ```plantuml
 @startuml 生存模式模块依赖
 skinparam shadowing false
 skinparam defaultFontName "Microsoft YaHei"
 skinparam packageStyle rectangle
 
-package "Survival/Mode（仅服务器）\nACC_SurvivalGameMode : ACC_RoomGameMode\nUCC_RespawnComponent" as Mode
-package "Survival/State（复制）\nACC_SurvivalGameState\n├ UCC_WaveDirectorComponent\n└ UCC_TeamProgressionComponent\nACC_SurvivalPlayerState" as State
-package "Survival/Stats\nFCC_StatTagStackContainer" as Stats
-package "Survival/Data\nUCC_SurvivalModeConfig\nUCC_SurvivalSaveGame" as Data
-package "Survival/Debug\nUCC_SurvivalCheatExtension\nLogCCSurvival / CVar" as Dbg
-package "GameEvents\nUCC_GameEventSubsystem（服务器）\nFCC_MatchMessage（客户端）" as Events
-package "UI/Survival\nHUD 扩展 / 复活倒计时 / 结算页" as SUI
+package "Game/Survival 规则（仅服务器）\nACC_SurvivalGameMode : ACC_RoomGameMode\nUCC_RespawnComponent" as Mode
+package "Game/Survival 复制状态\nACC_SurvivalGameState\n├ UCC_WaveDirectorComponent\n└ UCC_TeamProgressionComponent\nACC_SurvivalPlayerState" as State
+package "Game/Survival 数据\nUCC_SurvivalModeConfig（只读）\nFCC_StatTagStackContainer\nUCC_SurvivalSaveGame\nCCSurvivalTags" as Data
+package "Game/Survival 调试（Private）\nCC_SurvivalDebug.cpp\ncc.Survival.* 命令 / CVar" as Dbg
+package "Subsystems\nUCC_GameEventSubsystem\n（死亡事件转发）" as Events
+package "UI/Survival + UI/Combat\nCC_SurvivalResultController\nCombatMainModel.GetSurvival" as SUI
 
-package "已有：OnlineRoom\nACC_RoomGameMode / RoomPlayerState" as Room
-package "已有：Character\nACC_BaseCharacter / Enemy / Player\nACC_EnemySpawner" as Char
-package "已有：Attribute\nUCC_AttributeSet" as Attr
-package "已有：BuffSelection" as Sel
-package "已有：Buff\nUCC_BuffComponent" as Buff
-package "已有：Team\nUCC_TeamStatics" as Team
-package "已有：UI 框架\nController / Model" as UIF
+package "已有：Game\nACC_RoomGameMode / RoomPlayerState" as Room
+package "已有：Actors\nACC_BaseCharacter / Enemy / Player\nACC_EnemySpawner" as Char
+package "已有：AbilitySystem\nUCC_AttributeSet / CC_Death" as Attr
+package "已有：Components\nUCC_BuffComponent\nUCC_BuffSelectionComponent" as Comp
+package "已有：Utils/Team\nUCC_TeamStatics" as Team
+package "已有：UI 框架\nUIManager / Controller / Model" as UIF
 
 Mode --> Room : 继承
 Mode --> State : 推进阶段 / 转发事件
-Mode --> Events : 订阅 OnCharacterDied
-Mode --> Team : 击杀归属
+Mode --> Events : 订阅死亡事件
+Mode --> Team : 击杀归属 IsHostile
 Mode --> Char : Revive(Location)
-State --> Char : SpawnEnemiesWithRequest
-State --> Sel : OfferBuffs
-State --> Stats
+Mode --> Comp : 订阅三选一服务器事件
+State --> Char : FindSpawnLocation / SpawnEnemyAt
+State --> Comp : OfferBuffs
 State --> Data
 Mode --> Data
-Char --> Attr : 绑定 OnOutOfHealth
+Attr --> Char : OnOutOfHealth
 Char --> Events : 死亡广播一次
-Char --> Buff : ResumeAfterRevive
+Char --> Comp : ResumeAfterRevive
 Dbg --> Mode : 仅调试入口
 SUI --> State : 只读复制数据 + 消息
 SUI --> UIF
@@ -94,13 +114,11 @@ SUI --> Data : 本地最佳纪录
 note bottom of State
   波次与经验组件互不依赖，
   各自持有自己的复制数据，
-  UI 直接绑定对应组件
+  界面直接绑定对应组件
 end note
 note bottom of Events
-  服务器事件：只有 Character 发布，
-  只有 GameMode 订阅。
-  客户端消息：只用于提示/横幅，
-  不承载需要可靠同步的状态
+  只有角色发布、只有 GameMode 订阅；
+  角色不依赖 Game/Survival
 end note
 @enduml
 ```
@@ -119,32 +137,32 @@ skinparam defaultFontName "Microsoft YaHei"
 
 package "服务器" {
   package "ACC_SurvivalGameMode : ACC_RoomGameMode" {
-    [GameMode\n阶段切换 / 事件路由\n全灭判定 / 统计记录] as GM
+    [GameMode\n阶段切换 / 事件路由\n击杀归属 / 全灭判定\n统计订阅 / 选卡保护] as GM
     [UCC_RespawnComponent\n复活倒计时 / 选复活点] as RC
   }
-  [UCC_GameEventSubsystem\nOnCharacterDied] as GES
-  [ACC_EnemySpawner × N] as SP
+  [UCC_GameEventSubsystem\nOnCharacterDied\nOnCharacterDeathFinished] as GES
+  [ACC_EnemySpawner × N\nbManagedByWaveDirector] as SP
   [ACC_EnemyCharacter\nSpawnParams(Transient)] as EN
   [ACC_PlayerCharacter\nRevive()] as PC
-  [UCC_AttributeSet\nOnOutOfHealth] as AS
-  [UCC_BuffSelectionComponent\n(每个 PlayerController)] as BS
-  [UCC_BuffComponent] as BC
+  [UCC_AttributeSet\nOnOutOfHealth（Health < 0.1）] as AS
+  [CC_Death\n结束时 HandleDeathFinished] as DA
+  [UCC_BuffSelectionComponent\nOnServerPendingChanged\nOnServerChoiceAccepted] as BS
+  [UCC_BuffComponent\nResumeAfterRevive] as BC
 }
 
 package "复制状态" {
   package "ACC_SurvivalGameState" {
-    [Phase / 开始结束时间\nTeamStats（TagStack）] as GS
-    [UCC_WaveDirectorComponent\n服务器：计时 / 刷怪队列 / 回收\n复制：CurrentWave / NextWaveTime] as WD
-    [UCC_TeamProgressionComponent\n服务器：加经验 / 升级\n复制：Level / Experience] as TP
+    [Phase / 开始结束时间\nTeamStats（TagStack）\nMulticastMatchMessage] as GS
+    [UCC_WaveDirectorComponent\n服务器：计时 / 刷怪队列 / 回收 / CSV\n复制：CurrentWave / NextWaveServerTime / AliveEnemyCount] as WD
+    [UCC_TeamProgressionComponent\n服务器：加经验 / 升级\n复制：TeamLevel / TeamExperience] as TP
   }
-  [ACC_SurvivalPlayerState\nStats（TagStack）\nLifeState / RespawnServerTime] as PS
+  [ACC_SurvivalPlayerState\nStats（TagStack）\nLifeState / RespawnServerTime\nServerRequestPlayAgain / ReturnToLobby] as PS
 }
 
 package "客户端（每个本地玩家）" {
-  [CC_CombatMainController\n+ 生存 HUD 数据] as HUD
-  [复活倒计时 / 观战视角] as RUI
-  [结算页 Controller/Model] as RES
-  [UCC_SurvivalSaveGame\n(ULocalPlayerSaveGame)] as SAVE
+  [CC_CombatMainController\nGetSurvival 快照] as HUD
+  [结算页\nCC_SurvivalResultController] as RES
+  [UCC_SurvivalSaveGame\n本地最佳纪录] as SAVE
   [三选一界面（已有）] as SEL
 }
 
@@ -154,13 +172,15 @@ AS --> EN : OnOutOfHealth
 AS --> PC : OnOutOfHealth
 EN --> GES : 死亡广播
 PC --> GES : 死亡广播
-GES --> GM : OnCharacterDied
+DA --> GES : DeathFinished
+GES --> GM
 GM --> WD : NotifyEnemyRemoved
 GM --> TP : AddExperience
-GM --> RC
+GM --> RC : SchedulePlayer / NotifyDeathFinished
 GM --> GS
 GM --> PS
-WD --> SP : SpawnEnemiesWithRequest（分帧）
+BS --> GM : 选卡开始/结束、已选
+WD --> SP : FindSpawnLocation\nSpawnEnemyAt（分帧）
 SP --> EN : Deferred Spawn + SpawnParams
 TP --> BS : OfferBuffs(Pool)
 RC --> PC : Revive(Location)
@@ -172,9 +192,10 @@ RC ..> CFG
 GS ..> HUD : OnRep / 消息
 WD ..> HUD : OnRep
 TP ..> HUD : OnRep
-PS ..> RUI : OnRep
+PS ..> HUD : OnRep（复活倒计时）
 GS ..> RES : Phase = GameOver
-RES --> SAVE
+RES --> SAVE : 异步读写
+RES --> PS : Server RPC
 BS ..> SEL : 复制当前一轮
 @enduml
 ```
@@ -190,180 +211,181 @@ skinparam defaultFontName "Microsoft YaHei"
 skinparam classAttributeIconSize 0
 hide empty members
 
-package "已有：OnlineRoom" {
+package "已有：Game" {
   class ACC_RoomGameMode <<existing>>
   class ACC_RoomPlayerState <<existing>>
+  class ACC_GameState <<existing>>
 }
 
-package "Survival/Mode" {
+package "Game/Survival：规则" {
   class ACC_SurvivalGameMode <<new>> {
-    - Config : UCC_SurvivalModeConfig*
-    - Respawn : UCC_RespawnComponent*
+    # Config : UCC_SurvivalModeConfig*
+    # StartTimeout : float = 10
+    # Respawn : UCC_RespawnComponent*
     --
     + StartMatch() / EndMatch()
-    # HandleCharacterDied(Info)
-    # HandleEnemyDied(Info)
-    # HandlePlayerDied(Info)
-    # CheckTeamWiped() : bool
-    # HandleStartingNewPlayer() override：中途加入追赶
-    # Logout() override
-    # BindPlayerStats(PS) / UnbindPlayerStats(PS)
-    + GetAlivePlayerCount() : int32
+    + IsMatchPlaying() : bool
+    + HandlePlayerRevived(PS)
+    + RequestPlayAgain() / RequestReturnToLobby()
+    + DebugAddExperience / DebugReviveAll / DebugToggleGodMode
+    # InitGame()：?SurvivalConfig= / ?SurvivalSeed=
+    # HandleStartingNewPlayer()：中途加入追赶
+    # Logout()
+    - HandleCharacterDied(FCC_DeathInfo)
+    - HandleCharacterDeathFinished(Character)
+    - ShouldCreditKill(Info) : bool
+    - IsTeamWiped() : bool
+    - BindPlayer / UnbindPlayer：统计、选卡保护
+    - SetChoosingProtection(PS, bEnable)
   }
   class UCC_RespawnComponent <<new>> {
-    - Pending : TMap<PlayerState, FTimerHandle>
-    --
     + SchedulePlayer(PS)
+    + NotifyDeathFinished(PS)
     + Cancel(PS) / CancelAll()
-    # OnRespawnTimer(PS)
-    # PickAnchor() : ACC_PlayerCharacter*
-    # FindReviveLocation(Anchor, Out) : bool
-    + {static} ComputeDelay(Settings, DeathCount) : float
+    + ReviveNow(PS) : bool
+    + FindReviveLocation(Anchor, Reviving) : FVector
+    - TryRevive(PS, bForce)
+    - PickAnchor(Exclude)
+    - Pending : TMap<PS, FPending>
   }
 }
 
-package "Survival/State" {
+package "Game/Survival：复制状态" {
   class ACC_SurvivalGameState <<new>> {
-    + Phase : ECC_MatchPhase [Rep]
     + MatchStartServerTime / MatchEndServerTime [Rep]
-    + TeamStats : FCC_StatTagStackContainer [Rep]
-    + WaveDirector : UCC_WaveDirectorComponent*
-    + Progression : UCC_TeamProgressionComponent*
-    + OnPhaseChanged
-    + MulticastMatchMessage(Msg) [NetMulticast, Unreliable]
-    + OnMatchMessage
+    - Phase : ECC_MatchPhase [Rep]
+    - TeamStats : FCC_StatTagStackContainer [Rep]
+    # ResultScreenClass / ResultScreenLayer
+    --
+    + GetPhase() / GetTeamStat(Tag)
+    + GetMatchElapsedSeconds()
+    + GetSecondsUntilServerTime(Time)
+    + GetSurvivalPlayers()
+    + SetPhase() / AddTeamStat()（服务器）
+    + MulticastMatchMessage [NetMulticast, Unreliable]
+    + OnPhaseChanged / OnTeamStatsChanged / OnMatchMessage
   }
   class UCC_WaveDirectorComponent <<new, GameStateComponent>> {
-    + CurrentWave : int32 [Rep]
-    + NextWaveServerTime : double [Rep]
-    + AliveEnemyCount : int32 [Rep]
-    .. 以下仅服务器 ..
-    - Spawners : TArray<TWeakObjectPtr<ACC_EnemySpawner>>
-    - AliveEnemies : TSet<TWeakObjectPtr<ACC_EnemyCharacter>>
+    - CurrentWave / NextWaveServerTime / AliveEnemyCount [Rep]
+    .. 仅服务器 ..
     - SpawnQueue : TArray<FCC_PendingSpawn>
-    - RandomStream : FRandomStream
-    + Start(Settings, Seed) / Stop()
+    - AliveEnemies / FarTimes / Spawners
+    - RandomStream
+    --
+    + StartDirector(Config, Seed) / StopDirector()
     + NotifyEnemyRemoved(Enemy)
-    + DebugSetWave(N) / DebugSkipWave()
-    # AdvanceWave()
-    # BuildRequests(Wave, PlayerCount)
-    # TickSpawnQueue()
-    # CleanupStrayEnemies()
-    + {static} FindTier(Settings, Wave)
-    + {static} ComputeCount(Tier, Wave, PlayerScale)
+    + DebugSetWave / DebugSkipWave / DebugClearEnemies
+    - AdvanceWave() / TickSpawnQueue()
+    - CleanupStrayEnemies()
+    - PickSpawner() / PickEnemyClass()
+    - MulticastSpawnTelegraph [NetMulticast, Unreliable]
+    + OnWaveStateChanged / OnSpawnTelegraph
   }
   class UCC_TeamProgressionComponent <<new, GameStateComponent>> {
-    + TeamLevel : int32 [Rep]
-    + TeamExperience : float [Rep]
-    + ExperienceToNextLevel : float [Rep]
+    - TeamLevel / TeamExperience / ExperienceToNextLevel [Rep]
     --
-    + AddExperience(Amount)（仅服务器）
-    + GrantCatchUpOffers(PC)（中途加入）
-    # GrantLevelUp(NewLevel)
-    + {static} ExperienceToNext(Settings, Level)
+    + StartProgression(Config) / StopProgression()
+    + AddExperience(Amount) : int32
+    + GrantCatchUpOffers(PC)
+    + OnProgressChanged
   }
   class ACC_SurvivalPlayerState <<new>> {
-    + Stats : FCC_StatTagStackContainer [Rep]
-    + LifeState : ECC_PlayerLifeState [Rep]
-    + RespawnServerTime : double [Rep]
-    + OnLifeStateChanged
-    + CopyProperties()：不复制本局统计
+    - Stats : FCC_StatTagStackContainer [Rep]
+    - LifeState : ECC_PlayerLifeState [Rep]
+    - RespawnServerTime : double [Rep]
+    --
+    + GetStat / GetLifeState / GetRespawnRemainingSeconds
+    + AddStat / SetLifeState / SetRespawnServerTime（服务器）
+    + ServerRequestPlayAgain() [Server]
+    + ServerRequestReturnToLobby() [Server]
+    + CanControlMatch() : bool
+    + OnSurvivalStateChanged
   }
-  enum ECC_MatchPhase <<new>> {
+  enum ECC_MatchPhase {
     WaitingToStart
     Playing
     GameOver
   }
-  enum ECC_PlayerLifeState <<new>> {
+  enum ECC_PlayerLifeState {
     Alive
     Dying
     Dead
   }
 }
 
-package "Survival/Stats" {
-  class FCC_StatTagStackContainer <<new, FastArray>> {
-    + AddStack(Tag, Count)
-    + GetStackCount(Tag) : int32
-  }
-}
-
-package "GameEvents" {
+package "Subsystems" {
   class UCC_GameEventSubsystem <<new, WorldSubsystem>> {
-    + OnCharacterDied : FCC_OnCharacterDied
+    + OnCharacterDied
+    + OnCharacterDeathFinished
   }
   class FCC_DeathInfo <<struct>> {
-    + Victim : ACC_BaseCharacter*
-    + Killer : AActor*
-    + DamageCauser : AActor*
-    + KillerPlayerState : APlayerState*
-  }
-  class FCC_MatchMessage <<struct>> {
-    + Verb : FGameplayTag
-    + Instigator : APlayerState*
-    + Target : APlayerState*
-    + Magnitude : float
+    + Victim / Killer / DamageCauser
+    + KillerPlayerState
   }
 }
 
 package "已有：修改" {
   class UCC_AttributeSet <<modified>> {
     + OnOutOfHealth : FCC_OutOfHealthEvent
+    + OutOfHealthThreshold = 0.1 {static}
     - bOutOfHealth : bool
   }
   class ACC_BaseCharacter <<modified>> {
+    + HandleDeath()：幂等
+    + HandleDeathFinished()
+    # BindOutOfHealth(Attributes)
     # HandleOutOfHealth(Instigator, Causer, Spec, Magnitude)
-    + HandleDeath()：防重入 + 广播
-    + OnDeathFinished：死亡动作结束
+    - bDeathReported : bool
   }
   class ACC_PlayerCharacter <<modified>> {
-    + Revive(Location)
+    + Revive(Location, ReviveEffect) : bool
   }
   class ACC_EnemyCharacter <<modified>> {
-    + SpawnParams : FCC_EnemySpawnParams [Transient]
+    - SpawnParams : FCC_EnemySpawnParams [Transient]
+    + SetSpawnParams(Params)
     + GetExperienceReward() : float
-    # InitializeAttributes()：优先 SpawnParams
+    # InitializeAttributes()：InitEffect @ 波次 + HealthScale
   }
   class ACC_EnemySpawner <<modified>> {
     + bManagedByWaveDirector : bool
-    + SpawnOne(Class, Params) : ACC_EnemyCharacter*
+    + FindSpawnLocation(Class, bProjectToNav, Random, Out) : bool
+    + SpawnEnemyAt(Class, Location, Params)
     + SpawnEnemies()：行为不变
   }
   class UCC_BuffComponent <<modified>> {
     + ResumeAfterRevive()
   }
-  class UCC_CharacterConfig <<modified>> {
-    + ExperienceReward : float
+  class UCC_BuffSelectionComponent <<modified>> {
+    + OnServerPendingChanged
+    + OnServerChoiceAccepted
   }
-}
-
-package "Survival/Debug" {
-  class UCC_SurvivalCheatExtension <<new, CheatManagerExtension>> {
-    Survival.SetWave N / SkipWave
-    Survival.AddXP N / KillAllEnemies
-    Survival.God / ReviveAll / EndMatch
+  class UCC_CharacterConfig <<modified>> {
+    + ExperienceReward : float = 10
   }
 }
 
 ACC_RoomGameMode <|-- ACC_SurvivalGameMode
 ACC_RoomPlayerState <|-- ACC_SurvivalPlayerState
+ACC_GameState <|-- ACC_SurvivalGameState
 ACC_SurvivalGameMode *-- UCC_RespawnComponent
 ACC_SurvivalGameMode ..> UCC_GameEventSubsystem : 订阅
+ACC_SurvivalGameMode ..> UCC_BuffSelectionComponent : 订阅服务器事件
 ACC_SurvivalGameMode --> ACC_SurvivalGameState
 ACC_SurvivalGameState *-- UCC_WaveDirectorComponent
 ACC_SurvivalGameState *-- UCC_TeamProgressionComponent
-ACC_SurvivalGameState *-- FCC_StatTagStackContainer
-ACC_SurvivalPlayerState *-- FCC_StatTagStackContainer
-ACC_SurvivalGameState ..> FCC_MatchMessage
+ACC_SurvivalGameState --> ECC_MatchPhase
+ACC_SurvivalPlayerState --> ECC_PlayerLifeState
 UCC_GameEventSubsystem ..> FCC_DeathInfo
 UCC_AttributeSet ..> ACC_BaseCharacter : OnOutOfHealth
 ACC_BaseCharacter ..> UCC_GameEventSubsystem : 发布
 ACC_BaseCharacter <|-- ACC_PlayerCharacter
 ACC_BaseCharacter <|-- ACC_EnemyCharacter
-ACC_PlayerCharacter ..> UCC_BuffComponent
+ACC_PlayerCharacter ..> UCC_BuffComponent : 复活时恢复
 UCC_WaveDirectorComponent --> ACC_EnemySpawner
+ACC_EnemySpawner ..> ACC_EnemyCharacter : 写 SpawnParams
+ACC_EnemyCharacter ..> UCC_CharacterConfig : 基础经验
+UCC_TeamProgressionComponent ..> UCC_BuffSelectionComponent : OfferBuffs
 UCC_RespawnComponent ..> ACC_PlayerCharacter : Revive
-UCC_SurvivalCheatExtension ..> ACC_SurvivalGameMode
 @enduml
 ```
 
@@ -378,89 +400,100 @@ skinparam defaultFontName "Microsoft YaHei"
 skinparam classAttributeIconSize 0
 hide empty members
 
-class UCC_SurvivalModeConfig <<PrimaryDataAsset>> {
+class UCC_SurvivalModeConfig <<PrimaryDataAsset，只读>> {
   + Waves : FCC_WaveSettings
   + Spawning : FCC_SpawnPacingSettings
   + PlayerScaling : FCC_PlayerScalingSettings
   + Progression : FCC_ProgressionSettings
   + Respawn : FCC_RespawnSettings
+  --
+  + FindTier(Settings, Wave) {static}
+  + ComputeCount(Tier, Wave, CountScale) {static}
+  + EvaluateMultiplier(Curve, X) {static}
+  + ComputeExperienceToNext(Settings, Level) {static}
+  + ApplyExperience(Settings, Level, Exp, Amount) {static}
+  + ComputeRespawnDelay(Settings, DeathCount) {static}
   + IsDataValid()
 }
 
 class FCC_WaveSettings <<struct>> {
-  + FirstWaveDelay : float = 5
-  + WaveInterval : float = 20
-  + MaxAliveEnemies : int32 = 60
-  + bAdvanceWhenCleared : bool = false
+  + FirstWaveDelay = 5
+  + WaveInterval = 20
+  + MaxAliveEnemies = 60
+  + bAdvanceWhenCleared = false
   + Tiers : TArray<FCC_WaveTier>
 }
 
 class FCC_WaveTier <<struct>> {
-  + StartWave : int32
+  + StartWave（首档 = 1，严格递增）
   + InitEffect : TSubclassOf<UGameplayEffect>
   + Enemies : TArray<FCC_WeightedEnemy>
-  + BaseCount : int32
-  + CountPerWave : float
-  + ExperienceMultiplier : float = 1
+  + BaseCount = 5
+  + CountPerWave = 1
+  + ExperienceMultiplier = 1
 }
 
 class FCC_WeightedEnemy <<struct>> {
   + EnemyClass : TSoftClassPtr<ACC_EnemyCharacter>
-  + Weight : float = 1
+  + Weight = 1
 }
 
 class FCC_SpawnPacingSettings <<struct>> {
-  + SpawnsPerTick : int32 = 2
-  + TickInterval : float = 0.1
-  + TelegraphDuration : float = 0.8
+  + SpawnsPerTick = 2
+  + TickInterval = 0.1
+  + TelegraphDuration = 0.8
   + TelegraphCue : FGameplayTag
-  + MinDistanceToPlayers : float = 800
-  + bPreferOffscreen : bool = true
-  + bRequireNavReachable : bool = true
-  + LeashDistance : float = 4000
-  + LeashTime : float = 8
+  + MinDistanceToPlayers = 800
+  + PreferredDistanceToPlayers = 1600
+  + bProjectToNavigation = true
+  + LeashDistance = 4000
+  + LeashTime = 8
 }
 
 class FCC_PlayerScalingSettings <<struct>> {
   + CountMultiplier : FRuntimeFloatCurve
   + HealthMultiplier : FRuntimeFloatCurve
-  ' X = 存活玩家数，Y = 倍率；1 人 = 1.0
-  + ScalingEffect : TSubclassOf<UGameplayEffect>
-  ' SetByCaller Data.Survival.HealthScale
 }
+note right of FCC_PlayerScalingSettings
+  X = 存活玩家数，Y = 倍率
+  没有关键帧时视为 1
+end note
 
 class FCC_ProgressionSettings <<struct>> {
   + ExperienceToNext : FRuntimeFloatCurve
-  ' X = 当前等级，Y = 升到下一级所需经验
+  + BaseExperienceToNext = 20
+  + ExperienceToNextPerLevel = 10
   + BuffPool : UCC_BuffOfferPool*
-  + MaxLevel : int32 = 0（不限）
+  + MaxLevel = 0（不限）
   + ChoosingProtectionEffect : TSubclassOf<UGameplayEffect>
 }
 
 class FCC_RespawnSettings <<struct>> {
-  + BaseDelay : float = 5
-  + DelayPerDeath : float = 2
-  + MaxDelay : float = 20
-  + MinRadius : float = 150
-  + MaxRadius : float = 400
+  + BaseDelay = 5
+  + DelayPerDeath = 2
+  + MaxDelay = 20
+  + MinRadius = 150
+  + MaxRadius = 400
+  + DeathFinishedTimeout = 5
   + ReviveEffect : TSubclassOf<UGameplayEffect>
-  ' 回满血 + Status.Invincible 2 秒 + 复活 Cue
+}
+note right of FCC_RespawnSettings
+  ReviveEffect 建议：回满血
+  + Status.DamageImmunity 2 秒 + 复活 Cue
+end note
+
+class FCC_EnemySpawnParams <<struct，运行时>> {
+  + InitEffect
+  + EffectLevel（= 波次）
+  + HealthScale
+  + ExperienceMultiplier
+  + WaveIndex
+  + bIsSet
 }
 
-class FCC_EnemySpawnParams <<struct, 运行时>> {
-  + InitEffect : TSubclassOf<UGameplayEffect>
-  + EffectLevel : float
-  + HealthScale : float
-  + ExperienceMultiplier : float
-  + WaveIndex : int32
-  + IsSet() : bool
-}
-
-class UCC_SurvivalSaveGame <<ULocalPlayerSaveGame>> {
-  + SaveVersion : int32
-  + BestWave : int32
-  + BestKills : int32
-  + BestSurvivalTime : float
+class UCC_SurvivalSaveGame <<USaveGame，客户端本地>> {
+  + SaveVersion
+  + BestWave / BestKills / BestSurvivalTime
 }
 
 UCC_SurvivalModeConfig *-- FCC_WaveSettings
@@ -470,7 +503,7 @@ UCC_SurvivalModeConfig *-- FCC_ProgressionSettings
 UCC_SurvivalModeConfig *-- FCC_RespawnSettings
 FCC_WaveSettings *-- "1..*" FCC_WaveTier
 FCC_WaveTier *-- "1..*" FCC_WeightedEnemy
-FCC_WaveTier ..> FCC_EnemySpawnParams : 波次时生成
+FCC_WaveTier ..> FCC_EnemySpawnParams : 每波生成
 @enduml
 ```
 
@@ -506,25 +539,26 @@ skinparam shadowing false
 skinparam defaultFontName "Microsoft YaHei"
 
 [*] --> WaitingToStart
-WaitingToStart --> Playing : 所有已连接玩家的 Pawn 就绪\n或等待超时（默认 10 秒）\n→ StartMatch()
-Playing --> GameOver : 全员 LifeState != Alive\n或最后一名玩家退出
-GameOver --> [*] : 房主：再来一局（ServerTravel 同地图）\n或返回大厅（ReturnToLobby，已有）
+WaitingToStart --> Playing : 所有已连接玩家的 Pawn 存活就绪\n或等待超过 StartTimeout（默认 10 秒）\n→ StartMatch()
+Playing --> GameOver : 全员 LifeState != Alive\n或最后一名玩家退出（下一帧判定）
+GameOver --> [*] : 房主：再来一局（ServerTravel ?Restart）\n或返回大厅（ReturnToLobby）
 
 state Playing {
   [*] --> Warmup
   Warmup --> WaveActive : FirstWaveDelay 结束
-  WaveActive --> WaveActive : WaveInterval 到时\n(或清场且 bAdvanceWhenCleared)\n→ AdvanceWave()
+  WaveActive --> WaveActive : WaveInterval × WaveIntervalScale 到时\n(或清场且 bAdvanceWhenCleared)\n→ AdvanceWave()
 }
 
 state GameOver {
   GameOver : 进入时（服务器，按顺序）：
-  GameOver : 1. WaveDirector.Stop()（清空刷怪队列）
-  GameOver : 2. Respawn.CancelAll()
-  GameOver : 3. 每个玩家 BuffSelection.ClearOffers()
-  GameOver : 4. 所有 AI StopLogic，玩家禁用输入
-  GameOver : 5. 记录 MatchEndServerTime，退订统计事件
-  GameOver : 6. Phase = GameOver（复制 → 客户端打开结算页）
-  GameOver : 之后到达的死亡 / 经验事件一律忽略
+  GameOver : 1. WaveDirector.StopDirector()（清空队列、写最后一行 CSV）
+  GameOver : 2. Progression.StopProgression()
+  GameOver : 3. Respawn.CancelAll()
+  GameOver : 4. 每个玩家 BuffSelection.ClearOffers()（同时撤掉选卡保护）
+  GameOver : 5. 冻结怪物：StopMovement + BrainComponent.StopLogic
+  GameOver : 6. 记录 MatchEndServerTime，退订所有玩家的统计事件
+  GameOver : 7. Phase = GameOver（复制 → 客户端打开结算页）
+  GameOver : 之后到达的死亡 / 伤害事件一律忽略
 }
 @enduml
 ```
@@ -539,21 +573,21 @@ skinparam shadowing false
 skinparam defaultFontName "Microsoft YaHei"
 
 [*] --> Alive
-Alive --> Dying : 生命耗尽（DeathStarted）\nStats.Deaths++\nBuff 挂起\n开始复活倒计时
-Dying --> Dead : 死亡动作结束（DeathFinished）\n视角切到存活队友
-Dead --> Alive : 倒计时结束\nRevive(Location)\nResumeAfterRevive
-Dying --> Alive : 倒计时先结束\n等待 DeathFinished 后再复活
+Alive --> Dying : 生命耗尽（OnCharacterDied）\nStats.Deaths++\nBuff 挂起（bRemoveOnDeath=false 的保留）\n未全灭 → 开始复活倒计时
+Dying --> Dead : CC_Death 结束（OnCharacterDeathFinished）\n视角切到存活队友
+Dead --> Alive : 倒计时结束\nRevive(Location)\nResumeAfterRevive\nStats.Revives++
+Dying --> Alive : 倒计时先结束且超过 DeathFinishedTimeout\n（玩家没有死亡能力时的兜底）
 
 note right of Dying
   全灭判定按 LifeState != Alive，
-  所以 Dying 也算阵亡
+  Dying 也算阵亡
 end note
-note right of Dead
+note left of Dead
   RespawnServerTime 复制给客户端显示倒计时
   阵亡期间：
   - 共享经验照常增长，升级照常排队三选一
   - 选择返回 NoTarget，本轮保留，复活后再选
-  - 包围系统已按 IsAlive 释放槽位
+  - AI 选目标要求 IsAlive，会放弃阵亡者
 end note
 @enduml
 ```
@@ -574,6 +608,7 @@ autonumber
 
 participant "UCC_DamageStatics\n::ApplyDamage" as DMG
 participant "UCC_AttributeSet\n(受害者)" as AS
+participant "UCC_ListenToHealth\n→ CC_Death" as LH
 participant "ACC_BaseCharacter\n(受害者)" as CH
 participant "UCC_GameEventSubsystem" as GES
 participant "ACC_SurvivalGameMode" as GM
@@ -581,29 +616,41 @@ participant "ACC_SurvivalGameMode" as GM
 DMG -> AS : 伤害 GE 执行（Damage 中间属性）
 activate AS
 AS -> AS : SetHealth(Health - Damage)
-AS -> AS : SendDamageEvents（原逻辑不变）
-alt Health <= 0 且 !bOutOfHealth
-  AS -> AS : 从 Context 解析 Instigator / Causer\n（与 SendDamageEvents 同一函数）
+AS -> LH : Health 变化回调（同步，早于下面的广播）
+activate LH
+LH -> CH : 死亡能力激活 → HandleDeath()
+note right of CH
+  HandleDeath 幂等：
+  IsAlive() 为 false 时直接返回
+  清理：SetAlive(false)、ClearBuffs(OwnerDeath)
+end note
+deactivate LH
+AS -> AS : SendDamageEvents（DamageTaken / DamageDealt，原逻辑）
+alt Health < 0.1 且 !bOutOfHealth
+  AS -> AS : bOutOfHealth = true\n从 Context 解析 Instigator（来源 ASC 的 Avatar）/ Causer
   AS -> CH : OnOutOfHealth(Instigator, Causer, Spec, Magnitude)
   activate CH
-  CH -> CH : HandleDeath()\n防重入：RuntimeData.IsAlive() 为 false 直接返回
-  CH -> CH : SetAlive(false)\nClearBuffs(OwnerDeath)\n触发死亡能力（Death 事件）
-  CH -> GES : OnCharacterDied(Victim, Killer, Causer, KillerPS)
-  GES -> GM : HandleCharacterDied(Info)
-  note right of GM : 见 7.3（敌人）/ 7.4（玩家）
+  alt bDeathReported 或 属性集已不属于本 Pawn
+    CH --> AS : 忽略
+  else 首次
+    CH -> CH : bDeathReported = true\nHandleDeath()（已清理则跳过）
+    CH -> GES : OnCharacterDied(Victim, Killer, Causer, KillerPlayerState)
+    GES -> GM : HandleCharacterDied(Info)
+    note right of GM : 见 09（敌人）/ 10（玩家）
+  end
   deactivate CH
 end
-AS -> AS : bOutOfHealth = (Health <= 0)
 deactivate AS
 
+... 死亡蒙太奇播完 ...
+LH -> CH : CC_Death.FinishOwnedAction\n角色仍死亡 → HandleDeathFinished()
+CH -> GES : OnCharacterDeathFinished(Character)
+GES -> GM : HandleCharacterDeathFinished
+
 note over AS
-  PostAttributeChange 中 Health 回到 > 0（复活回血）时
-  bOutOfHealth = false；非 GE 导致的归零
-  （如 MaxHealth 被削减）也在这里补发，Instigator 为空
-end note
-note over CH
-  原 OnHealthChange → HandleDeath 的路径删除，
-  死亡只由 OnOutOfHealth 触发
+  Health 回到 >= 0.1（复活回血、重新初始化）时
+  PostAttributeChange 清除 bOutOfHealth；
+  复活 / 重生时角色清除 bDeathReported
 end note
 @enduml
 ```
@@ -620,39 +667,40 @@ autonumber
 
 participant "UCC_WaveDirector\nComponent" as WD
 participant "ACC_EnemySpawner" as SP
-participant "GameplayCue\n(出生预警)" as CUE
+participant "客户端\n(Cue / OnSpawnTelegraph)" as CUE
 participant "ACC_EnemyCharacter" as EN
 participant "ASC(怪物)" as ASC
 
-[-> WD : 波次定时器到时
+[-> WD : WaveTimer 到时（游戏时间，单机三选一暂停时同步暂停）
 activate WD
-WD -> WD : Wave++，Tier = FindTier(Wave)
-WD -> WD : PlayerCount = 存活玩家数（本波取样）
-WD -> WD : Count = ComputeCount(Tier, Wave)\n× CountMultiplier(PlayerCount)\n截断到 MaxAlive - AliveCount - 队列中数量
-WD -> WD : 复制 CurrentWave / NextWaveServerTime\n广播消息 Survival.Msg.WaveStarted
+WD -> WD : 写上一波平衡 CSV\nCurrentWave++，Tier = FindTier(Wave)
+WD -> WD : Players = 存活玩家数（本波取样）\nCount = ComputeCount(Tier, Wave, CountMultiplier(Players) × SpawnCountScale)\n截断到 MaxAlive - 存活 - 队列
+WD -> WD : Params = { InitEffect, EffectLevel = Wave,\nHealthScale = HealthMultiplier(Players),\nExperienceMultiplier, bIsSet }
 loop Count 次
-  WD -> WD : 按权重抽怪物类（RandomStream）\n选刷怪器：受控、距玩家 ≥ MinDistance，\n优先离屏（bPreferOffscreen）
-  WD -> SP : 选取落点：现有地面检测\n+ ProjectPointToNavigation\n+ 可选：到最近玩家寻路可达
-  WD -> WD : SpawnQueue.Add({Class, Location, ReadyTime = Now + Telegraph})
-  WD -> CUE : 在落点执行预警 Cue（所有客户端可见）
+  WD -> WD : PickEnemyClass：按权重（RandomStream）\n未预加载完成则同步加载并警告
+  WD -> WD : PickSpawner：受控刷怪器中\n离所有玩家 ≥ Preferred → ≥ MinDistance → 最远
+  WD -> SP : FindSpawnLocation(Class, bProjectToNavigation, RandomStream)
+  SP --> WD : 地面 + 坡度 + NavMesh 投影 + 胶囊无阻挡
+  WD -> WD : SpawnQueue.Add({Spawner, Class, Location, ReadyTime = Now + Telegraph, Params})
+  WD -> CUE : MulticastSpawnTelegraph(Location, Duration, Cue)
 end
+WD -> WD : 广播 Survival.Msg.WaveStarted\n预加载下一档怪物类\nScheduleNextWave(Interval × WaveIntervalScale)
 deactivate WD
 
-loop 每 TickInterval
-  WD -> WD : TickSpawnQueue：取 ReadyTime 已到的前 SpawnsPerTick 个
-  WD -> SP : SpawnOne(Class, Params)
+loop QueueTimer 每 TickInterval
+  WD -> WD : 取 ReadyTime 已到的前 SpawnsPerTick 个
+  WD -> SP : SpawnEnemyAt(Class, Location, Params)
   activate SP
-  SP -> EN : SpawnActorDeferred → SpawnParams = Params → FinishSpawning
-  EN -> ASC : InitializeAttributes：\nInitEffect @ Level = Wave\n→ ScalingEffect（HealthScale）
-  SP --> WD : Enemy（失败则丢弃，记录日志）
+  SP -> EN : SpawnActorDeferred → SetSpawnParams → FinishSpawning
+  EN -> ASC : BeginPlay → InitializeAttributes：\nInitEffect @ Level = Wave\nMaxHealth / Health 基础值 × HealthScale
+  SP --> WD : Enemy（失败则丢弃）
   deactivate SP
-  WD -> WD : AliveEnemies.Add，AliveEnemyCount 更新
+  WD -> WD : AliveEnemies.Add，TeamStats.EnemiesSpawned++
 end
 
-loop 每 2 秒（CleanupStrayEnemies）
-  WD -> WD : 距所有存活玩家 > LeashDistance\n持续 > LeashTime 的怪
-  WD -> EN : 直接销毁（不给经验、不计击杀）
-  WD -> WD : 名额退回，下一波可补
+loop CleanupTimer 每 2 秒
+  WD -> WD : 清除已死亡 / 已销毁的记录
+  WD -> EN : 离所有存活玩家 > LeashDistance\n持续 ≥ LeashTime → Destroy（不给经验、不计击杀）
 end
 @enduml
 ```
@@ -679,35 +727,34 @@ opt Phase != Playing
   GM -> GM : 忽略
 end
 GM -> WD : NotifyEnemyRemoved(Victim)
-GM -> TEAM : IsHostile(Killer, Victim)\n且 GetEffectiveTeam(Killer) 为玩家阵营
+GM -> TEAM : ShouldCreditKill：IsHostile(Killer, Victim) 且\n（Killer 有 PlayerState，或与任一玩家不敌对）
 alt 玩家方击杀（含被魅惑的友军、以后的召唤物）
   opt KillerPlayerState 有效
     GM -> KPS : Stats[Kills]++
   end
   GM -> GS : TeamStats[Kills]++
-  GM -> TP : AddExperience(Victim.GetExperienceReward())
+  GM -> TP : AddExperience(ExperienceReward × ExperienceMultiplier × XPScale)
   activate TP
-  TP -> TP : TeamExperience += Amount
-  loop while TeamExperience ≥ ExperienceToNext(TeamLevel)\n且未达 MaxLevel
-    TP -> TP : TeamExperience -= 所需；TeamLevel++
-    TP -> GS : MulticastMatchMessage(Survival.Msg.LevelUp)
+  TP -> TP : ApplyExperience：while 经验 ≥ 升级所需（未达 MaxLevel）\n扣除并 TeamLevel++
+  opt 升了 N 级
     loop 每个 PlayerController（含阵亡玩家）
-      TP -> BS : OfferBuffs(Config.BuffPool)
+      TP -> BS : OfferBuffs(BuffPool) × N（自带排队）
     end
+    TP -> GS : MulticastMatchMessage(Survival.Msg.LevelUp)
   end
   deactivate TP
-else 非玩家方击杀 / 无击杀者 / 被回收
+else 非玩家方击杀 / 无击杀者
   GM -> GM : 不计数、不给经验
 end
 deactivate GM
 
-== 选卡期间保护（联机） ==
-BS -> BS : 本地打开三选一界面
-BS -> GM : （服务器）当前一轮生效时施加 ChoosingProtectionEffect\n本轮结束 / ClearOffers 时移除
-note right
-  做成 BuffSelection 的通用配置项"选卡期间附加 GE"，
-  对称施加与移除；单机暂停时不需要
-end note
+== 选卡期间保护（联机；单机打开三选一会暂停世界，不施加） ==
+BS -> GM : OnServerPendingChanged(true)
+GM -> GM : 施加 ChoosingProtectionEffect，记录句柄
+BS -> GM : OnServerChoiceAccepted(Option)
+GM -> KPS : Stats[BuffsChosen]++
+BS -> GM : OnServerPendingChanged(false)（选完 / ClearOffers）
+GM -> GM : 移除保护 GE（与施加对称）
 @enduml
 ```
 
@@ -725,53 +772,52 @@ participant "ACC_SurvivalPlayerState\n(阵亡者)" as PS
 participant "ACC_PlayerCharacter\n(阵亡者，复用同一 Pawn)" as PC
 participant "UCC_BuffComponent" as BC
 participant "UNavigationSystemV1" as NAV
-participant "阵亡者客户端" as UI
 
 [-> GM : HandleCharacterDied(Info)，Victim 是玩家
 activate GM
 GM -> PS : Stats[Deaths]++，LifeState = Dying
-GM -> GM : 广播消息 Survival.Msg.PlayerDown
-GM -> GM : CheckTeamWiped()
-alt 所有玩家 LifeState != Alive
-  GM -> GM : EndMatch()（见 6.1）
-else 仍有存活队友
+GM -> GM : 广播 Survival.Msg.PlayerDown
+alt IsTeamWiped（没有 Alive 且仍在线的玩家）
+  GM -> GM : EndMatch()（见 05）
+else
   GM -> RC : SchedulePlayer(PS)
-  RC -> PS : RespawnServerTime = Now + ComputeDelay(DeathCount)
-  PS -->> UI : OnRep → 显示复活倒计时
+  RC -> PS : RespawnServerTime = Now + ComputeRespawnDelay(Deaths)
 end
 deactivate GM
 
-PC -> PS : 死亡动作结束（DeathFinished）→ LifeState = Dead
-PS -->> UI : OnRep → SetViewTargetWithBlend(存活队友)
+[-> GM : HandleCharacterDeathFinished（CC_Death 播完）
+GM -> PS : LifeState = Dead
+GM -> GM : SetViewTargetWithBlend(存活队友)（服务器设置，自动同步给客户端）
+GM -> RC : NotifyDeathFinished(PS)
 
 ... 倒计时结束 ...
 
-RC -> RC : OnRespawnTimer(PS)
-activate RC
-alt Phase != Playing
-  RC -> RC : 忽略
-else LifeState == Dying（动作还没播完）
-  RC -> RC : 等 DeathFinished 后立即执行下面流程
+RC -> RC : HandleCountdownFinished
+alt LifeState == Dying（动作未播完）
+  RC -> RC : 等 NotifyDeathFinished；\n超过 DeathFinishedTimeout 则强制复活
 else
-  RC -> RC : Anchor = PickAnchor()：随机一名存活玩家
-  RC -> NAV : Anchor 周围 [MinRadius, MaxRadius] 环上\n8 个候选点 ProjectPointToNavigation
-  RC -> RC : 胶囊体碰撞检查取第一个可用点\n（全失败：Anchor 位置兜底）
-  RC -> PC : Revive(Location)
+  RC -> RC : TryRevive：Phase 必须为 Playing\nAnchor = 随机一名存活玩家
+  RC -> NAV : Anchor 周围 [MinRadius, MaxRadius] 8 个方向\nProjectPointToNavigation + 胶囊无阻挡（全失败用 Anchor 位置）
+  RC -> PC : Revive(Location, ReviveEffect)
   activate PC
-  PC -> PC : TeleportTo；结束死亡能力，移除 Status.Death\n恢复碰撞、移动、输入
-  PC -> PC : RuntimeData.ResetForRespawn()
-  PC -> PC : 施加 ReviveEffect：回满血\n+ Status.Invincible 2 秒 + 复活 Cue
-  PC -> BC : ResumeAfterRevive()\n（与 ClearBuffs(OwnerDeath) 对称）
+  PC -> PC : ResetForRespawn（先标记存活）\nCancelAbilities(Death)\nTeleportTo，恢复碰撞 / 移动
+  PC -> PC : 施加 ReviveEffect（回满血 + Status.DamageImmunity）\n仍无血则代码兜底回满
+  PC -> BC : ResumeAfterRevive()\n（撤销 ClearBuffs(OwnerDeath) 的挂起）
   deactivate PC
-  RC -> PS : LifeState = Alive，RespawnServerTime = 0\nStats[Revives]++
-  PS -->> UI : OnRep → 关闭倒计时，视角切回自己
+  RC -> GM : HandlePlayerRevived(PS)
+  GM -> PS : LifeState = Alive，RespawnServerTime = 0，Stats[Revives]++
+  GM -> GM : 视角切回自己，广播 Survival.Msg.PlayerRevived
 end
-deactivate RC
 
 == 断线 ==
 [-> GM : Logout(PC)
 GM -> RC : Cancel(PS)
-GM -> GM : 退订其 ASC 统计事件；CheckTeamWiped()
+GM -> GM : 解除统计 / 选卡订阅（撤保护）\n下一帧判定是否全灭
+
+note over GM, PC
+  复活不走 PossessedBy → HandleRespawn：
+  那条路径会 ClearBuffs(Reset) 清掉所有升级 Buff。
+end note
 @enduml
 ```
 
@@ -784,25 +830,36 @@ skinparam defaultFontName "Microsoft YaHei"
 autonumber
 
 participant "ACC_SurvivalGameState\n(客户端副本)" as GS
-participant "结算页 Controller" as CTRL
-participant "结算页 Model / View" as VIEW
-participant "UCC_SurvivalSaveGame\n(ULocalPlayerSaveGame)" as SAVE
+participant "UCC_UIManagerSubsystem\n/ 根布局" as UIM
+participant "CC_SurvivalResultController" as CTRL
+participant "CC_SurvivalResultModel\n/ 结算页蓝图" as VIEW
+participant "UCC_SurvivalSaveGame" as SAVE
+participant "ACC_SurvivalPlayerState" as PS
 participant "ACC_SurvivalGameMode\n(服务器)" as GM
 
-GS -> CTRL : OnPhaseChanged(GameOver)\n本地 PlayerController 通过 UIManager 打开结算页
-CTRL -> GS : 读 Wave / TeamLevel / TeamStats / 时长
-CTRL -> CTRL : 读本地 PlayerState.Stats
-CTRL -> SAVE : AsyncLoad（按本地玩家）
-CTRL -> CTRL : 比较并标记"新纪录"
-CTRL -> SAVE : 有新纪录则 AsyncSave
-CTRL -> VIEW : 写入 Model 快照，View 刷新
-alt 房主
-  VIEW -> CTRL : 点"再来一局"
-  CTRL -> GM : Server RPC（经 PlayerController）→ 校验房主\n→ ServerTravel 同地图（无缝切图，统计不复制）
-  VIEW -> CTRL : 点"返回大厅"
-  CTRL -> GM : ReturnToLobby()（已有）
-else 非房主
-  VIEW -> VIEW : 显示"等待房主"；可单独退出到主菜单
+GS -> GS : OnRep_Phase(GameOver)（监听服务器主机在 SetPhase 中直接执行）
+GS -> UIM : 每个本地玩家 ShowScreen(ResultScreenClass, UI.Layer.Menu)\n根布局过渡中则用核心 Ticker 每 0.25 秒重试（最多 20 次）
+UIM -> CTRL : 页面激活 → OnActivated
+CTRL -> GS : 波次 / 等级 / 全队击杀 / 存活时长
+CTRL -> PS : 本地 Stats、CanControlMatch
+CTRL -> VIEW : SetResult（先显示）
+CTRL -> SAVE : AsyncLoadGameFromSlot("SurvivalRecord", ControllerId)
+SAVE --> CTRL : 读档完成（校验激活令牌，旧页面结果丢弃）
+CTRL -> CTRL : 比较并标记 bNewBest*
+CTRL -> VIEW : SetResult（含纪录）
+opt 有新纪录
+  CTRL -> SAVE : AsyncSaveGameToSlot
+end
+
+alt bCanControlMatch（房主 / 单机）
+  VIEW -> CTRL : RequestPlayAgain
+  CTRL -> PS : ServerRequestPlayAgain [Server RPC]
+  PS -> GM : 再次校验房主 → RequestPlayAgain\nServerTravel("?Restart")（无缝切图，统计不带入）
+  VIEW -> CTRL : RequestReturnToLobby
+  CTRL -> PS : ServerRequestReturnToLobby [Server RPC]
+  PS -> GM : ReturnToLobby()（房间基类已有）
+else
+  VIEW -> VIEW : 显示"等待房主"
 end
 @enduml
 ```
@@ -926,7 +983,14 @@ end
 - 把 `UCC_BuffComponent` 移到 PlayerState 后改为 Lyra 式"销毁并重新生成 Pawn"复活。
 - 阶段增多时迁移到"阶段 = GameplayAbility"的阶段子系统。
 
-## 17. 版本记录
+## 17. 编辑器接线
+
+已移到使用说明：[SurvivalMode-Usage.zh-CN.md](SurvivalMode-Usage.zh-CN.md)（接入清单、调参、调试、常见问题）。
+
+## 18. 版本记录
+
+**v2.1**（实现）：C++ 按 v2 实现，差异见第 0 节；新增第 17 节编辑器接线。
+
 
 **v2**（对照 Lyra / ShooterGame 补充）
 

@@ -1,0 +1,38 @@
+@startuml 结算
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+autonumber
+
+participant "ACC_SurvivalGameState\n(客户端副本)" as GS
+participant "UCC_UIManagerSubsystem\n/ 根布局" as UIM
+participant "CC_SurvivalResultController" as CTRL
+participant "CC_SurvivalResultModel\n/ 结算页蓝图" as VIEW
+participant "UCC_SurvivalSaveGame" as SAVE
+participant "ACC_SurvivalPlayerState" as PS
+participant "ACC_SurvivalGameMode\n(服务器)" as GM
+
+GS -> GS : OnRep_Phase(GameOver)（监听服务器主机在 SetPhase 中直接执行）
+GS -> UIM : 每个本地玩家 ShowScreen(ResultScreenClass, UI.Layer.Menu)\n根布局过渡中则用核心 Ticker 每 0.25 秒重试（最多 20 次）
+UIM -> CTRL : 页面激活 → OnActivated
+CTRL -> GS : 波次 / 等级 / 全队击杀 / 存活时长
+CTRL -> PS : 本地 Stats、CanControlMatch
+CTRL -> VIEW : SetResult（先显示）
+CTRL -> SAVE : AsyncLoadGameFromSlot("SurvivalRecord", ControllerId)
+SAVE --> CTRL : 读档完成（校验激活令牌，旧页面结果丢弃）
+CTRL -> CTRL : 比较并标记 bNewBest*
+CTRL -> VIEW : SetResult（含纪录）
+opt 有新纪录
+  CTRL -> SAVE : AsyncSaveGameToSlot
+end
+
+alt bCanControlMatch（房主 / 单机）
+  VIEW -> CTRL : RequestPlayAgain
+  CTRL -> PS : ServerRequestPlayAgain [Server RPC]
+  PS -> GM : 再次校验房主 → RequestPlayAgain\nServerTravel("?Restart")（无缝切图，统计不带入）
+  VIEW -> CTRL : RequestReturnToLobby
+  CTRL -> PS : ServerRequestReturnToLobby [Server RPC]
+  PS -> GM : ReturnToLobby()（房间基类已有）
+else
+  VIEW -> VIEW : 显示"等待房主"
+end
+@enduml

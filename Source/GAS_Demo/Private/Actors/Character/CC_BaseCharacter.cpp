@@ -7,7 +7,10 @@
 #include "Components/ActionComponent.h"
 #include "Data/CC_CharacterConfig.h"
 #include "Data/CC_CharacterRuntimeData.h"
+#include "GameFramework/PlayerState.h"
 #include "GAS_Demo.h"
+#include "Net/UnrealNetwork.h"
+#include "Subsystems/CC_GameEventSubsystem.h"
 
 #include "Perception/AISense_Sight.h"
 
@@ -61,11 +64,27 @@ void ACC_BaseCharacter::PostInitializeComponents()
 
 void ACC_BaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UnbindOutOfHealth();
 	if (HasAuthority())
 	{
 		RemoveReplicatedSubObject(RuntimeData);
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void ACC_BaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ACC_BaseCharacter, TeamOverride);
+}
+
+void ACC_BaseCharacter::SetTeamOverride(FGameplayTag InTeam)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	TeamOverride = InTeam;
 }
 
 const UCC_CharacterConfig* ACC_BaseCharacter::GetCharacterConfig() const
@@ -207,15 +226,87 @@ UActionComponent* ACC_BaseCharacter::GetUCombatActionComponent() const
 
 void ACC_BaseCharacter::OnHealthChange(const FOnAttributeChangeData& AttributeChangeData)
 {
-	if(AttributeChangeData.NewValue<=0.1f)
+	// 死亡判定改由 UCC_AttributeSet::OnOutOfHealth 驱动（带击杀者），见 HandleOutOfHealth。
+	// 这里不再调用 HandleDeath：属性回调早于来源解析，在这里死亡会丢失击杀者。
+}
+
+void ACC_BaseCharacter::BindOutOfHealth(UCC_AttributeSet* Attributes)
+{
+	if (!HasAuthority() || !IsValid(Attributes))
 	{
-		HandleDeath();
+		return;
+	}
+	UnbindOutOfHealth();
+	OutOfHealthSource = Attributes;
+	OutOfHealthHandle = Attributes->OnOutOfHealth.AddUObject(this, &ThisClass::HandleOutOfHealth);
+}
+
+void ACC_BaseCharacter::UnbindOutOfHealth()
+{
+	if (UCC_AttributeSet* Attributes = OutOfHealthSource.Get(); Attributes && OutOfHealthHandle.IsValid())
+	{
+		Attributes->OnOutOfHealth.Remove(OutOfHealthHandle);
+	}
+	OutOfHealthHandle.Reset();
+	OutOfHealthSource.Reset();
+}
+
+/**
+ * 生命耗尽：执行死亡清理，并广播一次带击杀者的死亡通知
+ * 
+ * @param DamageInstigator 
+ * @param DamageCauser 
+ * @param EffectSpec 
+ * @param Magnitude 
+ */
+void ACC_BaseCharacter::HandleOutOfHealth(AActor* DamageInstigator, AActor* DamageCauser,
+                                          const FGameplayEffectSpec& EffectSpec, float Magnitude)
+{
+	if (!HasAuthority() || bDeathReported)
+	{
+		return;
+	}
+	// 玩家属性集在 PlayerState 上：Pawn 已换掉时旧 Pawn 不应响应。
+	if (GetAttributeSet() != OutOfHealthSource.Get())
+	{
+		return;
+	}
+	bDeathReported = true;
+	HandleDeath();
+
+	FCC_DeathInfo Info;
+	Info.Victim = this;
+	Info.Killer = DamageInstigator;
+	Info.DamageCauser = DamageCauser;
+	if (const APawn* KillerPawn = Cast<APawn>(DamageInstigator))
+	{
+		Info.KillerPlayerState = KillerPawn->GetPlayerState();
+	}
+	UE_LOG(LogGAS_Demo, Log, TEXT("[Death] Victim=%s Killer=%s Causer=%s"),
+		*GetNameSafe(this), *GetNameSafe(DamageInstigator), *GetNameSafe(DamageCauser));
+	if (UCC_GameEventSubsystem* Events = UCC_GameEventSubsystem::Get(this))
+	{
+		// 告诉其他人 这个死亡了
+		Events->BroadcastCharacterDied(Info);
+	}
+}
+
+void ACC_BaseCharacter::HandleDeathFinished()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (UCC_GameEventSubsystem* Events = UCC_GameEventSubsystem::Get(this))
+	{
+		Events->BroadcastCharacterDeathFinished(this);
 	}
 }
 
 void ACC_BaseCharacter::HandleDeath()
 {
-	if (!HasAuthority())
+	// 幂等：死亡能力与生命耗尽事件都会调用；尚未出生（bAlive 初值 false）的角色也不重复清理。
+	if (!HasAuthority() || !RuntimeData->IsAlive())
 	{
 		return;
 	}
@@ -274,6 +365,7 @@ void ACC_BaseCharacter::HandleRespawn()
 
 	BuffComponent->ClearBuffs();
 	RuntimeData->ResetForRespawn();
+	ResetDeathReport();
 	ForceNetUpdate();
 
 	//清空能力

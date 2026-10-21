@@ -6,6 +6,7 @@
 #include "CC_BaseCharacter.h"
 #include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "Components/ActionComponent.h"
+#include "Data/CC_EnemySpawnTypes.h"
 #include "Utils/CC_BlueprintLibrary.h"
 #include "CC_EnemyCharacter.generated.h"
 
@@ -41,7 +42,24 @@ public:
 	virtual void HandleDeath() override;
 	virtual void HandleRespawn() override;
 
+	/**
+	 * 写入本次生成的实例参数（初始化 GE、等级、血量倍率、经验倍率）。
+	 * 必须在 SpawnActorDeferred 之后、FinishSpawning 之前调用，BeginPlay 初始化属性时才会使用。
+	 */
+	void SetSpawnParams(const FCC_EnemySpawnParams& InParams);
+
+	/** 本实例的生成参数；未设置时 bIsSet 为 false。 */
+	UFUNCTION(BlueprintPure, Category = "Crash|Spawn")
+	FCC_EnemySpawnParams GetSpawnParams() const { return SpawnParams; }
+
+	/** 被玩家方击杀时给予的经验：CharacterConfig.ExperienceReward × SpawnParams.ExperienceMultiplier。 */
+	UFUNCTION(BlueprintPure, Category = "Crash|Spawn")
+	float GetExperienceReward() const;
+
 protected:
+	/** SpawnParams 已设置时用其中的 GE 和等级初始化，并应用血量倍率；否则沿用配置。 */
+	virtual void InitializeAttributes() const override;
+
 	/** 多个角色蓝图可引用同一份配置。当前只支持出生前在类默认值中指定。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crash|Data")
 	TObjectPtr<UCC_CharacterConfig> CharacterConfig;
@@ -51,6 +69,10 @@ protected:
 	virtual void GiveStartupAbilities() override;
 	
 private:
+	/** 本实例的生成参数（实例状态，不写回 CharacterConfig）。只在服务器使用，不复制。 */
+	UPROPERTY(Transient)
+	FCC_EnemySpawnParams SpawnParams;
+
 	/** 后撤决策的节流计时；只在服务器且目标进入 MinRange 后尝试激活能力。 */
 	float KeepDistanceCheckRemaining = 0.0f;
 	// 可见但是不可编辑

@@ -32,6 +32,17 @@ public:
 	virtual UCC_AttributeSet* GetAttributeSet() const override;
 	/** 默认属于 CCTags.Team.Player；CharacterConfig.Team 有值时以配置为准。 */
 	virtual FGameplayTag GetDefaultTeam() const override;
+
+	/**
+	 * 原地复用 Pawn 复活（服务器）。不走 PossessedBy → HandleRespawn，因为那条路径会清空全部 Buff。
+	 * 依次：标记存活 → 取消死亡能力 → 传送 → 恢复移动/碰撞 → 施加 ReviveEffect（为空或施加后仍无血时回满血）
+	 * → 恢复死亡时挂起的 Buff（UCC_BuffComponent::ResumeAfterRevive）。
+	 * @param Location 复活落点（胶囊中心，调用方负责找可用位置）。
+	 * @param ReviveEffect 复活时施加的 GE，例如回满血 + 短暂 Status.DamageImmunity；可为空。
+	 * @return 已死亡且成功复活时返回 true。
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Crash|Respawn")
+	bool Revive(const FVector& Location, TSubclassOf<UGameplayEffect> ReviveEffect);
 	
 	//蓝图事件
 	// UFUNCTION(BlueprintImplementableEvent, Category="Crash|Input")

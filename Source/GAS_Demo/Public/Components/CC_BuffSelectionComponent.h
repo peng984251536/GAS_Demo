@@ -13,6 +13,10 @@ class UCC_BuffOfferPool;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCC_BuffOfferChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCC_BuffChoiceResolved, int32, OfferId, ECC_BuffChoiceResult, Result);
+/** 服务器：是否有待选的一轮发生变化（无 → 有、有 → 无）。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FCC_ServerOfferPendingChanged, bool /*bHasPendingOffer*/);
+/** 服务器：某个选项已被 GAS 接受。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FCC_ServerChoiceAccepted, const FCC_BuffOfferOption& /*Option*/);
 
 /**
  * 每个玩家一份的 Buff 三选一流程，挂在 PlayerController 上（重生换 Pawn 不影响进行中的一轮）。
@@ -87,6 +91,15 @@ public:
     /** 本地请求得到服务器结果时广播；失败原因用于界面提示。 */
     UPROPERTY(BlueprintAssignable, Category = "Buff|Selection")
     FCC_BuffChoiceResolved OnChoiceResolved;
+
+    /**
+     * 服务器规则层订阅：待选状态变化（例如玩法模式在选卡期间给予保护）。
+     * 只在服务器广播；排队中的下一轮接上时状态不变，不会广播。
+     */
+    FCC_ServerOfferPendingChanged OnServerPendingChanged;
+
+    /** 服务器规则层订阅：选择被接受（统计等）。只在服务器广播。 */
+    FCC_ServerChoiceAccepted OnServerChoiceAccepted;
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

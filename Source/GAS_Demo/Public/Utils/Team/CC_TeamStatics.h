@@ -12,7 +12,8 @@ class AActor;
  * 不要再用 Actor Tag 或直接比较阵营标签判断敌我。
  *
  * 阵营分两层：
- *   基础阵营：CharacterConfig.Team，为空时用角色类默认值（ACC_BaseCharacter::GetDefaultTeam）。
+ *   基础阵营：实例覆盖（ACC_BaseCharacter::SetTeamOverride，召唤物继承召唤者）优先，
+ *             其次 CharacterConfig.Team，为空时用角色类默认值（ACC_BaseCharacter::GetDefaultTeam）。
  *   有效阵营：被魅惑（CCTags.Status.Charmed）时临时变为施加魅惑者的基础阵营。
  * 非角色 Actor（如箭）使用其 Instigator 的阵营，因此反弹投射物只需更换 Instigator。
  *
@@ -44,7 +45,7 @@ public:
 	/**
 	 * 获取 Actor 的基础阵营，不考虑魅惑等临时状态。
 	 * @param Actor 角色或由角色发起的 Actor；非角色时沿 Instigator 查找一次。
-	 * @return CharacterConfig.Team 有值时返回它，否则返回角色类默认阵营；都没有时返回空标签。
+	 * @return 依次取实例覆盖、CharacterConfig.Team、角色类默认阵营；都没有时返回空标签。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Team")
 	static FGameplayTag GetBaseTeam(const AActor* Actor);

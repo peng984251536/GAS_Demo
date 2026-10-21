@@ -168,4 +168,42 @@ bool FCCAITargetSelectionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("同伴解除魅惑后不再是目标"), Select({Ally, Near}, Ally) == Near);
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCCTeamOverrideTest, "GAS_Demo.Team.InstanceOverride",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+/**
+ * 验证实例级阵营覆盖（召唤物继承召唤者阵营）：同一个敌人类的两个实例可以站不同阵营，
+ * 覆盖优先于类默认阵营，取消覆盖后恢复，且与魅惑叠加时仍以魅惑者阵营为准。
+ */
+bool FCCTeamOverrideTest::RunTest(const FString& Parameters)
+{
+	using namespace CCTeamTests;
+	UWorld* World = CreateTestWorld();
+	if (!TestNotNull(TEXT("World"), World)) return false;
+	ON_SCOPE_EXIT { DestroyTestWorld(World); };
+
+	auto* Enemy = SpawnAlive<ACC_EnemyCharacter>(World, FVector(0.f, 0.f, 0.f));
+	auto* Summon = SpawnAlive<ACC_EnemyCharacter>(World, FVector(300.f, 0.f, 0.f));
+	auto* Player = SpawnAlive<ACC_PlayerCharacter>(World, FVector(600.f, 0.f, 0.f));
+	if (!TestNotNull(TEXT("Enemy"), Enemy) || !TestNotNull(TEXT("Summon"), Summon) || !TestNotNull(TEXT("Player"), Player))
+		return false;
+
+	Summon->SetTeamOverride(UCC_TeamStatics::GetBaseTeam(Player));
+	TestEqual(TEXT("覆盖后基础阵营 = 召唤者阵营"), UCC_TeamStatics::GetBaseTeam(Summon), CCTags::Team::Player.GetTag());
+	TestEqual(TEXT("覆盖不影响同类的其他实例"), UCC_TeamStatics::GetBaseTeam(Enemy), CCTags::Team::Enemy.GetTag());
+	TestFalse(TEXT("随从与召唤者不敌对"), UCC_TeamStatics::IsHostile(Summon, Player));
+	TestTrue(TEXT("随从与原同类敌对"), UCC_TeamStatics::IsHostile(Summon, Enemy));
+	TestTrue(TEXT("原同类把随从当敌人"), UCC_TeamStatics::IsHostile(Enemy, Summon));
+
+	// 随从被敌人魅惑：有效阵营跟随魅惑者，基础阵营仍是覆盖值。
+	const FActiveGameplayEffectHandle Charm = ApplyCharm(Summon, Enemy);
+	TestEqual(TEXT("被魅惑的随从有效阵营 = 魅惑者阵营"), UCC_TeamStatics::GetEffectiveTeam(Summon), CCTags::Team::Enemy.GetTag());
+	TestTrue(TEXT("被魅惑的随从攻击召唤者"), UCC_TeamStatics::IsHostile(Summon, Player));
+	Summon->GetAbilitySystemComponent()->RemoveActiveGameplayEffect(Charm);
+	TestEqual(TEXT("解除魅惑后回到覆盖阵营"), UCC_TeamStatics::GetEffectiveTeam(Summon), CCTags::Team::Player.GetTag());
+
+	Summon->SetTeamOverride(FGameplayTag());
+	TestEqual(TEXT("清除覆盖后恢复类默认阵营"), UCC_TeamStatics::GetBaseTeam(Summon), CCTags::Team::Enemy.GetTag());
+	return true;
+}
 #endif

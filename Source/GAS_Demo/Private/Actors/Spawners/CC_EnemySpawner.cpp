@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GAS_Demo.h"
+#include "NavigationSystem.h"
 
 ACC_EnemySpawner::ACC_EnemySpawner()
 {
@@ -30,16 +31,103 @@ void ACC_EnemySpawner::OnConstruction(const FTransform& Transform)
 void ACC_EnemySpawner::BeginPlay()
 {
 	Super::BeginPlay();
-	if (bSpawnOnBeginPlay)
+	if (bSpawnOnBeginPlay && !bManagedByWaveDirector)
 	{
 		SpawnEnemies();
 	}
 }
 
-int32 ACC_EnemySpawner::SpawnEnemies()
+bool ACC_EnemySpawner::CanSpawnHere() const
+{
+	const UWorld* World = GetWorld();
+	return World && World->IsGameWorld() && GetNetMode() != NM_Client && HasAuthority();
+}
+
+bool ACC_EnemySpawner::FindSpawnLocation(TSubclassOf<ACC_EnemyCharacter> Class, bool bProjectToNavigation,
+	FRandomStream& Random, FVector& OutLocation) const
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->IsGameWorld() || GetNetMode() == NM_Client || !HasAuthority() || bIsSpawning || SpawnCount <= 0)
+	if (!World || !Class || Class->HasAnyClassFlags(CLASS_Abstract))
+	{
+		return false;
+	}
+	const ACC_EnemyCharacter* Defaults = Class->GetDefaultObject<ACC_EnemyCharacter>();
+	const UCapsuleComponent* Capsule = Defaults->GetCapsuleComponent();
+	const float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const float CapsuleRadius = Capsule->GetScaledCapsuleRadius();
+	const float WalkableFloorZ = Defaults->GetCharacterMovement()->GetWalkableFloorZ();
+	const FVector Origin = GetActorLocation();
+	const float Radius = FMath::Max(0.0f, SpawnRadius);
+	const float SearchDistance = FMath::Max(1.0f, GroundSearchDistance);
+	const int32 Attempts = FMath::Clamp(MaxAttemptsPerEnemy, 1, 100);
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(EnemySpawnerGround), false, this);
+	const FCollisionObjectQueryParams GroundObjects(ECC_WorldStatic);
+	const FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
+	const UNavigationSystemV1* NavSys = bProjectToNavigation ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+
+	for (int32 Attempt = 0; Attempt < Attempts; ++Attempt)
+	{
+		const float Angle = Random.FRand() * 2.0f * PI;
+		const float Distance = FMath::Sqrt(Random.FRand()) * Radius;
+		const FVector Candidate = Origin + FVector(FMath::Cos(Angle) * Distance, FMath::Sin(Angle) * Distance, 0.0f);
+		FHitResult GroundHit;
+		if (!World->LineTraceSingleByObjectType(GroundHit,
+			Candidate + FVector(0, 0, SearchDistance), Candidate - FVector(0, 0, SearchDistance),
+			GroundObjects, QueryParams) || GroundHit.ImpactNormal.Z < WalkableFloorZ)
+		{
+			continue;
+		}
+
+		FVector Ground = GroundHit.ImpactPoint;
+		if (NavSys)
+		{
+			FNavLocation NavLocation;
+			if (!NavSys->ProjectPointToNavigation(Ground, NavLocation, FVector(CapsuleRadius * 2.f, CapsuleRadius * 2.f, CapsuleHalfHeight)))
+			{
+				continue;
+			}
+			Ground = NavLocation.Location;
+		}
+
+		const FVector Location = Ground + FVector(0, 0, CapsuleHalfHeight + 2.0f);
+		if (World->OverlapBlockingTestByChannel(Location, FQuat::Identity, ECC_Pawn, CapsuleShape, QueryParams))
+		{
+			continue;
+		}
+		OutLocation = Location;
+		return true;
+	}
+	return false;
+}
+
+ACC_EnemyCharacter* ACC_EnemySpawner::SpawnEnemyAt(TSubclassOf<ACC_EnemyCharacter> Class, const FVector& Location,
+	const FCC_EnemySpawnParams& Params)
+{
+	UWorld* World = GetWorld();
+	if (!CanSpawnHere() || !Class || Class->HasAnyClassFlags(CLASS_Abstract))
+	{
+		return nullptr;
+	}
+	const FTransform SpawnTransform(FRotator(0, GetActorRotation().Yaw, 0), Location);
+	ACC_EnemyCharacter* Enemy = World->SpawnActorDeferred<ACC_EnemyCharacter>(
+		Class, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding);
+	if (!Enemy)
+	{
+		return nullptr;
+	}
+	if (Params.bIsSet)
+	{
+		Enemy->SetSpawnParams(Params);
+	}
+	// Also supports the original Boris blueprint, which only auto-possesses placed actors.
+	Enemy->AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	Enemy->FinishSpawning(SpawnTransform);
+	return IsValid(Enemy) ? Enemy : nullptr;
+}
+
+int32 ACC_EnemySpawner::SpawnEnemies()
+{
+	if (!CanSpawnHere() || bIsSpawning || SpawnCount <= 0)
 	{
 		return 0;
 	}
@@ -50,57 +138,25 @@ int32 ACC_EnemySpawner::SpawnEnemies()
 	}
 
 	TGuardValue<bool> SpawningGuard(bIsSpawning, true);
-	const ACC_EnemyCharacter* Defaults = EnemyClass->GetDefaultObject<ACC_EnemyCharacter>();
-	const float CapsuleHalfHeight = Defaults->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-	const float WalkableFloorZ = Defaults->GetCharacterMovement()->GetWalkableFloorZ();
-	const FVector Origin = GetActorLocation();
-	const float Radius = FMath::Max(0.0f, SpawnRadius);
-	const float SearchDistance = FMath::Max(1.0f, GroundSearchDistance);
-	const int32 Attempts = FMath::Clamp(MaxAttemptsPerEnemy, 1, 100);
 	// Snapshot settings: spawned actors can execute Blueprint code during FinishSpawning.
 	const int32 RequestedCount = SpawnCount;
 	const TSubclassOf<ACC_EnemyCharacter> ClassToSpawn = EnemyClass;
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(EnemySpawnerGround), false, this);
-	const FCollisionObjectQueryParams GroundObjects(ECC_WorldStatic);
+	FRandomStream Random(FMath::Rand());
 	int32 SpawnedCount = 0;
 
 	for (int32 Index = 0; Index < RequestedCount && IsValid(this); ++Index)
 	{
-		for (int32 Attempt = 0; Attempt < Attempts; ++Attempt)
+		FVector Location;
+		// 原有行为：不要求导航网格。
+		if (FindSpawnLocation(ClassToSpawn, false, Random, Location) && SpawnEnemyAt(ClassToSpawn, Location, FCC_EnemySpawnParams()))
 		{
-			const float Angle = FMath::FRand() * 2.0f * PI;
-			const float Distance = FMath::Sqrt(FMath::FRand()) * Radius;
-			const FVector Candidate = Origin + FVector(FMath::Cos(Angle) * Distance, FMath::Sin(Angle) * Distance, 0.0f);
-			FHitResult GroundHit;
-			if (!World->LineTraceSingleByObjectType(GroundHit,
-				Candidate + FVector(0, 0, SearchDistance), Candidate - FVector(0, 0, SearchDistance),
-				GroundObjects, QueryParams) || GroundHit.ImpactNormal.Z < WalkableFloorZ)
-			{
-				continue;
-			}
-
-			const FVector Location = GroundHit.ImpactPoint + FVector(0, 0, CapsuleHalfHeight + 2.0f);
-			const FTransform SpawnTransform(FRotator(0, GetActorRotation().Yaw, 0), Location);
-			ACC_EnemyCharacter* Enemy = World->SpawnActorDeferred<ACC_EnemyCharacter>(
-				ClassToSpawn, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding);
-			if (!Enemy)
-			{
-				continue;
-			}
-			// Also supports the original Boris blueprint, which only auto-possesses placed actors.
-			Enemy->AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-			Enemy->FinishSpawning(SpawnTransform);
-			if (IsValid(Enemy))
-			{
-				++SpawnedCount;
-				break;
-			}
+			++SpawnedCount;
 		}
 	}
 	if (SpawnedCount < RequestedCount)
 	{
 		UE_LOG(LogGAS_Demo, Warning, TEXT("%s: Spawned %d/%d enemies. Check ground collision and available space (radius %.0f)."),
-			*GetName(), SpawnedCount, RequestedCount, Radius);
+			*GetName(), SpawnedCount, RequestedCount, FMath::Max(0.0f, SpawnRadius));
 	}
 	return SpawnedCount;
 }

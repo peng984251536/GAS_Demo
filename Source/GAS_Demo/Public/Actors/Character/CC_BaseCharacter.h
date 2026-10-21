@@ -96,6 +96,22 @@ public:
 	 */
 	virtual FGameplayTag GetDefaultTeam() const { return FGameplayTag(); }
 
+	/**
+	 * 设置实例级阵营覆盖（服务器，复制到客户端）。有值时优先于 CharacterConfig.Team 和 GetDefaultTeam。
+	 * 用于"同一个角色蓝图、不同实例站不同阵营"，例如召唤物继承召唤者阵营；配置资产保持共享只读。
+	 * 应在 SpawnActorDeferred 之后、FinishSpawning 之前调用，BeginPlay 时阵营即已确定。
+	 * 不要直接比较它判断敌我，请使用 UCC_TeamStatics::IsHostile。
+	 * @param InTeam 新阵营；传空标签表示取消覆盖。
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Team")
+	void SetTeamOverride(FGameplayTag InTeam);
+
+	/** 实例级阵营覆盖；未设置时为空标签。 */
+	UFUNCTION(BlueprintPure, Category = "Team")
+	FGameplayTag GetTeamOverride() const { return TeamOverride; }
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	// 保留角色查询接口，让现有蓝图、AI、能力继续使用。
 	UFUNCTION(BlueprintCallable, Category = "Crash|Abilities")
 	void SetLastMoveInputDirection(const FVector& InDirection);
@@ -106,8 +122,17 @@ public:
 	bool IsAlive() const;
 	UFUNCTION(BlueprintPure, Category = "Crash|Abilities")
 	bool IsHit() const;
+	/**
+	 * 死亡清理（服务器，幂等）：标记死亡、挂起/清除 Buff、清空受击与目标缓存。
+	 * 可能先由死亡能力调用，再由生命耗尽事件调用；已死亡时直接返回。
+	 */
 	UFUNCTION(BlueprintCallable, Category="Crash|Abilities")
 	virtual void HandleDeath();
+	/**
+	 * 死亡动作结束（服务器）。由死亡能力结束时调用，广播 UCC_GameEventSubsystem::OnCharacterDeathFinished。
+	 * 敌人在此之后被销毁；玩家保留 Pawn 等待复活。
+	 */
+	virtual void HandleDeathFinished();
 	UFUNCTION(BlueprintCallable, Category="Crash|Abilities")
 	virtual void HandleRespawn();
 	UFUNCTION(BlueprintCallable, Category="Crash|Abilities")
@@ -126,11 +151,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Crash|Abilities")
 	virtual UActionComponent* GetUCombatActionComponent() const;
 
+	/** 旧的生命变化回调，保留绑定以兼容；死亡判定已改为 AttributeSet 的 OnOutOfHealth。 */
 	virtual void OnHealthChange(const FOnAttributeChangeData& AttributeChangeData);
-	
 
-	
+
+
 protected:
+	/**
+	 * 订阅属性集的生命耗尽事件（服务器）。重复调用会先解除旧订阅；EndPlay 自动解除。
+	 * 敌人在 BeginPlay、玩家在 PossessedBy 时调用（玩家属性集在 PlayerState 上，换 Pawn 后需要重新绑定）。
+	 */
+	void BindOutOfHealth(UCC_AttributeSet* Attributes);
+	void UnbindOutOfHealth();
+	/** 生命耗尽：执行死亡清理，并广播一次带击杀者的死亡通知。 */
+	virtual void HandleOutOfHealth(AActor* DamageInstigator, AActor* DamageCauser,
+		const FGameplayEffectSpec& EffectSpec, float Magnitude);
+	/** 复活或重生时调用，允许下一次死亡再次广播。 */
+	void ResetDeathReport() { bDeathReported = false; }
+
 	/** ASC 初始化完成后由子类调用：广播 OnASCInitialized 和 OnAnyCharacterReady。 */
 	void BroadcastASCInitialized();
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Buff")
@@ -152,5 +190,13 @@ protected:
 	virtual void InitializeAttributes() const;
 	
 private:
+	/** 实例级阵营覆盖（见 SetTeamOverride）。实例状态，不写回 CharacterConfig。 */
+	UPROPERTY(Replicated)
+	FGameplayTag TeamOverride;
+
 	bool bASCInitialized = false;
+	/** 本次死亡是否已广播；与 RuntimeData.bAlive 分开，因为死亡能力可能先于生命耗尽事件执行清理。 */
+	bool bDeathReported = false;
+	TWeakObjectPtr<UCC_AttributeSet> OutOfHealthSource;
+	FDelegateHandle OutOfHealthHandle;
 };

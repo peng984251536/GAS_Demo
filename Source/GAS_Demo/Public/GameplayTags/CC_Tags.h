@@ -15,6 +15,8 @@ namespace CCTags
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(FindActor);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Respawn);
+		/** 选点召唤随从（UCC_SummonAlly 的 Asset Tag，按标签激活）。 */
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Summon);
 		
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(ActivateOnGiven);
 
@@ -46,6 +48,8 @@ namespace CCTags
 		/** 被魅惑：有效阵营临时变为施加该效果者的阵营，见 UCC_TeamStatics::GetEffectiveTeam。 */
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Charmed);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Dead);
+		/** 正在用鼠标选点（选点类能力激活期间）：攻击键改为确认，技能键改为取消。 */
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Targeting);
 	}
 
 	namespace Attack

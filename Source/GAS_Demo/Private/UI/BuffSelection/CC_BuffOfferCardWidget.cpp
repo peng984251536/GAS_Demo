@@ -8,13 +8,13 @@ void UCC_BuffOfferCardWidget::SetCardData(const FCC_BuffOfferCardData& InData, U
 {
     Data = InData;
     OwnerScreen = InOwner;
-    if (Text_Name)
+    if (TextBlock_Name)
     {
-        Text_Name->SetText(Data.DisplayName);
+        TextBlock_Name->SetText(Data.DisplayName);
     }
-    if (Text_Description)
+    if (TextBlock_Description)
     {
-        Text_Description->SetText(Data.Description);
+        TextBlock_Description->SetText(Data.Description);
     }
     if (Image_Icon)
     {
