@@ -21,13 +21,18 @@
 | 伤害后事件 | AttributeSet 扣血后发送 Event.Combat.DamageDealt（来源）/ DamageTaken（目标），EventMagnitude 为实际扣血，Context 带暴击与命中点 |
 | 调试 | LogCCBuff；生命周期 Log，钩子及快照 Verbose |
 | 获取：三选一 | UCC_BuffOfferPool + UCC_BuffSelectionComponent（PlayerController 上，服务器抽取与校验）+ UCC_BuffSelectionScreen；见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
+| 复活恢复 | `UCC_BuffComponent::ResumeAfterRevive`：撤销 `ClearBuffs(OwnerDeath)` 对保留实例（`bRemoveOnDeath=false`）的挂起，按 GAS 当前状态重新启用钩子与 Behavior；测试 `GAS_Demo.Buff.ResumeAfterRevive` |
+| 死亡与击杀者 | `UCC_AttributeSet::OnOutOfHealth`（带 Instigator / Causer）→ `ACC_BaseCharacter::HandleOutOfHealth` → `UCC_GameEventSubsystem::OnCharacterDied`；"击杀触发"类规则以后从这里接入 |
+| 实例级阵营 | `ACC_BaseCharacter::SetTeamOverride`（复制），`UCC_TeamStatics` 优先读取；召唤物继承召唤者阵营；测试 `GAS_Demo.Team.InstanceOverride` |
+| 按标签激活能力的输入 | `InputConfig.AbilityInputActions` 由 `ACC_PlayerController` 绑定，按 InputTag 激活 Asset Tag 匹配的 GA；`CCTags.Status.Targeting` 期间攻击键 = 确认、技能键 = 取消 |
+| 选点召唤 | `UCC_SummonAlly` + `ACC_TargetActor_GroundPlacement` + `ACC_GroundPlacementIndicator`，见 [SummonAlly.zh-CN.md](SummonAlly.zh-CN.md) |
+| 三选一服务器事件 | `UCC_BuffSelectionComponent::OnServerPendingChanged / OnServerChoiceAccepted`，见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
 
 ## 后续需求出现时再实现
 
-- 通用输入配置如何绑定新能力：当前不修改 PlayerController 的输入策略。
 - ApplyEffectOnDamage 规则（监听已实现的 DamageDealt / DamageTaken 事件）；ProcDepth 防循环字段尚未加入 Context。
 - 近战等其他伤害来源的 Damage.Source.* 补齐；当前不扩大到全战斗流程。
 - 按状态标签选择动作集、移动射击、冻结、魅惑等具体玩法。
-- 爆炸箭、反弹、召唤规则及其专用基础设施。
+- 爆炸箭、反弹规则及其专用基础设施；召唤类 Buff（`UCC_BuffBehavior_Summon`）可复用 `UCC_SummonAlly` 的生成与阵营逻辑，或直接通过 Grant Abilities 授予该 GA。
 
 实现代码已编译通过；已准备 GAS_Demo.Buff.FourExamples，按用户要求不再继续执行 UE 验证。后续实机测试由用户负责。

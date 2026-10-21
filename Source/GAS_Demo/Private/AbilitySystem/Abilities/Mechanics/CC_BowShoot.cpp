@@ -2,13 +2,13 @@
 
 #include "AbilitySystemComponent.h"
 
-#include "Character/CC_EnemyCharacter.h"
-#include "Character/Combat/CC_ArrowProjectile.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
+#include "Actors/Projectiles/CC_ArrowProjectile.h"
 #include "Components/ActionComponent.h"
 #include "Components/CC_BuffComponent.h"
 #include "Data/Buff/CC_BuffTags.h"
 #include "Data/Buff/CC_BuffDebug.h"
-#include "Character/Combat/CC_ProjectileFireContext.h"
+#include "Actors/Projectiles/CC_ProjectileFireContext.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/AbilityData/CombatActionData.h"
 #include "Data/CC_CharacterConfig.h"
@@ -26,8 +26,8 @@ UCC_BowShoot::UCC_BowShoot()
     bRetriggerInstancedAbility = true;
     // 资产标签用于按 Tag 查找已授予的能力；它本身不等于“已经激活”。
     SetAssetTags(FGameplayTagContainer(CCTags::CCAbilityTrigger::BowShoot));
-    // 激活期间给 ASC 挂上 Attack 状态；KeepDistance 会据此暂缓后撤。
-    //ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
+    // 激活期间给 ASC 挂上 Attack 状态：KeepDistance 据此暂缓后撤；AI 控制器据此切换 Crowd ObstacleOnly。
+    ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
 
     // 收到 BowShoot 游戏事件时自动激活本能力，事件携带本次要播放的动作数据。
     FAbilityTriggerData Trigger;

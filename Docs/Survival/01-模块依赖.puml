@@ -1,0 +1,47 @@
+@startuml 生存模式模块依赖
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam packageStyle rectangle
+
+package "Game/Survival 规则（仅服务器）\nACC_SurvivalGameMode : ACC_RoomGameMode\nUCC_RespawnComponent" as Mode
+package "Game/Survival 复制状态\nACC_SurvivalGameState\n├ UCC_WaveDirectorComponent\n└ UCC_TeamProgressionComponent\nACC_SurvivalPlayerState" as State
+package "Game/Survival 数据\nUCC_SurvivalModeConfig（只读）\nFCC_StatTagStackContainer\nUCC_SurvivalSaveGame\nCCSurvivalTags" as Data
+package "Game/Survival 调试（Private）\nCC_SurvivalDebug.cpp\ncc.Survival.* 命令 / CVar" as Dbg
+package "Subsystems\nUCC_GameEventSubsystem\n（死亡事件转发）" as Events
+package "UI/Survival + UI/Combat\nCC_SurvivalResultController\nCombatMainModel.GetSurvival" as SUI
+
+package "已有：Game\nACC_RoomGameMode / RoomPlayerState" as Room
+package "已有：Actors\nACC_BaseCharacter / Enemy / Player\nACC_EnemySpawner" as Char
+package "已有：AbilitySystem\nUCC_AttributeSet / CC_Death" as Attr
+package "已有：Components\nUCC_BuffComponent\nUCC_BuffSelectionComponent" as Comp
+package "已有：Utils/Team\nUCC_TeamStatics" as Team
+package "已有：UI 框架\nUIManager / Controller / Model" as UIF
+
+Mode --> Room : 继承
+Mode --> State : 推进阶段 / 转发事件
+Mode --> Events : 订阅死亡事件
+Mode --> Team : 击杀归属 IsHostile
+Mode --> Char : Revive(Location)
+Mode --> Comp : 订阅三选一服务器事件
+State --> Char : FindSpawnLocation / SpawnEnemyAt
+State --> Comp : OfferBuffs
+State --> Data
+Mode --> Data
+Attr --> Char : OnOutOfHealth
+Char --> Events : 死亡广播一次
+Char --> Comp : ResumeAfterRevive
+Dbg --> Mode : 仅调试入口
+SUI --> State : 只读复制数据 + 消息
+SUI --> UIF
+SUI --> Data : 本地最佳纪录
+
+note bottom of State
+  波次与经验组件互不依赖，
+  各自持有自己的复制数据，
+  界面直接绑定对应组件
+end note
+note bottom of Events
+  只有角色发布、只有 GameMode 订阅；
+  角色不依赖 Game/Survival
+end note
+@enduml

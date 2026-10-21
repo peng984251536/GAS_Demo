@@ -1,5 +1,5 @@
 #include "UI/BuffSelection/CC_BuffSelectionController.h"
-#include "BuffSelection/CC_BuffSelectionComponent.h"
+#include "Components/CC_BuffSelectionComponent.h"
 #include "Data/Buff/CC_BuffUIData.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayEffect.h"

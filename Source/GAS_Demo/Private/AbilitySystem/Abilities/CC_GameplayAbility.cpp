@@ -6,7 +6,7 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 
 #include "Animation/AnimMontage.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Data/AbilityData/CombatActionData.h"
 
 UCC_GameplayAbility::UCC_GameplayAbility()

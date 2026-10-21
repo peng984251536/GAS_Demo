@@ -1,14 +1,27 @@
 #include "UI/Combat/CC_CombatMainController.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Attribute/CC_AttributeSet.h"
-#include "Character/CC_BaseCharacter.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Engine/World.h"
+#include "Game/Survival/CC_SurvivalGameState.h"
+#include "Game/Survival/CC_SurvivalPlayerState.h"
+#include "Game/Survival/CC_SurvivalTags.h"
+#include "Game/Survival/CC_TeamProgressionComponent.h"
+#include "Game/Survival/CC_WaveDirectorComponent.h"
 #include "GameFramework/PlayerController.h"
 
 void UCC_CombatMainModel::SetVitals(const FCC_PlayerVitals& Value)
 {
 	if (Vitals == Value) return;
 	Vitals = Value;
+	NotifyChanged();
+}
+
+void UCC_CombatMainModel::SetSurvival(const FCC_SurvivalHUDSnapshot& Value)
+{
+	if (Survival == Value) return;
+	Survival = Value;
 	NotifyChanged();
 }
 
@@ -22,12 +35,14 @@ void UCC_CombatMainController::OnActivated()
 		HandlePawnChanged(nullptr, Player->GetPawn());
 	}
 	Super::OnActivated();
+	BindSurvival();
 }
 
 void UCC_CombatMainController::OnDeactivated()
 {
 	if (APlayerController* Player = GetPlayerController()) Player->OnPossessedPawnChanged.RemoveDynamic(this, &ThisClass::HandlePawnChanged);
 	UnbindPawn();
+	UnbindSurvival();
 	Super::OnDeactivated();
 }
 
@@ -38,6 +53,117 @@ void UCC_CombatMainController::HandlePawnChanged(APawn* OldPawn, APawn* NewPawn)
 	BoundCharacter = Cast<ACC_BaseCharacter>(NewPawn);
 	if (BoundCharacter.IsValid()) BoundCharacter->OnASCInitialized.AddUniqueDynamic(this, &ThisClass::HandleASCReady);
 	BindASC(UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(NewPawn));
+	// 客户端的 PlayerState 可能晚于界面激活到达，Pawn 变化时顺带补绑。
+	if (IsActive()) BindSurvival();
+}
+
+// ---------------------------------------------------------------------------
+// 生存模式数据（可选）
+// ---------------------------------------------------------------------------
+
+void UCC_CombatMainController::BindSurvival()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+	ACC_SurvivalGameState* SurvivalState = World->GetGameState<ACC_SurvivalGameState>();
+	if (!SurvivalState && !World->GetGameState())
+	{
+		// 客户端 GameState 还没复制到达：等它出现再绑。
+		if (!GameStateSetHandle.IsValid())
+		{
+			GameStateSetHandle = World->GameStateSetEvent.AddUObject(this, &ThisClass::HandleGameStateSet);
+		}
+		return;
+	}
+	if (SurvivalState && BoundSurvivalState.Get() != SurvivalState)
+	{
+		BoundSurvivalState = SurvivalState;
+		SurvivalState->OnPhaseChanged.AddUniqueDynamic(this, &ThisClass::HandleSurvivalPhaseChanged);
+		SurvivalState->OnTeamStatsChanged.AddUniqueDynamic(this, &ThisClass::HandleSurvivalChanged);
+		SurvivalState->GetWaveDirector()->OnWaveStateChanged.AddUniqueDynamic(this, &ThisClass::HandleSurvivalChanged);
+		SurvivalState->GetProgression()->OnProgressChanged.AddUniqueDynamic(this, &ThisClass::HandleSurvivalChanged);
+	}
+	const APlayerController* Player = GetPlayerController();
+	ACC_SurvivalPlayerState* SurvivalPlayer = Player ? Player->GetPlayerState<ACC_SurvivalPlayerState>() : nullptr;
+	if (SurvivalPlayer != BoundSurvivalPlayer.Get())
+	{
+		if (ACC_SurvivalPlayerState* Old = BoundSurvivalPlayer.Get())
+		{
+			Old->OnSurvivalStateChanged.RemoveDynamic(this, &ThisClass::HandleSurvivalChanged);
+		}
+		BoundSurvivalPlayer = SurvivalPlayer;
+		if (SurvivalPlayer)
+		{
+			SurvivalPlayer->OnSurvivalStateChanged.AddUniqueDynamic(this, &ThisClass::HandleSurvivalChanged);
+		}
+	}
+	RefreshSurvival();
+}
+
+void UCC_CombatMainController::UnbindSurvival()
+{
+	if (UWorld* World = GetWorld(); World && GameStateSetHandle.IsValid())
+	{
+		World->GameStateSetEvent.Remove(GameStateSetHandle);
+	}
+	GameStateSetHandle.Reset();
+	if (ACC_SurvivalGameState* SurvivalState = BoundSurvivalState.Get())
+	{
+		SurvivalState->OnPhaseChanged.RemoveDynamic(this, &ThisClass::HandleSurvivalPhaseChanged);
+		SurvivalState->OnTeamStatsChanged.RemoveDynamic(this, &ThisClass::HandleSurvivalChanged);
+		SurvivalState->GetWaveDirector()->OnWaveStateChanged.RemoveDynamic(this, &ThisClass::HandleSurvivalChanged);
+		SurvivalState->GetProgression()->OnProgressChanged.RemoveDynamic(this, &ThisClass::HandleSurvivalChanged);
+	}
+	if (ACC_SurvivalPlayerState* SurvivalPlayer = BoundSurvivalPlayer.Get())
+	{
+		SurvivalPlayer->OnSurvivalStateChanged.RemoveDynamic(this, &ThisClass::HandleSurvivalChanged);
+	}
+	BoundSurvivalState.Reset();
+	BoundSurvivalPlayer.Reset();
+}
+
+void UCC_CombatMainController::HandleGameStateSet(AGameStateBase* GameState)
+{
+	if (UWorld* World = GetWorld(); World && GameStateSetHandle.IsValid())
+	{
+		World->GameStateSetEvent.Remove(GameStateSetHandle);
+	}
+	GameStateSetHandle.Reset();
+	if (IsActive()) BindSurvival();
+}
+
+void UCC_CombatMainController::HandleSurvivalChanged() { RefreshSurvival(); }
+
+void UCC_CombatMainController::HandleSurvivalPhaseChanged(ECC_MatchPhase NewPhase) { RefreshSurvival(); }
+
+void UCC_CombatMainController::RefreshSurvival()
+{
+	if (!IsActive()) return;
+	FCC_SurvivalHUDSnapshot Value;
+	if (const ACC_SurvivalGameState* SurvivalState = BoundSurvivalState.Get())
+	{
+		const UCC_WaveDirectorComponent* Waves = SurvivalState->GetWaveDirector();
+		const UCC_TeamProgressionComponent* Progress = SurvivalState->GetProgression();
+		Value.bActive = true;
+		Value.Phase = SurvivalState->GetPhase();
+		Value.CurrentWave = Waves->GetCurrentWave();
+		Value.NextWaveServerTime = Waves->GetNextWaveServerTime();
+		Value.AliveEnemies = Waves->GetAliveEnemyCount();
+		Value.TeamLevel = Progress->GetTeamLevel();
+		Value.TeamExperience = Progress->GetTeamExperience();
+		Value.ExperienceToNextLevel = Progress->GetExperienceToNextLevel();
+		Value.TeamKills = SurvivalState->GetTeamStat(CCSurvivalTags::StatKills);
+	}
+	if (const ACC_SurvivalPlayerState* SurvivalPlayer = BoundSurvivalPlayer.Get())
+	{
+		Value.MyKills = SurvivalPlayer->GetStat(CCSurvivalTags::StatKills);
+		Value.LifeState = SurvivalPlayer->GetLifeState();
+		Value.RespawnServerTime = SurvivalPlayer->GetRespawnServerTime();
+	}
+	if (UCC_CombatMainModel* CombatModel = Cast<UCC_CombatMainModel>(GetModel()))
+	{
+		CombatModel->SetSurvival(Value);
+	}
 }
 // 角色延迟初始化完成后，把战斗主界面绑定到新的能力系统。
 void UCC_CombatMainController::HandleASCReady(UAbilitySystemComponent* NewASC, UAttributeSet* Attributes) { BindASC(NewASC); }

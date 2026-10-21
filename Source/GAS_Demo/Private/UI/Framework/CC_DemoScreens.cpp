@@ -40,10 +40,10 @@ namespace
 		return Panel;
 	}
 	// 创建带本地玩家上下文的 CommonButton，加入示例面板。
-	UCC_MenuButton* AddButton(UUserWidget* Owner, UVerticalBox* Panel, FName Name, const FText& Label)
+	UCC_MenuButton* AddButton(UUserWidget* Owner, UVerticalBox* Panel, FName Name, const FText& LabelText)
 	{
 		UCC_MenuButton* Button = CreateWidget<UCC_MenuButton>(Owner, UCC_MenuButton::StaticClass(), Name);
-		Button->SetLabel(Label);
+		Button->SetLabel(LabelText);
 		Panel->AddChildToVerticalBox(Button)->SetPadding(FMargin(0, 6));
 		return Button;
 	}
@@ -58,14 +58,14 @@ void UCC_MenuButton::NativeOnInitialized()
 	Background->SetPadding(FMargin(24.f, 16.f));
 	Background->SetVisibility(ESlateVisibility::HitTestInvisible);
 	WidgetTree->RootWidget = Background;
-	Label = WidgetTree->ConstructWidget<UTextBlock>();
-	Label->SetJustification(ETextJustify::Center);
-	Background->AddChild(Label);
+	TextBlock_Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TextBlock_Label"));
+	TextBlock_Label->SetJustification(ETextJustify::Center);
+	Background->AddChild(TextBlock_Label);
 	OnHovered().AddWeakLambda(this, [Background]() { Background->SetBrushColor(FLinearColor(0.22f, 0.38f, 0.46f)); });
 	OnUnhovered().AddWeakLambda(this, [Background]() { Background->SetBrushColor(FLinearColor(0.12f, 0.2f, 0.26f)); });
 }
 // 更新示例按钮显示文字。
-void UCC_MenuButton::SetLabel(const FText& Text) { if (Label) Label->SetText(Text); }
+void UCC_MenuButton::SetLabel(const FText& Text) { if (TextBlock_Label) TextBlock_Label->SetText(Text); }
 
 // 构建暂停菜单，继续按钮关闭本页，退出按钮打开 Modal 层确认框。
 void UCC_PauseMenuWidget::NativeOnInitialized()

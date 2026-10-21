@@ -186,12 +186,12 @@ private:
 	/** 按视觉顺序（下标 0 最底层）排列的运行时层。 */
 	UPROPERTY(Transient) TArray<FCC_UIRuntimeLayer> RuntimeLayers;
 	/** 最底视觉层：世界空间投影的血条与飘字，自身和子控件均不参与命中测试。 */
-	UPROPERTY(Transient) TObjectPtr<UOverlay> WorldOverlayLayer;
+	UPROPERTY(Transient) TObjectPtr<UOverlay> Overlay_World;
 	UPROPERTY(Transient) TObjectPtr<UCC_WorldIndicatorLayer> WorldIndicatorLayer;
 	/** 最上视觉层：提示，其自身和子控件均不参与命中测试。 */
-	UPROPERTY(Transient) TObjectPtr<UOverlay> NotificationLayer;
+	UPROPERTY(Transient) TObjectPtr<UOverlay> Overlay_Notifications;
 	/** 动画期间拦截鼠标点击的透明全屏遮罩。 */
-	UPROPERTY(Transient) TObjectPtr<UWidget> InputShield;
+	UPROPERTY(Transient) TObjectPtr<UWidget> Widget_InputShield;
 	/** 容器到过滤令牌的映射，防止一个容器提前解锁其他容器。 */
 	TMap<UCommonActivatableWidgetContainerBase*, FName> TransitionTokens;
 	/** 软引用页面加载持有的输入锁，与动画令牌独立。 */

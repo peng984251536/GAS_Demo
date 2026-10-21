@@ -27,9 +27,9 @@ UCC_WorldIndicatorLayer::UCC_WorldIndicatorLayer(const FObjectInitializer& Objec
 void UCC_WorldIndicatorLayer::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("IndicatorCanvas"));
-	Canvas->SetVisibility(ESlateVisibility::HitTestInvisible);
-	WidgetTree->RootWidget = Canvas;
+	CanvasPanel_Indicators = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("IndicatorCanvas"));
+	CanvasPanel_Indicators->SetVisibility(ESlateVisibility::HitTestInvisible);
+	WidgetTree->RootWidget = CanvasPanel_Indicators;
 }
 
 // 每次 Slate 构建（含切图后重新挂载）重新订阅，并补上已经存在的指示器。
@@ -93,14 +93,14 @@ void UCC_WorldIndicatorLayer::ShowIndicator(UCC_WorldIndicator* Indicator)
 
 void UCC_WorldIndicatorLayer::CreateWidgetFor(UCC_WorldIndicator* Indicator, UClass* WidgetClass)
 {
-	if (!Canvas || !WidgetClass || !WidgetClass->IsChildOf<UUserWidget>() || WidgetClass->HasAnyClassFlags(CLASS_Abstract)) return;
+	if (!CanvasPanel_Indicators || !WidgetClass || !WidgetClass->IsChildOf<UUserWidget>() || WidgetClass->HasAnyClassFlags(CLASS_Abstract)) return;
 	UUserWidget* Widget = WidgetPool.GetOrCreateInstance(TSubclassOf<UUserWidget>(WidgetClass));
 	if (!Widget) return;
 	if (!ImplementsIndicatorWidget(Widget))
 		UE_LOG(LogGAS_Demo, Warning, TEXT("世界指示器控件 %s 没有实现 CC World Indicator Widget 接口，只显示、不绑定数据。"), *GetNameSafe(WidgetClass));
 
 	UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Widget->Slot);
-	if (!CanvasSlot || Widget->GetParent() != Canvas.Get()) CanvasSlot = Canvas->AddChildToCanvas(Widget);
+	if (!CanvasSlot || Widget->GetParent() != CanvasPanel_Indicators.Get()) CanvasSlot = CanvasPanel_Indicators->AddChildToCanvas(Widget);
 	if (CanvasSlot)
 	{
 		// Slot 只在这里设置一次；之后每帧只改渲染平移。

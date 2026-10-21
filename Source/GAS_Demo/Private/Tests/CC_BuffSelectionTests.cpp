@@ -2,7 +2,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Tests/CC_BuffSelectionTestTypes.h"
 #include "Tests/CC_BuffTestTypes.h"
-#include "BuffSelection/CC_BuffOfferPool.h"
+#include "Data/Buff/CC_BuffOfferPool.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"

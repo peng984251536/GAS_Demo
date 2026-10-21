@@ -1,6 +1,6 @@
 #include "Damage/CC_DamageSettings.h"
-#include "Effects/Damage/CC_GE_Damage.h"
-#include "Effects/Damage/CC_GE_Healing.h"
+#include "AbilitySystem/Effects/Damage/CC_GE_Damage.h"
+#include "AbilitySystem/Effects/Damage/CC_GE_Healing.h"
 
 UCC_DamageSettings::UCC_DamageSettings()
 {

@@ -1,6 +1,6 @@
 #include "AbilitySystem/Abilities/Reaction/CC_Death.h"
 
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "GAS_Demo.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -79,8 +79,15 @@ void UCC_Death::FinishOwnedAction(bool bWasCancelled)
 	{
 		return;
 	}
-	TWeakObjectPtr<ACC_EnemyCharacter> Enemy = Cast<ACC_EnemyCharacter>(GetAvatarActorFromActorInfo());
+	TWeakObjectPtr<ACC_BaseCharacter> Character = Cast<ACC_BaseCharacter>(GetAvatarActorFromActorInfo());
+	TWeakObjectPtr<ACC_EnemyCharacter> Enemy = Cast<ACC_EnemyCharacter>(Character.Get());
 	Super::FinishOwnedAction(bWasCancelled);
+
+	// 死亡动作结束（DeathFinished）。复活会取消本能力，此时角色已活着，不再上报。
+	if (!IsActive() && Character.IsValid() && Character->HasAuthority() && !Character->IsAlive())
+	{
+		Character->HandleDeathFinished();
+	}
 
 	// 先结束能力和动画任务，再销毁承载 ASC 的怪物，避免销毁期间重复结束能力。
 	if (!IsActive() && Enemy.IsValid() && Enemy->HasAuthority())

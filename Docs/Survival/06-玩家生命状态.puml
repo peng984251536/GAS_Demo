@@ -1,0 +1,22 @@
+@startuml 玩家生命状态
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+
+[*] --> Alive
+Alive --> Dying : 生命耗尽（OnCharacterDied）\nStats.Deaths++\nBuff 挂起（bRemoveOnDeath=false 的保留）\n未全灭 → 开始复活倒计时
+Dying --> Dead : CC_Death 结束（OnCharacterDeathFinished）\n视角切到存活队友
+Dead --> Alive : 倒计时结束\nRevive(Location)\nResumeAfterRevive\nStats.Revives++
+Dying --> Alive : 倒计时先结束且超过 DeathFinishedTimeout\n（玩家没有死亡能力时的兜底）
+
+note right of Dying
+  全灭判定按 LifeState != Alive，
+  Dying 也算阵亡
+end note
+note left of Dead
+  RespawnServerTime 复制给客户端显示倒计时
+  阵亡期间：
+  - 共享经验照常增长，升级照常排队三选一
+  - 选择返回 NoTarget，本轮保留，复活后再选
+  - AI 选目标要求 IsAlive，会放弃阵亡者
+end note
+@enduml

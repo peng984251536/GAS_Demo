@@ -56,7 +56,7 @@
 
 **伤害数字**：派生 `CC_DamageNumberWidget`。
 
-- 放一个名为 `DamageText` 的 TextBlock 会自动填入数字和样式（字体、字号、颜色按 Normal / Critical / Heal 区分）。
+- 必须放一个名为 `TextBlock_Damage` 的 TextBlock 会自动填入数字和样式（字体、字号、颜色按 Normal / Critical / Heal 区分）。
 - `On Damage Number Shown (Amount, Style, DamageType)` 可按伤害类型换颜色或播放 UMG 动画。
 - 要用 UMG 动画代替代码动画：关掉 `bDriveAnimationInCode`，动画结束时调用 `Finish Damage Number`。
 

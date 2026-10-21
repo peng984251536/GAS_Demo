@@ -1,0 +1,58 @@
+@startuml 玩家阵亡与复活
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+autonumber
+
+participant "ACC_SurvivalGameMode" as GM
+participant "UCC_RespawnComponent" as RC
+participant "ACC_SurvivalPlayerState\n(阵亡者)" as PS
+participant "ACC_PlayerCharacter\n(阵亡者，复用同一 Pawn)" as PC
+participant "UCC_BuffComponent" as BC
+participant "UNavigationSystemV1" as NAV
+
+[-> GM : HandleCharacterDied(Info)，Victim 是玩家
+activate GM
+GM -> PS : Stats[Deaths]++，LifeState = Dying
+GM -> GM : 广播 Survival.Msg.PlayerDown
+alt IsTeamWiped（没有 Alive 且仍在线的玩家）
+  GM -> GM : EndMatch()（见 05）
+else
+  GM -> RC : SchedulePlayer(PS)
+  RC -> PS : RespawnServerTime = Now + ComputeRespawnDelay(Deaths)
+end
+deactivate GM
+
+[-> GM : HandleCharacterDeathFinished（CC_Death 播完）
+GM -> PS : LifeState = Dead
+GM -> GM : SetViewTargetWithBlend(存活队友)（服务器设置，自动同步给客户端）
+GM -> RC : NotifyDeathFinished(PS)
+
+... 倒计时结束 ...
+
+RC -> RC : HandleCountdownFinished
+alt LifeState == Dying（动作未播完）
+  RC -> RC : 等 NotifyDeathFinished；\n超过 DeathFinishedTimeout 则强制复活
+else
+  RC -> RC : TryRevive：Phase 必须为 Playing\nAnchor = 随机一名存活玩家
+  RC -> NAV : Anchor 周围 [MinRadius, MaxRadius] 8 个方向\nProjectPointToNavigation + 胶囊无阻挡（全失败用 Anchor 位置）
+  RC -> PC : Revive(Location, ReviveEffect)
+  activate PC
+  PC -> PC : ResetForRespawn（先标记存活）\nCancelAbilities(Death)\nTeleportTo，恢复碰撞 / 移动
+  PC -> PC : 施加 ReviveEffect（回满血 + Status.DamageImmunity）\n仍无血则代码兜底回满
+  PC -> BC : ResumeAfterRevive()\n（撤销 ClearBuffs(OwnerDeath) 的挂起）
+  deactivate PC
+  RC -> GM : HandlePlayerRevived(PS)
+  GM -> PS : LifeState = Alive，RespawnServerTime = 0，Stats[Revives]++
+  GM -> GM : 视角切回自己，广播 Survival.Msg.PlayerRevived
+end
+
+== 断线 ==
+[-> GM : Logout(PC)
+GM -> RC : Cancel(PS)
+GM -> GM : 解除统计 / 选卡订阅（撤保护）\n下一帧判定是否全灭
+
+note over GM, PC
+  复活不走 PossessedBy → HandleRespawn：
+  那条路径会 ClearBuffs(Reset) 清掉所有升级 Buff。
+end note
+@enduml

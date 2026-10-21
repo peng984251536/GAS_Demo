@@ -3,8 +3,8 @@
 #include "Data/Buff/CC_BuffRulesComponent.h"
 #include "Data/Buff/CC_BuffUIData.h"
 #include "Data/Buff/CC_BuffDebug.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "Engine/World.h"
@@ -619,6 +619,36 @@ void UCC_BuffComponent::ClearBuffs(ECC_BuffEndReason Reason)
         RemovalReasons.Remove(Handle);
         FinishInstance(Handle, Reason); /** GAS 未回调或 ASC 已解绑时也走幂等收尾。 */
     }
+}
+
+/**
+ * 复活：撤销 ClearBuffs(OwnerDeath) 对保留实例的挂起。是否真正启用仍由 RefreshFromGAS
+ * 按当前 GAS 状态决定（被抑制的 GE 保持禁用），因此不会绕过抑制规则。
+ */
+void UCC_BuffComponent::ResumeAfterRevive()
+{
+    if (!GetOwner()->HasAuthority() || bClearing || bEnded)
+    {
+        return;
+    }
+    TArray<FActiveGameplayEffectHandle> Suspended;
+    for (const TPair<FActiveGameplayEffectHandle, FCC_BuffInstance>& Pair : Instances)
+    {
+        if (Pair.Value.bSuspendedForDeath)
+        {
+            Suspended.Add(Pair.Key);
+        }
+    }
+    for (FActiveGameplayEffectHandle Handle : Suspended)
+    {
+        // 前一个实例的 Enable 回调可能同步移除了后面的 GE，逐个重新查找。
+        if (FCC_BuffInstance* Instance = Instances.Find(Handle))
+        {
+            Instance->bSuspendedForDeath = false;
+            RefreshFromGAS(Handle);
+        }
+    }
+    UE_LOG(LogCCBuff, Log, TEXT("[Revive] Owner=%s 恢复 %d 个死亡挂起的 Buff"), *GetNameSafe(GetOwner()), Suspended.Num());
 }
 
 void UCC_BuffComponent::HandleStackChanged(FActiveGameplayEffectHandle Handle, int32 NewCount, int32 OldCount)

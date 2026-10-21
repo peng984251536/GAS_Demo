@@ -10,7 +10,8 @@ class UCC_BuffSelectionScreen;
 
 /**
  * 三选一的单张卡片，本身就是 CommonButton，支持鼠标、键盘和手柄焦点。
- * 设计器里可放名为 Text_Name、Text_Description、Image_Icon 的控件自动填充；
+ * 设计器里必须放名为 TextBlock_Name、TextBlock_Description、Image_Icon 的控件自动填充；
+ * 缺少同名、兼容类型的控件时，Widget Blueprint 编译报错。没有图标数据时会隐藏 Image_Icon。
  * 其他表现（稀有度边框、动画等）在 On Card Data Set 里自己处理。点击后交给所属页面选择。
  */
 UCLASS(Abstract, Blueprintable)
@@ -32,13 +33,13 @@ protected:
     UFUNCTION(BlueprintImplementableEvent, Category = "UI|BuffSelection")
     void OnCardDataSet(const FCC_BuffOfferCardData& CardData);
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "UI|BuffSelection")
-    TObjectPtr<UTextBlock> Text_Name;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "UI|BuffSelection")
+    TObjectPtr<UTextBlock> TextBlock_Name;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "UI|BuffSelection")
-    TObjectPtr<UTextBlock> Text_Description;
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "UI|BuffSelection")
+    TObjectPtr<UTextBlock> TextBlock_Description;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "UI|BuffSelection")
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "UI|BuffSelection")
     TObjectPtr<UImage> Image_Icon;
 
 private:

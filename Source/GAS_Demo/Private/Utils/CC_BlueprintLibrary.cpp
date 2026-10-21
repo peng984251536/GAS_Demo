@@ -6,8 +6,8 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"

@@ -1,0 +1,27 @@
+@startuml 对局阶段
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+
+[*] --> WaitingToStart
+WaitingToStart --> Playing : 所有已连接玩家的 Pawn 存活就绪\n或等待超过 StartTimeout（默认 10 秒）\n→ StartMatch()
+Playing --> GameOver : 全员 LifeState != Alive\n或最后一名玩家退出（下一帧判定）
+GameOver --> [*] : 房主：再来一局（ServerTravel ?Restart）\n或返回大厅（ReturnToLobby）
+
+state Playing {
+  [*] --> Warmup
+  Warmup --> WaveActive : FirstWaveDelay 结束
+  WaveActive --> WaveActive : WaveInterval × WaveIntervalScale 到时\n(或清场且 bAdvanceWhenCleared)\n→ AdvanceWave()
+}
+
+state GameOver {
+  GameOver : 进入时（服务器，按顺序）：
+  GameOver : 1. WaveDirector.StopDirector()（清空队列、写最后一行 CSV）
+  GameOver : 2. Progression.StopProgression()
+  GameOver : 3. Respawn.CancelAll()
+  GameOver : 4. 每个玩家 BuffSelection.ClearOffers()（同时撤掉选卡保护）
+  GameOver : 5. 冻结怪物：StopMovement + BrainComponent.StopLogic
+  GameOver : 6. 记录 MatchEndServerTime，退订所有玩家的统计事件
+  GameOver : 7. Phase = GameOver（复制 → 客户端打开结算页）
+  GameOver : 之后到达的死亡 / 伤害事件一律忽略
+}
+@enduml

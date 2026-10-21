@@ -34,13 +34,13 @@ protected:
 	FCC_RoomSearchRequest SearchRequest;
 	/** 必需的滚动列表；Entry Widget Class 应继承 CC_MultiplayerRoomItemWidget。 */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|Multiplayer")
-	TObjectPtr<UListView> List_Rooms;
+	TObjectPtr<UListView> ListView_Rooms;
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|Multiplayer")
-	TObjectPtr<UCommonButtonBase> Button_Refresh;
+	TObjectPtr<UCommonButtonBase> CommonButtonBase_Refresh;
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|Multiplayer")
-	TObjectPtr<UCommonButtonBase> Button_Back;
+	TObjectPtr<UCommonButtonBase> CommonButtonBase_Back;
 
-	/** 用于刷新加载动画、空列表提示和错误文字；房间行由 List_Rooms 自动创建。 */
+	/** 用于刷新加载动画、空列表提示和错误文字；房间行由 ListView_Rooms 自动创建。 */
 	UFUNCTION(BlueprintImplementableEvent, Category="UI|Multiplayer")
 	void OnMultiplayerStateChanged(const FCC_MultiplayerScreenState& State);
 

@@ -40,13 +40,13 @@ void UCC_BuffSelectionScreen::NativeOnModelChanged()
 
 void UCC_BuffSelectionScreen::RebuildCards(const UCC_BuffSelectionModel& Model)
 {
-    if (!CardContainer || !CardClass)
+    if (!PanelWidget_Cards || !CardClass)
     {
         return;
     }
     if (BuiltOfferId != Model.GetOfferId())
     {
-        CardContainer->ClearChildren();
+        PanelWidget_Cards->ClearChildren();
         SpawnedCards.Reset();
         BuiltOfferId = Model.GetOfferId();
         for (const FCC_BuffOfferCardData& CardData : Model.GetCards())
@@ -56,7 +56,7 @@ void UCC_BuffSelectionScreen::RebuildCards(const UCC_BuffSelectionModel& Model)
             {
                 continue;
             }
-            CardContainer->AddChild(Card);
+            PanelWidget_Cards->AddChild(Card);
             Card->SetCardData(CardData, this);
             SpawnedCards.Add(Card);
         }

@@ -77,14 +77,14 @@ void UCC_RootLayout::NativeOnInitialized()
 	Outer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	// 世界覆盖层先加入，位于所有页面层之下；不放进 SafeZone，因为投影位置要对应真实视口。
-	WorldOverlayLayer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("WorldOverlay"));
-	WorldOverlayLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
-	Fill(Outer, WorldOverlayLayer);
+	Overlay_World = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("WorldOverlay"));
+	Overlay_World->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Fill(Outer, Overlay_World);
 	// 在根布局自己的 WidgetTree 中构建，切图更换 Controller 时 SetPlayerContext 会一并传给它们。
 	if (WorldIndicatorLayerClass && !WorldIndicatorLayerClass->HasAnyClassFlags(CLASS_Abstract))
 	{
 		WorldIndicatorLayer = WidgetTree->ConstructWidget<UCC_WorldIndicatorLayer>(WorldIndicatorLayerClass, TEXT("WorldIndicators"));
-		if (WorldIndicatorLayer) Fill(WorldOverlayLayer, WorldIndicatorLayer);
+		if (WorldIndicatorLayer) Fill(Overlay_World, WorldIndicatorLayer);
 	}
 
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
@@ -134,12 +134,12 @@ void UCC_RootLayout::NativeOnInitialized()
 	UBorder* Shield = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TransitionInputShield"));
 	Shield->SetBrushColor(FLinearColor::Transparent);
 	Shield->SetVisibility(ESlateVisibility::Collapsed);
-	NotificationLayer = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Notifications"));
-	NotificationLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
-	Fill(Root, NotificationLayer);
+	Overlay_Notifications = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Notifications"));
+	Overlay_Notifications->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Fill(Root, Overlay_Notifications);
 	// 遮罩放在 Outer 最上层，过渡期间连安全区外的边缘也拦截点击。
 	Fill(Outer, Shield);
-	InputShield = Shield;
+	Widget_InputShield = Shield;
 	Super::NativeOnInitialized();
 }
 
@@ -244,8 +244,8 @@ void UCC_RootLayout::UpdateInteraction()
 {
 	if (RuntimeLayers.IsEmpty()) return;
 	const bool bAnyMenu = HasMenu();
-	if (WorldOverlayLayer)
-		WorldOverlayLayer->SetVisibility(bHideWorldOverlayWhenMenuOpen && bAnyMenu ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	if (Overlay_World)
+		Overlay_World->SetVisibility(bHideWorldOverlayWhenMenuOpen && bAnyMenu ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	if (bPauseGameWhileMenuOpen && GetWorld() && GetWorld()->GetNetMode() == NM_Standalone)
 	{
 		if (bAnyMenu && !UGameplayStatics::IsGamePaused(this)) bPausedWorld = UGameplayStatics::SetGamePaused(this, true);
@@ -265,16 +265,16 @@ void UCC_RootLayout::UpdateInteraction()
 			Entry.Stack->SetVisibility(bBlockedByAbove ? ESlateVisibility::HitTestInvisible : ESlateVisibility::SelfHitTestInvisible);
 		if (Entry.IsMenuLike() && Entry.Stack->GetNumWidgets() > 0) bBlockedByAbove = true;
 	}
-	if (InputShield) InputShield->SetVisibility(IsInputBlocked() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	if (Widget_InputShield) Widget_InputShield->SetVisibility(IsInputBlocked() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
 // 创建普通提示控件并设置可选移除计时器；提示不参与页面导航。
 UUserWidget* UCC_RootLayout::ShowNotification(TSubclassOf<UUserWidget> WidgetClass, float Duration)
 {
-	if (bShuttingDown || !NotificationLayer || !WidgetClass || WidgetClass->IsChildOf<UCommonActivatableWidget>()) return nullptr;
+	if (bShuttingDown || !Overlay_Notifications || !WidgetClass || WidgetClass->IsChildOf<UCommonActivatableWidget>()) return nullptr;
 	UUserWidget* Widget = CreateWidget<UUserWidget>(GetOwningPlayer(), WidgetClass);
 	if (!Widget) return nullptr;
-	Fill(NotificationLayer, Widget);
+	Fill(Overlay_Notifications, Widget);
 	if (Duration > 0.f)
 	{
 		FTimerHandle Handle;
@@ -290,10 +290,10 @@ UUserWidget* UCC_RootLayout::ShowNotification(TSubclassOf<UUserWidget> WidgetCla
 // 仅移除本提示容器中的控件，并取消它的计时器。
 void UCC_RootLayout::DismissNotification(UUserWidget* Widget)
 {
-	if (!Widget || !NotificationLayer || !NotificationLayer->HasChild(Widget)) return;
+	if (!Widget || !Overlay_Notifications || !Overlay_Notifications->HasChild(Widget)) return;
 	FTimerHandle Handle;
 	if (NotificationTimers.RemoveAndCopyValue(Widget, Handle) && GetWorld()) GetWorld()->GetTimerManager().ClearTimer(Handle);
-	NotificationLayer->RemoveChild(Widget);
+	Overlay_Notifications->RemoveChild(Widget);
 }
 
 // 清理本根布局施加的输入过滤，不影响其他原因的过滤。
@@ -336,7 +336,7 @@ void UCC_RootLayout::ResetWorldContent()
 	ReleaseInputTokens();
 	if (GetWorld()) for (auto& Pair : NotificationTimers) GetWorld()->GetTimerManager().ClearTimer(Pair.Value);
 	NotificationTimers.Reset();
-	if (NotificationLayer) NotificationLayer->ClearChildren();
+	if (Overlay_Notifications) Overlay_Notifications->ClearChildren();
 	// 从最高层往下清空，与正常关闭顺序一致。
 	for (int32 Index = RuntimeLayers.Num() - 1; Index >= 0; --Index)
 	{

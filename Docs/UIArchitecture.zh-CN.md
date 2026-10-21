@@ -55,7 +55,7 @@
 
 ## HUD 和示例页面
 
-战斗主界面（原玩家 HUD）现在为 `GAS → CC_CombatMainController → CC_CombatMainModel → CC_CombatMainWidget → 子控件`。Controller 管 Pawn 变化、ASC 就绪和四项属性委托，Model 管战斗界面所需的快照，CC_CombatMainWidget 只负责布局并把数据分发给子控件；玩家血蓝条是子控件 `CC_PlayerVitalsWidget`（名为 PlayerVitals，自动绑定）。原来的蓝图 OnVitalsChanged 继续保留。Controller 默认已由原生 Widget 指定，不需要手工实例化。旧类名通过 DefaultEngine.ini 的 ClassRedirects 自动迁移。
+战斗主界面（原玩家 HUD）现在为 `GAS → CC_CombatMainController → CC_CombatMainModel → CC_CombatMainWidget → 子控件`。Controller 管 Pawn 变化、ASC 就绪和四项属性委托，Model 管战斗界面所需的快照，CC_CombatMainWidget 只负责布局并把数据分发给子控件；玩家血蓝条是子控件 `CC_PlayerVitalsWidget`（名为 PlayerVitalsWidget_PlayerVitals，使用 BindWidget 必需绑定）。原来的蓝图 OnVitalsChanged 继续保留。Controller 默认已由原生 Widget 指定，不需要手工实例化。旧类名通过 DefaultEngine.ini 的 ClassRedirects 自动迁移。
 
 暂停与退出确认的按钮也改为调用各自 Controller。普通按钮和通知不强制增加控制器。未来背包可仿照 HUD 新建 InventoryController + InventoryModel，不在 RootLayout 中增加背包规则。
 

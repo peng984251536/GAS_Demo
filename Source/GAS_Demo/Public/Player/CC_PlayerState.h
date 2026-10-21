@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemInterface.h"
 
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 #include "Components/ActionComponent.h"
 #include "Data/CC_CharacterConfig.h"

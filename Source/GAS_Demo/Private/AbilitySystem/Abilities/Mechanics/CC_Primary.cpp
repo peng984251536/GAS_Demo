@@ -6,13 +6,22 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/CC_PlayerCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_PlayerCharacter.h"
 #include "Engine/OverlapResult.h"
 #include "Components/ActionComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "DrawDebugHelpers.h"
 #include "GameplayTags/CC_Tags.h"
+
+UCC_Primary::UCC_Primary()
+{
+	// 激活期间给 ASC 挂上「正在攻击」状态，能力以任何方式结束都会自动移除；连段期间计数不归零。
+	// 使用者：
+	//   - ACC_AIController：0→1 切 Crowd ObstacleOnly（站稳不被推），1→0 恢复避障；攻击中不做被挡检测；
+	//   - CC_KeepDistance / CC_Dash：ActivationBlockedTags，攻击期间不后撤 / 不冲刺。
+	ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
+}
 
 
 

@@ -4,7 +4,7 @@
 #include "AbilitySystem/Abilities/Reaction/CC_Death.h"
 #include "AbilitySystem/Abilities/Reaction/CC_HitReact.h"
 #include "AbilitySystemComponent.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Data/CC_CharacterRuntimeData.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"

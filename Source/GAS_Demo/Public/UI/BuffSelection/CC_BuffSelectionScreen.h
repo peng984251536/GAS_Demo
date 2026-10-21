@@ -10,7 +10,7 @@ class UCC_BuffSelectionModel;
 
 /**
  * 三选一页面基类。蓝图继承它搭布局：
- * - 放一个名为 CardContainer 的面板（HorizontalBox 等），并在类默认值里设置 CardClass，卡片会自动生成；
+ * - 放一个名为 PanelWidget_Cards 的面板（HorizontalBox 等），并在类默认值里设置 CardClass，卡片会自动生成；
  * - 或者不放容器，自己在 On Buff Offer Changed 里按 Cards 更新控件，再调用 Choose Option。
  * 页面不能用返回键关闭；当前一轮选完且没有下一轮时自动关闭，有下一轮时原地换成新卡片。
  */
@@ -49,9 +49,9 @@ protected:
     void OnBuffOfferChanged(const TArray<FCC_BuffOfferCardData>& Cards, bool bSubmitting,
                             ECC_BuffChoiceResult LastResult);
 
-    /** 可选：自动生成卡片的容器，名称必须是 CardContainer。 */
+    /** 可选：自动生成卡片的容器，名称必须是 PanelWidget_Cards。 */
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "UI|BuffSelection")
-    TObjectPtr<UPanelWidget> CardContainer;
+    TObjectPtr<UPanelWidget> PanelWidget_Cards;
 
     /** 自动生成时使用的卡片蓝图类。 */
     UPROPERTY(EditDefaultsOnly, Category = "UI|BuffSelection")

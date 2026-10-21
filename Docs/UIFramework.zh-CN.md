@@ -61,7 +61,7 @@ C++ 中引用层级一律使用原生标签 `CCTags::UILayer::Game / GameMenu / 
 1. 编译 C++ 并重启编辑器。任意本地 PlayerController 均可使用 UIManager 查询布局。
 2. 根布局只由 UIPolicy 配置，地图初始页面由独立装配入口打开，不再读取 Controller 的 HUD/初始菜单属性。
 3. 新建主菜单使用 `CC_MainMenuWidget`；背包、设置和确认框使用 `CC_ActivatableWidget`，复杂页面通过 ControllerClass 配置独立控制器。已经接入 CC 框架的页面无需重新改父类；旧框架页面应先核对绑定，再逐项迁移导航，不要批量删除业务节点。
-4. 自定义战斗主界面的父类改为 `CC_CombatMainWidget`。血蓝条推荐放一个名为 `PlayerVitals` 的 `CC_PlayerVitalsWidget`（或其派生蓝图）子控件；也可以继续在主界面实现 `On Vitals Changed`。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。原先派生自 `CC_PlayerHUDWidget` 的蓝图由 ClassRedirects 自动迁移。
+4. 自定义战斗主界面的父类改为 `CC_CombatMainWidget`。血蓝条必须放一个名为 `PlayerVitalsWidget_PlayerVitals` 的 `CC_PlayerVitalsWidget`（或其派生蓝图）子控件。血蓝条蓝图内部必须提供 `ProgressBar_Health` / `ProgressBar_Mana`（ProgressBar）和 `TextBlock_Vitals`（TextBlock）。这些属性使用 `BindWidget`，缺失或类型不匹配时 Widget Blueprint 编译报错；已有蓝图须重命名对应控件。也可以在主界面实现 `On Vitals Changed` 扩展展示。设计器有 WidgetTree 时保留蓝图布局，不生成原生示例布局。原先派生自 `CC_PlayerHUDWidget` 的蓝图由 ClassRedirects 自动迁移。
 5. 根布局可直接用原生 `CC_RootLayout`，无需手工创建栈或 RegisterLayer。若要调动画、层级表或 SafeZone，可派生根布局蓝图，只修改类默认值；根布局运行时自行构建容器，不使用设计器中的自定义根树。
 6. 通知使用普通 `UserWidget`。头顶血条和伤害飘字由根布局的世界覆盖层自动创建，不要再手动 Add to Player Screen 或拖进 HUD；详见 [WorldIndicator.zh-CN.md](WorldIndicator.zh-CN.md)。
 
@@ -115,7 +115,7 @@ Get Owning Player → Get Root Layout For Player
 
 ## 数据更新与后续验证
 
-战斗主界面的更新链：Pawn 变化 → CombatMainController 绑定 ASC → 四项属性写入 CombatMainModel → CombatMainWidget 收到模型通知 → PlayerVitals.SetVitals 与 On Vitals Changed。失活/重生时控制器精确解绑旧句柄；头顶血条管理器同样监听当前值与最大值，避免只改 MaxHealth 时界面不刷新。
+战斗主界面的更新链：Pawn 变化 → CombatMainController 绑定 ASC → 四项属性写入 CombatMainModel → CombatMainWidget 收到模型通知 → PlayerVitalsWidget_PlayerVitals.SetVitals 与 On Vitals Changed。失活/重生时控制器精确解绑旧句柄；头顶血条管理器同样监听当前值与最大值，避免只改 MaxHealth 时界面不刷新。
 
 编译后建议实际验证：打开暂停 → 退出确认 → 取消 → 返回游戏；手柄焦点是否恢复；连续点击是否重复入栈；血量和最大血量变化；重生换 Pawn；菜单动画途中切图；再次进入关卡没有重复 HUD。键盘 Esc 在 PIE 中可能优先触发编辑器停止运行，请在独立游戏窗口验证完整返回流程。
 

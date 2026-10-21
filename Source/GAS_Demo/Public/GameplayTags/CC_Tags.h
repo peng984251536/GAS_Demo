@@ -12,6 +12,11 @@ namespace CCTags
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Primary);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Move);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Death);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(FindActor);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Respawn);
+		/** 选点召唤随从（UCC_SummonAlly 的 Asset Tag，按标签激活）。 */
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Summon);
 		
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(ActivateOnGiven);
 
@@ -43,6 +48,51 @@ namespace CCTags
 		
 		/** 被魅惑：有效阵营临时变为施加该效果者的阵营，见 UCC_TeamStatics::GetEffectiveTeam。 */
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Charmed);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Dead);
+		/** 正在用鼠标选点（选点类能力激活期间）：攻击键改为确认，技能键改为取消。 */
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Targeting);
+	}
+
+	namespace Attack
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attacking);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputQueued);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(ReAttacking);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(WindowOpen);
+	}
+
+	namespace Attacking
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(AttackEnd);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(AttackStart);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(ComboCheck);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Comboing);
+	}
+
+	namespace Event
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(AttackInput);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(BeHit);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(CanMoveInput);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(ComboFinished);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(LevelUp);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(MoveInput);
+	}
+
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input);
+
+	namespace GameplayCue
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitReact);
+	}
+
+	namespace PlayerInput
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attack);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Dodge);
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Move);
 	}
 
 	// 阵营。敌我关系只能通过 UCC_TeamStatics::IsHostile 判断，不要直接比较这些标签。
@@ -52,8 +102,7 @@ namespace CCTags
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy);
 	}
 
-	// UI 根布局的四个页面层。名称与 DefaultGameplayTags.ini 中的 UI.Layer.* 保持一致，
-	// C++ 一律引用这里的原生标签，避免字符串拼写错误在运行时静默返回空层。
+	// UI 根布局的四个页面层。
 	namespace UILayer
 	{
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Game);

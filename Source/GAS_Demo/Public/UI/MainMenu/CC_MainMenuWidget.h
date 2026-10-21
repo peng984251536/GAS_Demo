@@ -1,7 +1,7 @@
 #pragma once
 
 #include "UI/Framework/CC_ActivatableWidget.h"
-#include "OnlineRoom/CC_RoomTypes.h"
+#include "Subsystems/CC_RoomTypes.h"
 #include "UI/MainMenu/CC_MainMenuController.h"
 #include "CC_MainMenuWidget.generated.h"
 
@@ -36,11 +36,11 @@ protected:
 	/** LobbyMap must use a Room GameMode so the server can confirm arrival. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="UI|MainMenu") FCC_RoomCreateRequest HostRequest;
 	/** Designer 中必须存在的 CommonUI 按钮；可使用任意 UCommonButtonBase 蓝图子类。 */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> Button_SinglePlayer;
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> Button_HostRoom;
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> Button_Multiplayer;
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> Button_LeaveRoom;
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> Button_Quit;
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> CommonButtonBase_SinglePlayer;
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> CommonButtonBase_HostRoom;
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> CommonButtonBase_Multiplayer;
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> CommonButtonBase_LeaveRoom;
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|MainMenu") TObjectPtr<UCommonButtonBase> CommonButtonBase_Quit;
 	/** LAN 搜索默认参数；BuildId 要与房主一致。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="UI|MainMenu") FCC_RoomSearchRequest SearchRequest;
 	/** 搜索后显示的独立房间列表页面。 */

@@ -24,8 +24,8 @@ void UCC_CombatMainWidget::NativeOnInitialized()
 		return;
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 	WidgetTree->RootWidget = Canvas;
-	PlayerVitals = WidgetTree->ConstructWidget<UCC_PlayerVitalsWidget>(UCC_PlayerVitalsWidget::StaticClass(), TEXT("PlayerVitals"));
-	UCanvasPanelSlot* VitalsSlot = Canvas->AddChildToCanvas(PlayerVitals);
+	PlayerVitalsWidget_PlayerVitals = WidgetTree->ConstructWidget<UCC_PlayerVitalsWidget>(UCC_PlayerVitalsWidget::StaticClass(), TEXT("PlayerVitalsWidget_PlayerVitals"));
+	UCanvasPanelSlot* VitalsSlot = Canvas->AddChildToCanvas(PlayerVitalsWidget_PlayerVitals);
 	VitalsSlot->SetPosition(FVector2D(32.f, 32.f));
 	VitalsSlot->SetSize(FVector2D(320.f, 100.f));
 	Canvas->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -37,7 +37,7 @@ void UCC_CombatMainWidget::NativeOnModelChanged()
 	if (const UCC_CombatMainModel* Model = Cast<UCC_CombatMainModel>(GetUIModel()))
 	{
 		const FCC_PlayerVitals Value = Model->GetVitals();
-		if (PlayerVitals) PlayerVitals->SetVitals(Value);
+		if (PlayerVitalsWidget_PlayerVitals) PlayerVitalsWidget_PlayerVitals->SetVitals(Value);
 		OnVitalsChanged(Value.Health, Value.MaxHealth, Value.Mana, Value.MaxMana);
 	}
 	Super::NativeOnModelChanged();

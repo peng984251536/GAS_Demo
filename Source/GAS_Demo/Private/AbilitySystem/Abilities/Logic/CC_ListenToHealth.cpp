@@ -2,7 +2,7 @@
 #include "GAS_Demo.h"
 
 #include "AbilitySystemComponent.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "Engine/Engine.h"
 
 UCC_ListenToHealth::UCC_ListenToHealth()

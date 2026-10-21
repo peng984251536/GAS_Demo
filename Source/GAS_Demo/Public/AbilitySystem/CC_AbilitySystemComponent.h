@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
-#include "Utils/FBufferedAbilityInput.h"
+#include "Input/FBufferedAbilityInput.h"
 #include "CC_AbilitySystemComponent.generated.h"
 
 

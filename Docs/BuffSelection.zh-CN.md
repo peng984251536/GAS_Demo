@@ -8,8 +8,8 @@
 
 | 类 | 位置 | 职责 |
 |---|---|---|
-| `UCC_BuffOfferPool` | `BuffSelection/` | 数据资产：候选 Buff 列表 + 每轮数量；运行时只读 |
-| `UCC_BuffSelectionComponent` | `BuffSelection/` | 挂在 PlayerController 上（已在 `ACC_PlayerController` 构造函数里创建）。服务器抽取、排队、校验、施加；客户端发请求、自动打开界面 |
+| `UCC_BuffOfferPool` | `Data/Buff/` | 数据资产：候选 Buff 列表 + 每轮数量；运行时只读 |
+| `UCC_BuffSelectionComponent` | `Components/` | 挂在 PlayerController 上（已在 `ACC_PlayerController` 构造函数里创建）。服务器抽取、排队、校验、施加；客户端发请求、自动打开界面 |
 | `UCC_BuffSelectionScreen` | `UI/BuffSelection/` | 页面基类（`CC_ActivatableWidget`），自动生成卡片，选完自动关闭 |
 | `UCC_BuffSelectionController` / `Model` | `UI/BuffSelection/` | 监听选择组件，把当前一轮转成卡片快照；转发点击 |
 | `UCC_BuffOfferCardWidget` | `UI/BuffSelection/` | 单张卡片，继承 `CommonButtonBase`，点击即选择 |
@@ -40,12 +40,12 @@
    - `Entries` 里填 Buff 的 GE 蓝图和等级。**GE 必须带 `CC Buff UI Data` 组件**（名称、描述、图标都从这里读），否则会被跳过，数据校验会给出警告。
    - `Offer Count` 是每轮给几个，默认 3。
 3. **做卡片蓝图**：新建控件蓝图，父类选 `CC_BuffOfferCardWidget`，例如 `WBP_BuffOfferCard`。
-   - 可放名为 `Text_Name`、`Text_Description`（Text）和 `Image_Icon`（Image）的控件，会自动填充；名字不同或不放也可以。
+   - 必须放名为 `TextBlock_Name`、`TextBlock_Description`（TextBlock）和 `Image_Icon`（Image）的控件，会自动填充；缺少同名、同类型控件时蓝图编译报错。
    - 其他表现（边框、悬停动画、等级显示）在 `On Card Data Set` 事件里自己做，数据里有 `Effect`、`Level` 等字段。
    - 按钮的悬停/按下样式按 CommonButton 的方式配置。
 4. **做页面蓝图**：新建控件蓝图，父类选 `CC_BuffSelectionScreen`，例如 `WBP_BuffSelection`。
-   - 放一个名为 `CardContainer` 的面板（HorizontalBox 等），类默认值里把 `Card Class` 设为第 3 步的卡片蓝图，卡片会按每轮数量自动生成，默认焦点在第一张。
-   - 想完全自己摆放也可以不放 `CardContainer`，在 `On Buff Offer Changed` 里根据 `Cards` 更新自己的控件，点击时调用 `Choose Option(OptionIndex)`。
+   - 放一个名为 `PanelWidget_Cards` 的面板（HorizontalBox 等），类默认值里把 `Card Class` 设为第 3 步的卡片蓝图，卡片会按每轮数量自动生成，默认焦点在第一张。
+   - 想完全自己摆放也可以不放 `PanelWidget_Cards`，在 `On Buff Offer Changed` 里根据 `Cards` 更新自己的控件，点击时调用 `Choose Option(OptionIndex)`。
    - `On Buff Offer Changed` 的 `bSubmitting` 可用来显示"等待中"，`Last Result` 不为 None 时可提示失败（例如 NoTarget = 角色已死亡）。
 5. **在 PlayerController 蓝图里设置界面**：打开你的 PlayerController 蓝图（父类为 `CC_PlayerController`），选中组件 `BuffSelection`，把 `Selection Screen Class` 设为第 4 步的页面。`Screen Layer` 默认 `UI.Layer.GameMenu`，一般不用改。
 6. **在需要的地方发起三选一**（只能在服务器执行，例如 GameMode、敌人刷新器、关卡蓝图）：
@@ -76,3 +76,10 @@
 ## 以后可能扩展
 
 需要时再加，当前不实现：权重与稀有度、已选次数上限、重抽、跳过按钮、所有玩家共享同一轮。
+
+## 服务器事件（玩法规则层订阅）
+
+- `OnServerPendingChanged(bool bHasPending)`：待选的一轮从无到有、从有到无时广播（排队中的下一轮接上时不广播）。生存模式用它在联机选卡期间施加保护 GE。
+- `OnServerChoiceAccepted(Option)`：选择被 GAS 接受时广播。生存模式用它统计已选 Buff 数。
+
+两者都是原生委托，只在服务器广播；组件本身仍不认识任何具体 Buff。测试：`GAS_Demo.Buff.Selection.ServerEvents`。
