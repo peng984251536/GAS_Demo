@@ -29,7 +29,7 @@ void UCC_GameplayCueManager::RouteGameplayCue(AActor* Target, FGameplayTag Tag, 
 
 			Index = Set->GameplayCueDataMap.Find(Tag);
 		}
-		if (Index && Set->GameplayCueData.IsValidIndex(*Index)) Set->GameplayCueData[*Index].LoadedGameplayCueClass = NativeClass;
+		if (Index && Set->GameplayCueData.IsValidIndex(*Index)) Set->GameplayCueData[*Index].LoadedGameplayCueClass = CueClass;
 
 	}
 	Super::RouteGameplayCue(Target, Tag, Event, Params, Options);

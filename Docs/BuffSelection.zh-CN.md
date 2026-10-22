@@ -33,30 +33,114 @@
 
 单机和监听服务器主机走同一套代码，RPC 在本地同步执行。
 
-## 编辑器接线（你需要做的）
+## 现有资产和分工
 
-1. **编译 C++ 并重启编辑器。**
-2. **建 Buff 池**：内容浏览器 → 右键 → 杂项 → 数据资产 → 选 `CC_BuffOfferPool`，例如 `DA_BuffPool_Default`。
-   - `Entries` 里填 Buff 的 GE 蓝图和等级。**GE 必须带 `CC Buff UI Data` 组件**（名称、描述、图标都从这里读），否则会被跳过，数据校验会给出警告。
-   - `Offer Count` 是每轮给几个，默认 3。
-3. **做卡片蓝图**：新建控件蓝图，父类选 `CC_BuffOfferCardWidget`，例如 `WBP_BuffOfferCard`。
-   - 必须放名为 `TextBlock_Name`、`TextBlock_Description`（TextBlock）和 `Image_Icon`（Image）的控件，会自动填充；缺少同名、同类型控件时蓝图编译报错。
-   - 其他表现（边框、悬停动画、等级显示）在 `On Card Data Set` 事件里自己做，数据里有 `Effect`、`Level` 等字段。
-   - 按钮的悬停/按下样式按 CommonButton 的方式配置。
-4. **做页面蓝图**：新建控件蓝图，父类选 `CC_BuffSelectionScreen`，例如 `WBP_BuffSelection`。
-   - 放一个名为 `PanelWidget_Cards` 的面板（HorizontalBox 等），类默认值里把 `Card Class` 设为第 3 步的卡片蓝图，卡片会按每轮数量自动生成，默认焦点在第一张。
-   - 想完全自己摆放也可以不放 `PanelWidget_Cards`，在 `On Buff Offer Changed` 里根据 `Cards` 更新自己的控件，点击时调用 `Choose Option(OptionIndex)`。
-   - `On Buff Offer Changed` 的 `bSubmitting` 可用来显示"等待中"，`Last Result` 不为 None 时可提示失败（例如 NoTarget = 角色已死亡）。
-5. **在 PlayerController 蓝图里设置界面**：打开你的 PlayerController 蓝图（父类为 `CC_PlayerController`），选中组件 `BuffSelection`，把 `Selection Screen Class` 设为第 4 步的页面。`Screen Layer` 默认 `UI.Layer.GameMenu`，一般不用改。
-6. **在需要的地方发起三选一**（只能在服务器执行，例如 GameMode、敌人刷新器、关卡蓝图）：
+项目里已有 `/Game/GAS_Demo/GameMode/SurvivalGameMode/DA_BuffOfferPool` 和 `DA_SurvivalModeConfig`，但还没有三选一的页面、卡片 Widget Blueprint。按下面步骤新建两个 `WBP_`，不需要再写一套抽卡、RPC 或自动弹窗蓝图。每段标题都写明应打开的资产；不要把卡片事件接在页面蓝图上。
 
-   ```text
-   Get Player Controller (或遍历所有玩家)
-   → Find For Player（或 Cast 到 CC_PlayerController → Get Buff Selection）
-   → Offer Buffs (Pool = DA_BuffPool_Default)
-   ```
+| 打开的资产 | 需要做什么 | C++ 已经做了什么 |
+|---|---|---|
+| `DA_BuffOfferPool`、各 Buff GE | 配置可抽选项及显示数据 | 抽取、过滤、去重 |
+| `WBP_BuffOfferCard`（新建） | 单张卡片的布局、可选的额外视觉效果 | 填名称/说明/图标、处理点击 |
+| `WBP_BuffSelection`（新建） | 页面布局、指定卡片类、可选状态提示 | 生成卡片、禁止重复提交、自动关闭 |
+| `BP_CC_PlayerController` | 给 `BuffSelection` 组件指定页面类 | 收到选项后自动在 UI 层打开页面 |
+| `DA_SurvivalModeConfig` | 升级时要自动三选一，就配置 `Progression.BuffPool` | 升级后向每个玩家发放选项 |
 
-   连续调用多次会排队，玩家选完一轮自动进入下一轮。需要自定义抽取规则时用 `Offer Options` 直接传选项数组。
+### 1. 配置 `DA_BuffOfferPool` 和 Buff GE
+
+1. 打开已有的 `DA_BuffOfferPool`；`Entries` 中每项填写一个 Buff 的 Gameplay Effect 类和正数 `Level`。`Offer Count` 设为 3。有效条目少于 3 个时，页面只能显示实际抽到的数量。
+2. 逐个打开所填的 GE，在 GE 的组件列表中加入 `CC Buff UI Data`，填写 `Display Name`、`Description` 和 `Icon`。不要把这些文字填在三选一页面上；卡片会从 GE 的 UI Data 读取。
+3. 保存、验证数据资产。空 GE、抽象 GE、非法等级、缺少 UI Data 的条目会被池过滤；同一 GE 类在一轮里不会重复出现。若没有有效条目，`Offer Buffs` 返回 false，页面也不会弹出。
+
+### 2. 新建 `WBP_BuffOfferCard`：单张卡片
+
+在 `/Game/GAS_Demo/UI/BuffSelection/` 新建 Widget Blueprint，**父类选 `CC_BuffOfferCardWidget`**。它本身继承 `CommonButtonBase`，是可点击的卡片；不要再套一个普通 Button 并重复写选择请求。
+
+**在 `WBP_BuffOfferCard` 的 Designer 中**安排紧凑的卡片内容，例如：
+
+```text
+Border_Card
+└─ VerticalBox_Content
+   ├─ Image_Icon               [Image，必需]
+   ├─ TextBlock_Name           [TextBlock，必需]
+   └─ TextBlock_Description    [TextBlock，必需]
+```
+
+三个带类型说明的控件必须**名称和类型都匹配**，并勾选 `Is Variable`；它们是 C++ `BindWidget` 字段，缺少任何一个都会导致该蓝图编译失败。卡片尺寸可先用约 220 × 300 的期望尺寸，图标用 64 × 64 的 SizeBox 约束，文字允许换行。颜色、边框和焦点样式在这张卡片的设计器/CommonButton 样式中设置。
+
+**在 `WBP_BuffOfferCard` 的 Event Graph 中**，最小方案无需接线：C++ `SetCardData` 已写入名称、说明和图标，`NativeOnClicked` 已把本卡的 `OptionIndex` 交给所属页面。只有要显示额外的等级或稀有度时才添加 `Event On Card Data Set`，从 `CardData` 读取 `Level` 等字段；不要在此再调用 `Choose Option`，否则一次点击会提交两次。
+
+编译并保存 `WBP_BuffOfferCard`，再做页面，否则页面的 `Card Class` 列表可能找不到它。
+
+### 3. 新建 `WBP_BuffSelection`：三选一页面
+
+在同一目录新建 Widget Blueprint，**父类选 `CC_BuffSelectionScreen`**，不是普通 `UserWidget` 或 `CC_ActivatableWidget`。**在 `WBP_BuffSelection` 的 Designer 中**放置全屏根布局和卡片面板：
+
+```text
+CanvasPanel_Root
+├─ Border_Backdrop             [全屏暗色背景]
+└─ VerticalBox_Center          [居中，尺寸由内容决定]
+   ├─ TextBlock_Title          [例如“选择一项强化”]
+   ├─ PanelWidget_Cards        [HorizontalBox，必需用于自动生成]
+   └─ TextBlock_Result         [可选：失败提示/提交状态]
+```
+
+将 HorizontalBox **准确命名为 `PanelWidget_Cards`** 并勾选 `Is Variable`。它是可选绑定字段，但最小自动生成方案必须放它；不放时 C++ 不会创建任何可见卡片。给面板的子项设置间距、居中对齐，保证 1～3 张卡片也能正常排列。背景要挡住下层鼠标点击，卡片区不可设置为 `Not Hit-Testable (Self & All Children)`。
+
+**在 `WBP_BuffSelection` 的 Class Defaults 中**设置 `Card Class = WBP_BuffOfferCard`。保留父类的 `Controller Class = CC_BuffSelectionController`、`Input Config = Menu` 和 `Allow Back = false`；误清空 `Controller Class` 会使模型为空。编译并保存。
+
+**在 `WBP_BuffSelection` 的 Event Graph 中**，最小方案也无需接线。若放了 `TextBlock_Result`，可添加 `Event On Buff Offer Changed(Cards, bSubmitting, LastResult)`：`bSubmitting` 为 true 时显示“提交中”；`LastResult = NoTarget` 时提示需要存活角色；`ApplyFailed` 时提示当前 Buff 无法施加；`None` 时清空提示。这个事件只用于展示，不要在里面重新创建卡片或再次调用 `Choose Option`，因为父类已负责这些操作。页面的 `On UI Model Changed` 也不是必接事件。
+
+### 4. 在 `BP_CC_PlayerController` 指定页面
+
+打开 `/Game/GAS_Demo/Player/BP_CC_PlayerController`，在 Components 面板选中继承的 **`BuffSelection` 组件**，在 Details 的 `Buff | Selection | UI` 下设置：
+
+```text
+Selection Screen Class = WBP_BuffSelection
+Screen Layer = UI.Layer.GameMenu
+```
+
+保存蓝图，并确认当前地图 GameMode 实际使用的是这个 PlayerController 类。`Selection Screen Class` 为空时，服务器仍可能生成选项，但本地不会自动弹窗。这里不需要在 `WBP_CombatMain` 里调用 `Create Widget`、`Add to Viewport` 或 `Show Screen`。
+
+### 5. 选择触发来源
+
+**生存模式升级自动触发：** 打开已有的 `/Game/GAS_Demo/GameMode/SurvivalGameMode/DA_SurvivalModeConfig`，把 `Progression → Buff Pool` 指向 `DA_BuffOfferPool`。服务器升级时 `UCC_TeamProgressionComponent` 已为每位玩家调用 `OfferBuffs`，已有一轮未选完则排队。确认当前 GameMode 使用了这份配置即可，不要再在 `CombatMain` 的经验条更新事件里调用 `OfferBuffs`，否则会重复发放。
+
+**手动测试或其他玩法：** 在服务器端蓝图（例如 GameMode 的测试事件）中取得目标 `PlayerController`，调用静态节点 `Find For Player`（目标为该 Controller），检查返回的 `CC_BuffSelectionComponent` 有效，再调用其 `Offer Buffs`，`Pool` 指向 `DA_BuffOfferPool`。该节点标记为 `BlueprintAuthorityOnly`，不要从客户端 Widget 调用。`Offer Buffs` 返回 false 时先检查池和条目。需要自己指定选项时才用 `Offer Options`。
+
+```text
+服务器蓝图：目标 PlayerController
+  → Find For Player(Player)
+  → Is Valid?
+  → Offer Buffs(Pool = DA_BuffOfferPool)
+  → 检查返回值
+```
+
+选项复制到拥有者后，组件会自动打开 `WBP_BuffSelection`；卡片点击调用 C++ 选择逻辑，服务器验证、施加 GE，最后自动换下一轮或关闭页面。
+
+### 6. PIE 验收顺序
+
+1. 单机 PIE，服务器端手动发一轮，确认出现 3 张不同卡片，名称/图标来自对应 GE。
+2. 点一张，确认只施加一次 Buff，卡片在提交时不可重复点击；没有排队时页面自动关闭。
+3. 连续发两轮，确认第二轮在选完第一轮后出现；提升经验触发升级时确认只发预期轮数。
+4. 多人 PIE，在客户端各自选择：每人只看到自己的卡，且只有服务器施加 Buff。
+
+**常见故障**
+
+| 现象 | 先检查 |
+|---|---|
+| 不弹窗 | `BP_CC_PlayerController.BuffSelection.Selection Screen Class`、实际 GameMode 的 Controller 类、`Offer Buffs` 返回值、Root 是否就绪。 |
+| 弹窗但没有卡片 | `WBP_BuffSelection` 是否继承正确父类；`PanelWidget_Cards` 名字/类型；`Card Class` 是否指向编译成功的 `WBP_BuffOfferCard`；该轮是否确实有有效选项。 |
+| 卡片文字/图标为空 | GE 是否带 `CC Buff UI Data` 且填了字段；卡片三个 `BindWidget` 控件是否匹配。 |
+| 卡片不可点击 | 页面是否被更高层遮挡、卡片区是否被设置为全子树不可命中；提交中的卡片本来就会暂时禁用。 |
+| 升级后不出现选择 | `DA_SurvivalModeConfig.Progression.BuffPool` 是否已指定；是否真的升了级；池里是否有有效条目。 |
+
+## 此前说明的疏漏与本次修正
+
+- 之前只列了“做卡片/做页面”的思路，没有逐段说明正在编辑哪个蓝图。本版把 `WBP_BuffOfferCard`、`WBP_BuffSelection`、`BP_CC_PlayerController` 和两份数据资产的操作分开，避免把事件接到错误的蓝图。
+- 之前没有突出 `BindWidget` 与自动生成的边界：卡片三个控件的名称/类型是必需的；页面的 `PanelWidget_Cards` 在手工布局时可省，但**自动生成方案**必须放；`Card Class` 也必须指定。
+- 之前容易让人以为要在经验条或关卡蓝图里手动 `Create Widget`。本版明确：组件已负责收到 Offer 后自动 `ShowScreen`，生存模式升级也已负责发 Offer；蓝图只需配类和池。
+- 之前提到了 `Choose Option`，却没区分自定义卡片和现有卡片的路径。默认卡片的点击已由 C++ 实现，不要再接一条蓝图提交线；仅完全自定义页面时才自己调用 `Choose Option(OptionIndex)`。
+- 之前的故障信息不够可验证。本版按“池是否抽到有效项 → 组件是否配置页面 → 页面是否生成卡片 → 点击是否被接收”给出 PIE 检查顺序；文中节点和字段均来自现有 C++ 接口，没有要求创建或调用未实现的函数。
 
 ## 行为说明
 

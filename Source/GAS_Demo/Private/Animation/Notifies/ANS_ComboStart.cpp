@@ -72,11 +72,11 @@ void UANS_ComboStart::SetAttackFacing(ACC_BaseCharacter* BaseCharacter,FVector I
 			InterpSpeed)
 		: TargetRotation;
 
-	UE_LOG(LogGAS_Demo, Warning,
-		TEXT("[BowAI][Facing] Store Character=%s Raw=%s Stored=%s"),
-		*GetNameSafe(this),
-		*FlatDirection.ToCompactString(),
-		*NewRotation.ToCompactString());
+	// UE_LOG(LogGAS_Demo, Warning,
+	// 	TEXT("[BowAI][Facing] Store Character=%s Raw=%s Stored=%s"),
+	// 	*GetNameSafe(this),
+	// 	*FlatDirection.ToCompactString(),
+	// 	*NewRotation.ToCompactString());
 	BaseCharacter->SetActorRotation(NewRotation);
 }
 

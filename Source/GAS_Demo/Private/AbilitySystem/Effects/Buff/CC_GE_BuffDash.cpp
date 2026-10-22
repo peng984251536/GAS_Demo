@@ -1,6 +1,9 @@
 #include "AbilitySystem/Effects/Buff/CC_GE_BuffDash.h"
 #include "AbilitySystem/Abilities/Mechanics/CC_Dash.h"
+#include "AbilitySystem/Abilities/Mechanics/CC_SummonAlly.h"
 #include "GameplayEffectComponents/AbilitiesGameplayEffectComponent.h"
+#include "GameplayEffectComponents/AssetTagsGameplayEffectComponent.h"
+#include "Data/Buff/CC_BuffTags.h"
 #include "Data/Buff/CC_BuffUIData.h"
 #include "Data/Buff/CC_BuffRulesComponent.h"
 #include "Data/Buff/CC_BuffBehavior_SplitArrow.h"
@@ -33,6 +36,35 @@ UCC_GE_BuffDash::UCC_GE_BuffDash()
     Config.RemovalPolicy = EGameplayEffectGrantedAbilityRemovePolicy::CancelAbilityImmediately;
     Grants->AddGrantedAbilityConfig(Config);
     GEComponents.Add(Grants);
+}
+
+/**
+ * 能力层配置：无限持续，GA 授予即在身边召唤，成功后移除本 GE；同时最多持有一个。召唤物不随 Buff 消失。
+ */
+UCC_GE_BuffSummon::UCC_GE_BuffSummon()
+{
+    DurationPolicy = EGameplayEffectDurationType::Infinite;
+    StackingType = EGameplayEffectStackingType::AggregateByTarget;
+    StackLimitCount = 1;
+    UCC_BuffUIData* UI = CreateDefaultSubobject<UCC_BuffUIData>(TEXT("BuffUI"));
+    UI->DisplayName = NSLOCTEXT("CCBuff", "SummonName", "召唤随从");
+    UI->Description = NSLOCTEXT("CCBuff", "SummonDescription", "在身边召唤一个为你作战的随从。");
+    GEComponents.Add(UI);
+    GEComponents.Add(CreateDefaultSubobject<UCC_BuffRulesComponent>(TEXT("BuffRules")));
+    UAbilitiesGameplayEffectComponent* Grants =
+        CreateDefaultSubobject<UAbilitiesGameplayEffectComponent>(TEXT("GrantSummon"));
+    FGameplayAbilitySpecConfig Config;
+    Config.Ability = UCC_SummonAlly::StaticClass();
+    Config.RemovalPolicy = EGameplayEffectGrantedAbilityRemovePolicy::CancelAbilityImmediately;
+    Grants->AddGrantedAbilityConfig(Config);
+    GEComponents.Add(Grants);
+    // 召唤 Buff 不同步给召唤物，否则召唤物也会召唤。
+    UAssetTagsGameplayEffectComponent* AssetTags =
+        CreateDefaultSubobject<UAssetTagsGameplayEffectComponent>(TEXT("AssetTags"));
+    FInheritedTagContainer Tags;
+    Tags.Added.AddTag(CCBuffTags::NotShared);
+    AssetTags->SetAndApplyAssetTagChanges(Tags);
+    GEComponents.Add(AssetTags);
 }
 
 /**

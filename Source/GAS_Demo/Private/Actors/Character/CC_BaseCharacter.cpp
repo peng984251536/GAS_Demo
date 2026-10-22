@@ -99,10 +99,10 @@ UCC_CharacterRuntimeData* ACC_BaseCharacter::GetRuntimeData() const
 
 void ACC_BaseCharacter::SetLastMoveInputDirection(const FVector& InDirection)
 {
-	UE_LOG(LogGAS_Demo, Warning,
-		TEXT("[BowAI][Facing] Store Character=%s dir=%s"),
-		*GetNameSafe(this),
-		*InDirection.ToCompactString());
+	// UE_LOG(LogGAS_Demo, Warning,
+	// 	TEXT("[BowAI][Facing] Store Character=%s dir=%s"),
+	// 	*GetNameSafe(this),
+	// 	*InDirection.ToCompactString());
 	RuntimeData->SetLastMoveInputDirection(InDirection);
 }
 

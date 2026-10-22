@@ -1,5 +1,7 @@
 # 角色面板
 
+从控件创建、Designer 布局到战斗地图接入的逐步操作，见 [CombatMain 与角色信息界面实装说明](CombatMain-CharacterScreen-Setup.zh-CN.md)。本页侧重架构和接口。
+
 角色面板分左右两栏：左侧是角色属性（名字、生命、法力，以及可配置的属性列表），右侧是当前持有的 Buff，每条显示名称、效果描述和剩余时间。
 
 它沿用 [UIArchitecture.zh-CN.md](UIArchitecture.zh-CN.md) 的 View / Controller / 展示 Model 分层，Buff 数据直接取自 Buff 系统（[BuffSystem-Architecture.zh-CN.md](BuffSystem-Architecture.zh-CN.md)）：从 `UCC_BuffComponent` 的复制快照读取列表，从 GE 上的 `UCC_BuffUIData` 读取显示信息。面板只读，不施加、不移除任何 Buff，也不认识任何具体 Buff。
@@ -52,7 +54,7 @@ Buff 的过滤规则与 `CC_BuffBarWidget` 相同：GE 上没有 `UCC_BuffUIData
 **页面 `WBP_CharacterScreen`**
 
 1. 父类选 `CC_CharacterScreenWidget`。`Controller Class` 默认已经是 `CC_CharacterScreenController`。
-2. 左侧：实现 `On Stats Changed(DisplayName, Vitals, Stats)`。血蓝条可以用 `Vitals` 的 `GetHealthPercent` / `GetManaPercent`；属性列表遍历 `Stats`，显示 `Label` 和 `ValueText`。
+2. 左侧：实现 `On Stats Changed(DisplayName, Vitals, Stats)`。可将 `Vitals` 传给 `CC_PlayerVitalsWidget.SetVitals`；自绘进度条时，在蓝图拆分结构体后防止最大值为零再计算比例。`GetHealthPercent` / `GetManaPercent` 是 C++ 辅助方法，当前未暴露为蓝图节点。属性列表遍历 `Stats`，显示 `Label` 和 `ValueText`。
 3. 右侧二选一：
    - **自动生成**：放一个 VerticalBox 或 ScrollBox，命名为 `BuffList`，类默认值设置 `Buff Entry Class`。条目按 `InstanceId` 复用：叠层、刷新时长、抑制只原地更新，不重建控件。
    - **自己生成**：实现 `On Buffs Changed(Buffs)`，剩余时间用 `Get Buff Remaining Time`。

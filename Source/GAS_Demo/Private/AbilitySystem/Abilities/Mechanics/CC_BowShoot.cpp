@@ -16,6 +16,51 @@
 #include "Engine/World.h"
 #include "GAS_Demo.h"
 
+namespace
+{
+    /**
+     * 计算出箭方向：从出箭点指向目标的身体中心（Actor 位置即胶囊体中心），
+     * 按目标水平速度做提前量（迭代一次修正飞行时间），再在圆锥内加随机误差。
+     * 箭没有重力，沿直线飞行，所以直接指向预判点即可命中。
+     * @param Origin 出箭点。
+     * @param Target 目标。
+     * @param ArrowSpeed 箭速（厘米/秒）。
+     * @param LeadFactor 提前量比例，0 表示不预判。
+     * @param AimErrorDegrees 随机误差圆锥的半角（度）。
+     * @param OutDirection 单位方向。
+     * @return 方向有效时返回 true；出箭点与瞄准点重合时返回 false。
+     */
+    bool ComputeArrowAimDirection(const FVector& Origin, const AActor& Target, float ArrowSpeed, float LeadFactor,
+                                  float AimErrorDegrees, FVector& OutDirection)
+    {
+        const FVector TargetLocation = Target.GetActorLocation();
+        // 只用水平速度预判：目标跳跃时不把箭射向天空。
+        const FVector TargetVelocity = Target.GetVelocity() * FVector(1.f, 1.f, 0.f);
+        const float Speed = FMath::Max(1.f, ArrowSpeed);
+
+        FVector AimPoint = TargetLocation;
+        if (LeadFactor > 0.f && !TargetVelocity.IsNearlyZero())
+        {
+            float FlightTime = FVector::Dist(Origin, TargetLocation) / Speed;
+            AimPoint = TargetLocation + TargetVelocity * FlightTime * LeadFactor;
+            FlightTime = FVector::Dist(Origin, AimPoint) / Speed;
+            AimPoint = TargetLocation + TargetVelocity * FlightTime * LeadFactor;
+        }
+
+        const FVector ToAim = AimPoint - Origin;
+        if (ToAim.IsNearlyZero())
+        {
+            return false;
+        }
+        OutDirection = ToAim.GetSafeNormal();
+        if (AimErrorDegrees > 0.f)
+        {
+            OutDirection = FMath::VRandCone(OutDirection, FMath::DegreesToRadians(AimErrorDegrees)).GetSafeNormal();
+        }
+        return true;
+    }
+}
+
 UCC_BowShoot::UCC_BowShoot()
 {
     // 每次射击使用独立能力实例，放箭状态不会被其他弓兵共享。
@@ -217,6 +262,15 @@ void UCC_BowShoot::ReleaseArrow()
             SpawnSource = Component->GetName();
             break;
         }
+    }
+
+    // 出箭点用弓上的箭模型，方向不能用它的朝向：那是放箭那一帧的动画姿势，与目标位置无关。
+    // 改为从出箭点指向目标（含提前量与随机误差）；计算失败时才保留上面的模型 / 角色朝向。
+    FVector AimDirection;
+    if (ComputeArrowAimDirection(Origin, *Target, Config->ArrowSpeed, Config->ArrowLeadFactor,
+                                 Config->ArrowAimErrorDegrees, AimDirection))
+    {
+        Direction = AimDirection;
     }
 
     /**

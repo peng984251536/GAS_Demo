@@ -11,7 +11,7 @@ UE5 + GAS 的动作战斗 Demo。C++ 源码在 `Source/GAS_Demo`，设计文档�
 - 案例手册（分裂箭、爆炸箭、冻结、魅惑、反弹等）：`Docs/BuffSystem-Cookbook.zh-CN.md`
 - 基础设施现状与待办：`Docs/BuffSystem-Roadmap.zh-CN.md`
 - Buff 三选一（获取途径）：`Docs/BuffSelection.zh-CN.md`
-- 选点召唤随从（地面高亮选点、召唤物继承阵营 `SetTeamOverride`）：`Docs/SummonAlly.zh-CN.md`
+- 召唤 Buff（玩家身边召唤、召唤物继承阵营 `SetTeamOverride`、Buff 同步给召唤物 `Buff.NotShared`）：`Docs/SummonAlly.zh-CN.md`
 - 生存模式（波次刷怪、共享经验、倒计时复活、结算）：设计 `Docs/SurvivalMode.zh-CN.md`（第 0 节为实现偏差），接入与调参 `Docs/SurvivalMode-Usage.zh-CN.md`。死亡判定统一走 `UCC_AttributeSet::OnOutOfHealth` → `UCC_GameEventSubsystem::OnCharacterDied`，不要再在 Health 变化回调里判定死亡。
 - 新增或修改 Buff 时，按 `.claude/skills/add-buff/SKILL.md` 的流程执行。
 

@@ -112,7 +112,23 @@ public:
 	/** 箭的初速度，按当前目标位置计算发射方向。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Crash|Ranged", meta = (ClampMin = "1"))
 	float ArrowSpeed = 1800.0f;
-	UPROPERTY(EditDefaultsOnly,BlueprintReadWrite,Category="Crash|AI")
+
+	/**
+	 * 瞄准提前量：按目标水平速度预判落点的比例。0 = 瞄准目标当前位置，1 = 完全预判。
+	 * 目标静止时不起作用。调小让移动中的玩家更容易躲开。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Crash|Ranged", meta = (ClampMin = "0", ClampMax = "1.5"))
+	float ArrowLeadFactor = 0.8f;
+	/**
+	 * 瞄准误差（度）：出箭方向在以瞄准方向为轴的圆锥内随机偏移。0 = 百发百中。
+	 * 850 射程上 1 度约偏 15 厘米。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Crash|Ranged", meta = (ClampMin = "0", ClampMax = "30"))
+	float ArrowAimErrorDegrees = 1.0f;
+	/**
+	 * 攻击延迟
+	 */
+	UPROPERTY(EditDefaultsOnly,BlueprintReadWrite,Category="Crash|Ranged")
 	float AttackDelay{1.0f};
 
 	/**

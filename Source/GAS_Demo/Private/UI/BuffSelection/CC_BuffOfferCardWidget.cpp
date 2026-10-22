@@ -18,8 +18,14 @@ void UCC_BuffOfferCardWidget::SetCardData(const FCC_BuffOfferCardData& InData, U
     }
     if (Image_Icon)
     {
-        Image_Icon->SetBrushFromTexture(Data.Icon);
-        Image_Icon->SetVisibility(Data.Icon ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+        if(Data.Icon)
+        {
+            Image_Icon->SetBrushFromTexture(Data.Icon);
+        }
+        
+        // Image_Icon->SetVisibility(Data.Icon ?
+        //     ESlateVisibility::HitTestInvisible :
+        //     ESlateVisibility::Collapsed);
     }
     OnCardDataSet(Data);
 }

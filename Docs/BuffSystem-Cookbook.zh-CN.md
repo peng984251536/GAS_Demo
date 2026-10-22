@@ -177,7 +177,17 @@ void ACC_ArrowProjectile::Deflect(AActor* NewOwner)
 
 ---
 
-## 召唤（现有功能的迁移目标）
+## 召唤
+
+### 瞬时召唤（已实现）
+
+- **归类**：能力层。召唤 GE 用 Grant Abilities 授予 `UCC_SummonAlly`，GA 带 `ActivateOnGiven` 授予即激活。
+- **流程**：服务器在玩家身边生成召唤物并 `SetTeamOverride(施放者阵营)` → 下一帧移除授予它的 GE（Buff 用完即消失）。
+- **Buff 共享**：`UCC_SummonBuffShareComponent` 只用 BuffComponent 公开接口，把玩家的每次获得复制给召唤物，复制品独立计时；带 `Buff.NotShared` 的不同步。
+- **生命周期**：召唤物不随 Buff 消失（它是这次施放的结果，不是 Buff 授予的状态）。
+- 详见 [SummonAlly.zh-CN.md](SummonAlly.zh-CN.md)。
+
+### 持续召唤（旧功能的迁移目标）
 
 - **归类**：规则层生命周期类，纯服务器逻辑。
 - **现状**：`SummonClass` 等字段在 `UCC_BuffDefinition` 中，逻辑在 `UCC_BuffComponent::StartSpecials`。
