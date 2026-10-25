@@ -1,4 +1,7 @@
 #include "Animation/Notifies/AnimNotify_MeleeHitBox.h"
+#include "Actors/Projectiles/CC_ProjectileInteractions.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Utils/Team/CC_TeamStatics.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
@@ -8,6 +11,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
+#include "Engine/OverlapResult.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTags/CC_Tags.h"
 #if WITH_EDITOR
@@ -101,6 +105,65 @@ const UAnimNotify_MeleeHitBox* UAnimNotify_MeleeHitBox::FromEventPayload(const F
 	return Cast<const UAnimNotify_MeleeHitBox>(Payload.OptionalObject.Get());
 }
 
+FGameplayAbilityTargetDataHandle UAnimNotify_MeleeHitBox::CollectTargetData(USkeletalMeshComponent* MeshComp) const
+{
+	FGameplayAbilityTargetDataHandle Result;
+	AActor* Owner = IsValid(MeshComp) ? MeshComp->GetOwner() : nullptr;
+	UWorld* World = IsValid(MeshComp) ? MeshComp->GetWorld() : nullptr;
+	if (!IsValid(Owner) || !Owner->HasAuthority() || !World || !World->IsGameWorld())
+	{
+		return Result;
+	}
+
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(MeleeNotifyHitBox), false, Owner);
+	FCollisionObjectQueryParams Objects(ECC_Pawn);
+	TSet<AActor*> AddedActors;
+	for (const FCC_MeleeHitShape& Shape : Shapes)
+	{
+		FVector Location;
+		FQuat Rotation;
+		float Scale = 1.f;
+		if (!Shape.ResolveWorldPose(MeshComp, Location, Rotation, Scale)) continue;
+		const FCollisionShape Collision = Shape.MakeCollisionShape(Scale);
+		// 箭单独处理，不混入角色伤害目标；只使用同一套 Notify 形状。
+		CCProjectileInteractions::DeflectInShape(Owner, Location, Rotation, Collision);
+		TArray<FOverlapResult> Overlaps;
+		World->OverlapMultiByObjectType(Overlaps, Location, Rotation, Objects, Collision, Query);
+		if (bDrawDebug) Shape.DrawDebug(World, Location, Rotation, Scale, FColor::Red, 0.4f);
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			AActor* Target = Overlap.GetActor();
+			UPrimitiveComponent* Component = Overlap.GetComponent();
+			if (!IsValid(Target) || Target == Owner || !IsValid(Component) || AddedActors.Contains(Target)) continue;
+			if (const ACC_BaseCharacter* Character = Cast<ACC_BaseCharacter>(Target))
+			{
+				if (!Character->IsAlive() || !UCC_TeamStatics::IsHostile(Owner, Target)) continue;
+			}
+
+			// Overlap 没有表面命中信息，补一条组件射线供受击方向/命中特效使用。
+			const FVector Center = Component->Bounds.Origin;
+			FVector Normal = (Owner->GetActorLocation() - Center).GetSafeNormal();
+			if (Normal.IsNearlyZero()) Normal = -Owner->GetActorForwardVector();
+			const float Distance = Component->Bounds.SphereRadius + 10.f;
+			FHitResult Hit;
+			if (!Component->LineTraceComponent(Hit, Center + Normal * Distance, Center - Normal * Distance, Query)
+				|| Hit.bStartPenetrating)
+			{
+				// 检测已经确认重叠，补射线失败不能把实际命中丢掉。
+				FVector Point = Center;
+				Component->GetClosestPointOnCollision(Owner->GetActorLocation(), Point);
+				Hit = FHitResult(Target, Component, Point, Normal);
+			}
+			Result.Add(new FGameplayAbilityTargetData_SingleTargetHit(Hit));
+			AddedActors.Add(Target);
+#if ENABLE_DRAW_DEBUG
+			if (bDrawDebug) DrawDebugPoint(World, Hit.ImpactPoint, 10.f, FColor::Green, false, 0.4f);
+#endif
+		}
+	}
+	return Result;
+}
+
 void UAnimNotify_MeleeHitBox::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
 	const FAnimNotifyEventReference& EventReference)
 {
@@ -135,12 +198,12 @@ void UAnimNotify_MeleeHitBox::Notify(USkeletalMeshComponent* MeshComp, UAnimSequ
 		return;
 	}
 
-	// 与原蓝图 AN_SendEventToActor 一致：发给自身 ASC，由正在执行的攻击 GA 处理。
 	FGameplayEventData Payload;
 	Payload.EventTag = EventTag;
 	Payload.Instigator = Owner;
 	Payload.Target = Owner;
 	Payload.OptionalObject = this;
+	Payload.TargetData = CollectTargetData(MeshComp);
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Owner, EventTag, Payload);
 }
 

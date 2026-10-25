@@ -105,6 +105,7 @@ namespace
 		Data.Target.HandleGameplayEvent(Payload.EventTag, &Payload);
 		if (SourceASC)
 		{
+			// 发送事件，伤害来源被攻击
 			Payload.EventTag = CCDamageTags::EventDamageDealt;
 			SourceASC->HandleGameplayEvent(Payload.EventTag, &Payload);
 		}

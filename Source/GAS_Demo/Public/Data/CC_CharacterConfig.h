@@ -134,7 +134,7 @@ public:
 	/**
 	 * 近战攻击距离（厘米），按双方胶囊体边缘计算，不是中心距离。
 	 * 近战的 FollowTarget 走到这个距离内即停下；行为树判断「在攻击距离内」与控制器的被挡检测也用它。
-	 * 按 UCC_Primary::HitBoxRadius 和攻击蒙太奇的前冲距离调整。弓兵不使用。
+	 * 按 Melee HitBox 通知的 Shapes 范围和攻击蒙太奇的前冲距离调整。弓兵不使用。
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Crash|AI", meta = (ClampMin = "0"))
 	float MeleeReach = 80.0f;

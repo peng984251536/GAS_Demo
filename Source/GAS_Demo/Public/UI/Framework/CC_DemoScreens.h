@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CommonButtonBase.h"
+#include "UI/Framework/CC_ButtonBase.h"
 #include "UI/Framework/CC_ActivatableWidget.h"
 #include "UI/Framework/CC_UIController.h"
 #include "CC_DemoScreens.generated.h"
@@ -31,7 +31,7 @@ public:
 
 /** 原生 CommonButton 示例：用于验证交互与焦点，实际游戏可使用自己的按钮蓝图。 */
 UCLASS()
-class GAS_DEMO_API UCC_MenuButton : public UCommonButtonBase
+class GAS_DEMO_API UCC_MenuButton : public UCC_ButtonBase
 {
 	GENERATED_BODY()
 public:

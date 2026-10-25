@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CommonButtonBase.h"
+#include "UI/Framework/CC_ButtonBase.h"
 #include "UI/BuffSelection/CC_BuffSelectionViewTypes.h"
 #include "CC_BuffOfferCardWidget.generated.h"
 
@@ -15,11 +15,14 @@ class UCC_BuffSelectionScreen;
  * 其他表现（稀有度边框、动画等）在 On Card Data Set 里自己处理。点击后交给所属页面选择。
  */
 UCLASS(Abstract, Blueprintable)
-class GAS_DEMO_API UCC_BuffOfferCardWidget : public UCommonButtonBase
+class GAS_DEMO_API UCC_BuffOfferCardWidget : public UCC_ButtonBase
 {
     GENERATED_BODY()
 
 public:
+    /** 选卡属于确认操作，点击音效使用 UI.Confirm。 */
+    UCC_BuffOfferCardWidget(const FObjectInitializer& ObjectInitializer);
+
     /** 页面生成卡片后调用，写入数据并记录所属页面。 */
     void SetCardData(const FCC_BuffOfferCardData& InData, UCC_BuffSelectionScreen* InOwner);
 

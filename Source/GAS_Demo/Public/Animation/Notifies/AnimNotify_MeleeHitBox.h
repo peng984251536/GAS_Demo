@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotify.h"
 #include "GameplayTagContainer.h"
+#include "Abilities/GameplayAbilityTargetTypes.h"
 #include "AnimNotify_MeleeHitBox.generated.h"
 
 class USceneComponent;
@@ -75,8 +76,9 @@ struct GAS_DEMO_API FCC_MeleeHitShape
  * 近战攻击判定 Notify，取代蓝图 AN_SendEventToActor。
  *
  * 放在攻击蒙太奇的出伤帧：向自身 ASC 发送 EventTag（默认 CCTags.Event.Attack），
- * 并把自己作为 Payload.OptionalObject 带上。攻击 GA 收到事件后调用
- * UCC_Primary::HitBoxOverlapFromEvent(Payload)，按这里配置的形状做重叠检测。
+ * 在服务器按 Shapes 完成命中检测，将结果放入 Payload.TargetData，自己放入 OptionalObject。
+ * 攻击 GA 收到事件后调用 UCC_Primary::HitBoxOverlapFromEvent(Payload) 读取结果，不再检测第二次。
+ * GameplayEvent 只在本机 ASC 分发；客户端仍收到空目标的时序事件，伤害以服务器检测为准。
  *
  * 每个放进蒙太奇的 Notify 都是独立实例，因此不同招式、同一招的不同出伤帧可以各配各的判定框。
  * Notify 是蒙太奇资源的子对象，运行时只读，不保存任何角色的状态。
@@ -84,7 +86,7 @@ struct GAS_DEMO_API FCC_MeleeHitShape
  * 编辑器：把播放头拖到该 Notify 附近，预览窗口会用红色线框画出判定形状；
  * 勾选 bAlwaysDrawInEditor 则任何时间都以暗橙色显示。
  */
-UCLASS(meta=(DisplayName="Melee HitBox"))
+UCLASS(meta=(DisplayName=""))
 class GAS_DEMO_API UAnimNotify_MeleeHitBox : public UAnimNotify
 {
 	GENERATED_BODY()
@@ -99,6 +101,13 @@ public:
 	/** 判定形状，可以多个（如武器挥过的扇面用两三个盒子拼）；命中目标会去重。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="HitBox", meta=(TitleProperty="{ShapeType} {AttachSocket}"))
 	TArray<FCC_MeleeHitShape> Shapes;
+
+	/** 运行时显示实际用于检测的形状与命中点；不改变编辑器预览。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="HitBox|Debug")
+	bool bDrawDebug = false;
+
+	/** 仅服务器收集命中；每个调用使用独立结果，多形状/多组件按 Actor 去重。 */
+	FGameplayAbilityTargetDataHandle CollectTargetData(USkeletalMeshComponent* MeshComp) const;
 
 	/** 编辑器预览：播放头在触发时间前后多少秒内高亮显示判定形状。 */
 	UPROPERTY(EditAnywhere, Category="HitBox|Editor", meta=(ClampMin="0"))

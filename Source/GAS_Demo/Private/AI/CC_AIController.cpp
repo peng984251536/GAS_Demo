@@ -26,6 +26,8 @@ namespace
 	/** 群体战斗写入的黑板键名（见 Docs/AI-Combat.zh-CN.md 第 7 节）。键不存在时写入静默失败。 */
 	const FName IsBlockedKey(TEXT("IsBlocked"));
 	const FName SquadOrderKey(TEXT("SquadOrder"));
+	/** 跟随命令下、没有目标时要跟随的 Actor（行为树的跟随分支 MoveTo 它）。 */
+	const FName FollowAnchorKey(TEXT("FollowAnchor"));
 }
 
 #pragma region
@@ -196,6 +198,8 @@ void ACC_AIController::ReevaluateTarget()
 		UpdateEngagement(Target);
 	}
 
+	// 目标没变时 ApplyTarget 不会调用，这里补上：锚点倒地 / 复活、黑板刚就绪等情况。
+	UpdateFollowAnchorKey();
 	UpdateAvoidanceLOD();
 	DrawBlockedDebug();
 }
@@ -236,6 +240,15 @@ void ACC_AIController::ReevaluateTargetInternal(const FVector* LostLocation)
 	{
 		if (!IsValidTarget(Self, Actor) || !PassesSquadConstraint(Actor))
 		{
+			// 诊断：看见了玩家却不能当目标时说明原因（死亡 / 非敌对 / 编队约束），排查「看得见却不锁定」。
+			if (const APawn* PerceivedPawn = Cast<APawn>(Actor); PerceivedPawn && PerceivedPawn->IsPlayerControlled())
+			{
+				const ACC_BaseCharacter* PerceivedCharacter = Cast<ACC_BaseCharacter>(Actor);
+				UE_LOG(LogGAS_Demo, Verbose,
+					TEXT("[AI][Targeting] Perceived player rejected: Controller=%s Player=%s Alive=%d Hostile=%d Squad=%d"),
+					*GetNameSafe(this), *GetNameSafe(Actor), PerceivedCharacter && PerceivedCharacter->IsAlive(),
+					UCC_TeamStatics::IsHostile(Self, Actor), PassesSquadConstraint(Actor));
+			}
 			continue;
 		}
 		if (Actor == Current)
@@ -253,14 +266,40 @@ void ACC_AIController::ReevaluateTargetInternal(const FVector* LostLocation)
 		}
 	}
 
+	// 当前目标近在身边却没被感知到（视线被武器、同伴或角度短暂挡住）：仍作为候选，不因一瞬间看不见就丢失。
+	if (CurrentIndex == INDEX_NONE && IsValid(Current) && KeepTargetRadius > 0.f
+		&& IsValidTarget(Self, Current) && PassesSquadConstraint(Current))
+	{
+		const float CurrentDistance = FVector::Dist2D(SelfLocation, Current->GetActorLocation());
+		if (CurrentDistance <= KeepTargetRadius)
+		{
+			CurrentIndex = Candidates.Num();
+			FCC_TargetCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+			Candidate.Actor = Current;
+			Candidate.Distance = CurrentDistance;
+			Candidate.bBlocked = Current == Blocked;
+			if (Registry)
+			{
+				Candidate.MeleeAttackers = Registry->GetMeleeAttackerCount(Current, Self);
+				Candidate.bTargetsSelf = Registry->GetTargetOf(Current) == Self;
+			}
+			UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Targeting] Keep unseen target: Controller=%s Target=%s Distance=%.0f"),
+				*GetNameSafe(this), *GetNameSafe(Current), CurrentDistance);
+		}
+	}
+
 	const int32 BestIndex = FCC_TargetScoring::SelectBest(Candidates, CurrentIndex, TargetScoring,
 		TargetSwitchHysteresis, bSelfIsMelee);
+	UE_LOG(LogGAS_Demo, VeryVerbose, TEXT("[AI][Targeting] Reevaluate: Controller=%s Perceived=%d Candidates=%d Current=%s Best=%s"),
+		*GetNameSafe(this), Perceived.Num(), Candidates.Num(), *GetNameSafe(Current),
+		*GetNameSafe(Candidates.IsValidIndex(BestIndex) ? Candidates[BestIndex].Actor : nullptr));
 	AActor* Best = Candidates.IsValidIndex(BestIndex) ? Candidates[BestIndex].Actor : nullptr;
 	if (Best == Current)
 	{
 		return;
 	}
-	ApplyTarget(Best, Best ? nullptr : LostLocation);
+	// 跟随中丢失目标时不去最后看到的位置搜索，直接回到锚点身边。
+	ApplyTarget(Best, (Best || GetFollowAnchor()) ? nullptr : LostLocation);
 }
 
 /**
@@ -363,6 +402,7 @@ void ACC_AIController::ApplyTarget(AActor* NewTarget, const FVector* LostLocatio
 
 	// 目标变化同步到登记表：魅惑导致的换目标也走这里。
 	UpdateEngagement(IsValid(NewTarget) ? NewTarget : nullptr);
+	UpdateFollowAnchorKey();
 }
 
 /**
@@ -431,14 +471,47 @@ void ACC_AIController::UpdateEngagement(AActor* NewTarget)
 }
 
 /**
- * 编队约束挂点。v3 不实现编队行为，所有候选都满足。
- * 实现编队层时在这里按 SquadOrder 过滤：
- *   Follow / Hold：只接受离锚点（或坚守位置）EngageRadius 以内的敌人；
- *   Retreat：不接受任何目标。
+ * 编队约束。Follow：栓绳（自己离锚点太远不打；新目标须在锚点 EngageRadius 内，当前目标可放宽到 LeashRadius）。
+ * 以后实现 Hold（以坚守位置为锚点）/ Retreat（不接受任何目标）也在这里加。
  */
-bool ACC_AIController::PassesSquadConstraint(const AActor* /*Candidate*/) const
+bool ACC_AIController::PassesSquadConstraint(const AActor* Candidate) const
 {
-	return true;
+	const AActor* Anchor = GetFollowAnchor();
+	if (!Anchor || !IsValid(BaseCharacter) || !IsValid(Candidate))
+	{
+		return true;
+	}
+	return FCC_SquadRules::PassesFollowLeash(SquadOrder, Anchor->GetActorLocation(),
+		BaseCharacter->GetActorLocation(), Candidate->GetActorLocation(), Candidate == CurrentTarget.Get());
+}
+
+AActor* ACC_AIController::GetFollowAnchor() const
+{
+	if (SquadOrder.Order != ECC_SquadOrder::Follow || !IsValid(SquadOrder.Anchor))
+	{
+		return nullptr;
+	}
+	// 锚点倒地等待复活时不跟随，按自由交战处理；复活后自动恢复跟随。
+	const ACC_BaseCharacter* AnchorCharacter = Cast<ACC_BaseCharacter>(SquadOrder.Anchor);
+	return (AnchorCharacter && !AnchorCharacter->IsAlive()) ? nullptr : SquadOrder.Anchor.Get();
+}
+
+void ACC_AIController::UpdateFollowAnchorKey()
+{
+	UBlackboardComponent* BlackboardComp = GetBlackboardComponent();
+	if (!BlackboardComp)
+	{
+		return;
+	}
+	AActor* Anchor = CurrentTarget.IsValid() ? nullptr : GetFollowAnchor();
+	if (Anchor)
+	{
+		BlackboardComp->SetValueAsObject(FollowAnchorKey, Anchor);
+	}
+	else
+	{
+		BlackboardComp->ClearValue(FollowAnchorKey);
+	}
 }
 
 void ACC_AIController::SetSquadOrder(const FCC_SquadOrder& NewOrder)
@@ -449,11 +522,12 @@ void ACC_AIController::SetSquadOrder(const FCC_SquadOrder& NewOrder)
 		BlackboardComp->SetValueAsEnum(SquadOrderKey, static_cast<uint8>(NewOrder.Order));
 	}
 
-	const bool bImplemented = NewOrder.Order == ECC_SquadOrder::Free || NewOrder.Order == ECC_SquadOrder::Charge;
+	const bool bImplemented = NewOrder.Order == ECC_SquadOrder::Free || NewOrder.Order == ECC_SquadOrder::Charge
+		|| NewOrder.Order == ECC_SquadOrder::Follow;
 	if (bImplemented)
 	{
-		UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Squad] Order: Controller=%s Order=%s"),
-			*GetNameSafe(this), *UEnum::GetValueAsString(NewOrder.Order));
+		UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Squad] Order: Controller=%s Order=%s Anchor=%s"),
+			*GetNameSafe(this), *UEnum::GetValueAsString(NewOrder.Order), *GetNameSafe(NewOrder.Anchor.Get()));
 	}
 	else
 	{

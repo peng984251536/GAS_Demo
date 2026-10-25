@@ -153,6 +153,8 @@ GE_Charm（UCC_BuffDefinition 蓝图）
 
 ## 攻击可以反弹弓箭
 
+当前已实现：`GE_Buff_DeflectArrow`（原生配置父类 `UCC_GE_DeflectArrowPermanent`）授予 `Ability.Deflect.Projectile`。近战有效帧通过 `CCProjectileInteractions::DeflectInShape` 查询箭，`ACC_ArrowProjectile::Deflect` 在服务器切换归属并转向原射手；每支箭最多反弹一次。检测统一由原生 MeleeHitBox Notify 的 Shapes 驱动。下方是设计伪代码；实际实现还会通过 DamageStatics 重新准备反弹者的伤害快照和 Context，防止只修改 Instigator 而保留旧伤害来源。参数与测试说明见 [NewBuffOffers.zh-CN.md](BuffSystem/NewBuffOffers.zh-CN.md)。
+
 - **归类**：状态层（开关式能力）。Buff 授予 `Ability.Deflect.Projectile`。
 - **依赖**：阵营系统；近战判定能检测投射物；箭支持改变归属。
 

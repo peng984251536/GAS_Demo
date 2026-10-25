@@ -128,41 +128,41 @@ void ACC_EnemyCharacter::Tick(float DeltaTime)
 		// 	}
 		// }
 
-		// 橙色圆圈表示弓兵的最小射程；目标进入圈内时应由 KeepDistance 尝试后撤。
-		// 与视野扇形一样每帧重画，怪物移动时圆圈会跟随，关闭调试开关后也不会残留。
-		if (IsValid(CharacterConfig) && CharacterConfig->MaxRange > 0.0f)
-		{
-			
-			constexpr int32 CircleSegments = 64;
-			const FVector CircleCenter = GetActorLocation() + FVector(0.0f, 0.0f, 8.0f);
-			FVector PreviousPoint = CircleCenter + FVector::ForwardVector * CharacterConfig->MaxRange;
-			for (int32 Segment = 1; Segment <= CircleSegments; ++Segment)
-			{
-				const float Angle = 360.0f * static_cast<float>(Segment) / CircleSegments;
-				const FVector CurrentPoint = CircleCenter
-					+ FVector::ForwardVector.RotateAngleAxis(Angle, FVector::UpVector) * CharacterConfig->MaxRange;
-				DrawDebugLine(GetWorld(), PreviousPoint, CurrentPoint, FColor::Red, false, 0.0f, 0, 2.0f);
-				PreviousPoint = CurrentPoint;
-			}
-		}
-		
-		// 橙色圆圈表示弓兵的最小射程；目标进入圈内时应由 KeepDistance 尝试后撤。
-		// 与视野扇形一样每帧重画，怪物移动时圆圈会跟随，关闭调试开关后也不会残留。
-		if (IsValid(CharacterConfig) && CharacterConfig->MinRange > 0.0f)
-		{
-			
-			constexpr int32 CircleSegments = 64;
-			const FVector CircleCenter = GetActorLocation() + FVector(0.0f, 0.0f, 8.0f);
-			FVector PreviousPoint = CircleCenter + FVector::ForwardVector * CharacterConfig->MinRange;
-			for (int32 Segment = 1; Segment <= CircleSegments; ++Segment)
-			{
-				const float Angle = 360.0f * static_cast<float>(Segment) / CircleSegments;
-				const FVector CurrentPoint = CircleCenter
-					+ FVector::ForwardVector.RotateAngleAxis(Angle, FVector::UpVector) * CharacterConfig->MinRange;
-				DrawDebugLine(GetWorld(), PreviousPoint, CurrentPoint, FColor::Orange, false, 0.0f, 0, 2.0f);
-				PreviousPoint = CurrentPoint;
-			}
-		}
+		// // 橙色圆圈表示弓兵的最小射程；目标进入圈内时应由 KeepDistance 尝试后撤。
+		// // 与视野扇形一样每帧重画，怪物移动时圆圈会跟随，关闭调试开关后也不会残留。
+		// if (IsValid(CharacterConfig) && CharacterConfig->MaxRange > 0.0f)
+		// {
+		// 	
+		// 	constexpr int32 CircleSegments = 64;
+		// 	const FVector CircleCenter = GetActorLocation() + FVector(0.0f, 0.0f, 8.0f);
+		// 	FVector PreviousPoint = CircleCenter + FVector::ForwardVector * CharacterConfig->MaxRange;
+		// 	for (int32 Segment = 1; Segment <= CircleSegments; ++Segment)
+		// 	{
+		// 		const float Angle = 360.0f * static_cast<float>(Segment) / CircleSegments;
+		// 		const FVector CurrentPoint = CircleCenter
+		// 			+ FVector::ForwardVector.RotateAngleAxis(Angle, FVector::UpVector) * CharacterConfig->MaxRange;
+		// 		DrawDebugLine(GetWorld(), PreviousPoint, CurrentPoint, FColor::Red, false, 0.0f, 0, 2.0f);
+		// 		PreviousPoint = CurrentPoint;
+		// 	}
+		// }
+		//
+		// // 橙色圆圈表示弓兵的最小射程；目标进入圈内时应由 KeepDistance 尝试后撤。
+		// // 与视野扇形一样每帧重画，怪物移动时圆圈会跟随，关闭调试开关后也不会残留。
+		// if (IsValid(CharacterConfig) && CharacterConfig->MinRange > 0.0f)
+		// {
+		// 	
+		// 	constexpr int32 CircleSegments = 64;
+		// 	const FVector CircleCenter = GetActorLocation() + FVector(0.0f, 0.0f, 8.0f);
+		// 	FVector PreviousPoint = CircleCenter + FVector::ForwardVector * CharacterConfig->MinRange;
+		// 	for (int32 Segment = 1; Segment <= CircleSegments; ++Segment)
+		// 	{
+		// 		const float Angle = 360.0f * static_cast<float>(Segment) / CircleSegments;
+		// 		const FVector CurrentPoint = CircleCenter
+		// 			+ FVector::ForwardVector.RotateAngleAxis(Angle, FVector::UpVector) * CharacterConfig->MinRange;
+		// 		DrawDebugLine(GetWorld(), PreviousPoint, CurrentPoint, FColor::Orange, false, 0.0f, 0, 2.0f);
+		// 		PreviousPoint = CurrentPoint;
+		// 	}
+		// }
 	}
 
 	// if(HasAuthority() && IsValid( FClosestActor.Actor.Get()))

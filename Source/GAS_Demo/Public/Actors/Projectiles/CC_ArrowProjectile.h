@@ -33,6 +33,13 @@ class GAS_DEMO_API ACC_ArrowProjectile : public AActor
 	 */
     void IgnoreVolleyArrow(ACC_ArrowProjectile* Other);
 
+    /**
+     * 服务器反弹：校验资格与敌我，更新归属、碰撞忽略和速度，并重新快照反弹者属性。
+     * 保留原箭 Payload 的技能参数；伤害来源和后续伤害事件归反弹者。每支箭最多反弹一次。
+     * 已反弹的箭独立存在，资格标签之后移除或被抑制不会撤回它。
+     */
+    bool Deflect(APawn* NewInstigator);
+
   protected:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
@@ -72,4 +79,6 @@ class GAS_DEMO_API ACC_ArrowProjectile : public AActor
     UPROPERTY(Transient) FCC_ArrowPayload Payload;
     FGameplayEffectSpecHandle DamageSnapshot;
     bool bHitProcessed = false;
+    /** 箭自身的运行时状态，防止多个攻击形状或双方攻击把同一支箭无限来回反弹。 */
+    bool bDeflected = false;
 };

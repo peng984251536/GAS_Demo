@@ -32,6 +32,23 @@ bool UCC_CombatRangeStatics::IsInMeleeReach(const ACC_BaseCharacter* SelfActor, 
 		IsValid(TargetActor)&& GetEdgeDistance2D(SelfActor, TargetActor) <= GetMeleeReach(SelfActor);
 }
 
+bool UCC_CombatRangeStatics::IsInAttackRange(const ACC_BaseCharacter* SelfCharacter, const AActor* Target)
+{
+	if (!IsValid(SelfCharacter) || !IsValid(Target))
+	{
+		return false;
+	}
+	if (!IsRangedCharacter(SelfCharacter))
+	{
+		return IsInMeleeReach(SelfCharacter, Target);
+	}
+	// 弓兵只看最大射程。太近（< MinRange）由行为树里排在射击前面的后撤分支处理；
+	// 后撤失败（退无可退）时落到射击分支，贴脸也照样射，不会因为三个分支都不成立而原地发呆。
+	const UCC_CharacterConfig* Config = SelfCharacter->GetCharacterConfig();
+	const float Distance = FVector::Dist2D(SelfCharacter->GetActorLocation(), Target->GetActorLocation());
+	return Config && Distance <= Config->MaxRange;
+}
+
 bool UCC_CombatRangeStatics::IsRangedCharacter(const ACC_BaseCharacter* Character)
 {
 	const UCC_CharacterConfig* Config = IsValid(Character) ? Character->GetCharacterConfig() : nullptr;

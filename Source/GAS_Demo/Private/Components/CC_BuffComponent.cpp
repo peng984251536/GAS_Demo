@@ -422,6 +422,7 @@ void UCC_BuffComponent::SetHooks(FActiveGameplayEffectHandle Handle, bool bEnabl
 }
 
 /**
+ * 拿到 Behavior 对射箭数据进行修改
  * 对活动规则执行本次钩子；快照索引确保回调中移除 Buff 也不会破坏遍历。
  * @param Hook 当前决策点的标签。
  * @param Context 只允许修改字段，不允许替换结构体类型。

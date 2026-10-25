@@ -6,7 +6,7 @@
 UCC_CharacterScreenWidget::UCC_CharacterScreenWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 	ControllerClass = UCC_CharacterScreenController::StaticClass();
-	InputConfig = ECC_UIInputMode::Menu;
+	InputMode = ECommonInputMode::Menu;
 	bAllowBack = true;
 }
 

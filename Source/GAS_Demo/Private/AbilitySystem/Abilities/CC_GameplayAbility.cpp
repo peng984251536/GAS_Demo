@@ -8,6 +8,8 @@
 #include "Animation/AnimMontage.h"
 #include "Actors/Character/CC_BaseCharacter.h"
 #include "Data/AbilityData/CombatActionData.h"
+#include "Audio/CC_AudioLibrary.h"
+#include "Kismet/GameplayStatics.h"
 
 UCC_GameplayAbility::UCC_GameplayAbility()
 {
@@ -150,6 +152,21 @@ void UCC_GameplayAbility::OnMontageCancelled()
 }
 
 #pragma endregion
+
+// 附着在根组件上播放，角色移动时声音跟随；音量、衰减由音效资产决定。
+void UCC_GameplayAbility::PlayAudioEventOnAvatar(FName Event) const
+{
+	const AActor* Avatar = GetAvatarActorFromActorInfo();
+	if (Event.IsNone() || !IsValid(Avatar) || Avatar->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	USceneComponent* Root = Avatar->GetRootComponent();
+	if (USoundBase* Sound = UCC_AudioLibrary::PickGlobalAudioSound(Event); Sound && Root)
+	{
+		UGameplayStatics::SpawnSoundAttached(Sound, Root);
+	}
+}
 
 void UCC_GameplayAbility::FinishOwnedAction(bool bWasCancelled)
 {

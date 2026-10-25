@@ -57,6 +57,12 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Ability|Abilities")
 	virtual void FinishOwnedAction(bool bWasCancelled);
 
+	/**
+	 * 从全局音效配置（UCC_AudioConfig）随机取 Event 对应的音效，附着在 Avatar 上播放。
+	 * 只在执行本能力的机器上播放，不做网络同步；Event 为空、未配置或专用服务器时跳过。
+	 */
+	void PlayAudioEventOnAvatar(FName Event) const;
+
 	virtual void ActivateAbility(
 		const FGameplayAbilitySpecHandle Handle,
 		const FGameplayAbilityActorInfo* ActorInfo,

@@ -36,6 +36,10 @@ struct GAS_DEMO_API FCC_ProjectileFireContext
     UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 ProjectileCount = 1;
     /** 合并：取最大；水平扇形的总夹角，最终限制在 0～180 度。 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite) float SpreadAngle = 0.f;
+    /** 合并：相加；连续发射轮数，最终限制 1～8。 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 VolleyCount = 1;
+    /** 合并：取最大；连续轮次间隔，单位秒。 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) float VolleyInterval = 0.f;
     /** 合并：按 Payload 各字段规则分别合并。 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite) FCC_ArrowPayload Payload;
 

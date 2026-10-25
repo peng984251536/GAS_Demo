@@ -45,10 +45,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category="UI|Buff")
 	FText InfiniteDurationText = NSLOCTEXT("CCCharacterScreen", "InfiniteDuration", "持续");
 
-	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional)) TObjectPtr<UImage> Icon;
-	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> NameText;
-	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> DescriptionText;
-	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> TimeText;
+	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional))
+	TObjectPtr<UImage> Icon;
+	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> NameText;
+	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> DescriptionText;
+	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> TimeText;
 	/** 剩余时间 / 总时长；无限期时为满。 */
 	UPROPERTY(BlueprintReadOnly, Category="UI|Buff", meta=(BindWidgetOptional)) TObjectPtr<UProgressBar> TimeBar;
 

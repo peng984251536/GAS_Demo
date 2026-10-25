@@ -33,6 +33,17 @@ private:
 	void HandlePathRequestFinished(FAIRequestID RequestID, const FPathFollowingResult& Result);
 	void LogMoveProgress();
 	void StopMoveDiagnostics();
+	/** 看门狗：移动已被接管（例如受击时的新移动请求）或超时则结束能力，见 CCMoveTaskWatchdog。 */
+	void CheckMoveWatchdog();
+
+	/** 一次后撤最长持续时间（秒），超过后结束能力，由行为树重新判断。 */
+	UPROPERTY(EditDefaultsOnly, Category = "AI|Movement", meta = (ClampMin = "0.5"))
+	float MaxRetreatDuration = 3.f;
+
+	FTimerHandle MoveWatchdogTimer;
+	TWeakObjectPtr<AAIController> WatchedController;
+	uint32 WatchedRequestId = 0;
+	float MoveStartTime = 0.f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAITask_MoveTo> MoveTask;

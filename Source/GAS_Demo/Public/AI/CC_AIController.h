@@ -45,7 +45,8 @@ enum class EAlertLevel : uint8
  *   - 寻路组件为 UCrowdFollowingComponent；监听自己 ASC 的 CCAbilities.Attack 标签：
  *     攻击期间切 ObstacleOnly（站稳不被推，后到的人被挤到侧面），结束后恢复；
  *   - 避障质量按离最近玩家的距离分级；
- *   - 编队命令 SetSquadOrder 只预留接口：v3 中所有命令都按自由交战处理。
+ *   - 编队命令 SetSquadOrder：Follow 已实现（栓绳选目标 + 没有目标时写黑板 FollowAnchor，行为树跟随锚点，
+ *     丢失目标时不去搜索），召唤的随从默认跟随施放者；Hold / Retreat 仍按自由交战处理。
  */
 UCLASS()
 class GAS_DEMO_API ACC_AIController : public AAIController
@@ -98,8 +99,9 @@ public:
 		AActor* Current, float SwitchHysteresis);
 
 	/**
-	 * 接收编队命令（编队层接口预留）。保存命令、写入黑板 SquadOrder（键不存在时忽略）并立即重选目标。
-	 * v3 中 Follow / Hold / Retreat 尚未实现，会打印警告并按自由交战处理。
+	 * 接收编队命令。保存命令、写入黑板 SquadOrder（键不存在时忽略）并立即重选目标。
+	 * Follow：按 FCC_SquadOrder 的三个半径做栓绳，没有目标时写黑板 FollowAnchor；
+	 * Hold / Retreat 尚未实现，会打印警告并按自由交战处理。
 	 * @param NewOrder 新命令。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "AI|Squad")
@@ -128,6 +130,14 @@ protected:
 	/** 切换目标所需的最小分数优势（只看距离时即厘米）：新目标的分数必须比当前目标低这么多才切换。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Targeting", meta = (ClampMin = "0"))
 	float TargetSwitchHysteresis = 200.f;
+
+	/**
+	 * 当前目标在这个水平距离（厘米）以内时，即使视觉这一刻没有感知到它，也继续作为候选，不丢失目标。
+	 * 贴身近战时视线常被自己的武器、同伴或角度短暂挡住；没有这层保护时目标会被清空，怪物停止攻击，
+	 * 直到目标重新进入视野。设为 0 关闭。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Targeting", meta = (ClampMin = "0"))
+	float KeepTargetRadius = 600.f;
 
 	/** 选目标评分参数：拥挤软上限与惩罚、回敬优惠、被挡惩罚。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Targeting")
@@ -205,10 +215,18 @@ private:
 	UCC_EngagementSubsystem* GetEngagementSubsystem() const;
 
 	/**
-	 * 编队约束挂点：候选是否满足当前编队命令（例如跟随时只打锚点附近的敌人）。
-	 * v3 永远返回 true；实现编队层时只需要改这里。
+	 * 编队约束：候选是否满足当前编队命令。Follow 时按栓绳过滤（FCC_SquadRules::PassesFollowLeash），
+	 * 其他命令不过滤。以后实现 Hold / Retreat 也在这里加。
 	 */
 	bool PassesSquadConstraint(const AActor* Candidate) const;
+
+	/**
+	 * @return 跟随命令下的锚点；不是 Follow、锚点已销毁或已死亡时返回 nullptr。
+	 */
+	AActor* GetFollowAnchor() const;
+
+	/** 同步黑板 FollowAnchor：跟随中且没有目标时写入锚点，否则清空。 */
+	void UpdateFollowAnchorKey();
 
 	/**
 	 * 被挡检测（只对近战、有目标、未在攻击的单位）。在重选目标之前调用。

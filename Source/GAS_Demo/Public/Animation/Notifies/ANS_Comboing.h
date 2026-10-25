@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -16,8 +16,8 @@ class GAS_DEMO_API UANS_Comboing : public UAnimNotifyState
 
 public:
 	/**
-	 * 放进 Montage 的可连招时间段。
-	 * Begin 打开输入窗口，End 关闭输入窗口。
+	 * 放进 Montage 的攻击霸体时间段。
+	 * 服务器 Begin 增加 SuperArmor，End（包括蒙太奇中断）移除本次贡献；不影响伤害。
 	 */
 	virtual void NotifyBegin(
 		USkeletalMeshComponent* MeshComp,

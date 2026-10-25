@@ -1,7 +1,11 @@
 #include "Actors/Projectiles/CC_ArrowProjectile.h"
+#include "Actors/Projectiles/CC_ProjectileInteractions.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "Components/ActionComponent.h"
+#include "GameplayTags/CC_Tags.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Damage/CC_DamageStatics.h"
@@ -81,6 +85,45 @@ void ACC_ArrowProjectile::IgnoreVolleyArrow(ACC_ArrowProjectile* Other)
     {
         Collision->IgnoreActorWhenMoving(Other, true);
     }
+}
+
+bool ACC_ArrowProjectile::Deflect(APawn* NewInstigator)
+{
+    const auto* Character = Cast<ACC_BaseCharacter>(NewInstigator);
+    auto* NewASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(NewInstigator);
+    APawn* PreviousShooter = GetInstigator();
+    if (!HasAuthority() || bHitProcessed || bDeflected || !Character || !Character->IsAlive() ||
+        !NewASC || !NewASC->HasMatchingGameplayTag(CCProjectileTags::CanDeflect) ||
+        !UCC_TeamStatics::IsHostile(NewInstigator, PreviousShooter)) return false;
+
+    FCC_DamageRequest Request;
+    Request.SkillScale = Payload.SkillScale;
+    Request.FlatDamage = Payload.FlatDamage;
+    Request.DamageMultiplier = Payload.DamageMultiplier;
+    Request.SourceTags = Payload.SourceTags;
+    Request.SourceTags.AddTag(CCProjectileTags::DeflectedDamage);
+    auto NewSnapshot = UCC_DamageStatics::PrepareDamage(NewASC, Request, this);
+    if (!NewSnapshot.IsValid()) return false;
+    // 仅换 Actor 归属不会更改旧 Spec 的来源；先准备完整的新快照，成功后再提交整个交接。
+    auto Context = NewSnapshot.Data->GetContext();
+    Context.AddInstigator(NewInstigator, this);
+    FVector Direction = (PreviousShooter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+    if (Direction.IsNearlyZero()) Direction = -GetActorForwardVector();
+    const float Speed = FMath::Max(1.f, Movement->Velocity.Size() > 1.f ? Movement->Velocity.Size() : Movement->InitialSpeed);
+    bDeflected = true;
+    DamageSnapshot = NewSnapshot;
+    Payload.SourceTags = Request.SourceTags;
+    SetInstigator(NewInstigator);
+    SetOwner(NewInstigator);
+    Collision->IgnoreActorWhenMoving(PreviousShooter, false);
+    Collision->IgnoreActorWhenMoving(NewInstigator, true);
+    SetActorRotation(Direction.Rotation());
+    Movement->Velocity = Direction * Speed;
+    Movement->UpdateComponentVelocity();
+    ForceNetUpdate();
+    UE_LOG(LogCCBuff, Log, TEXT("[Arrow][Deflect] Arrow=%s Previous=%s New=%s"),
+        *GetNameSafe(this), *GetNameSafe(PreviousShooter), *GetNameSafe(NewInstigator));
+    return true;
 }
 
 void ACC_ArrowProjectile::BeginPlay()
@@ -168,8 +211,27 @@ void ACC_ArrowProjectile::ProcessImpact(AActor* OtherActor, const FHitResult& Hi
 	 */
     if (IsValid(TargetASC) && UCC_TeamStatics::IsHostile(this, OtherActor))
     {
+        // 先完成伤害与死亡结算，再通过目标自身的动作入口请求受击。
+        // 入口统一检查死亡和 SuperArmor；不在箭中复制这些规则。
         const ECC_DamageApplyStatus Status = UCC_DamageStatics::ApplyPreparedDamage
             (TargetASC, DamageSnapshot, &Hit);
+        bool bHitReactTriggered = false;
+        if (Status == ECC_DamageApplyStatus::Applied && IsValid(OtherActor) && IsValid(TargetASC))
+        {
+            ACC_BaseCharacter* TargetCharacter = Cast<ACC_BaseCharacter>(OtherActor);
+            UActionComponent* Actions = IsValid(TargetCharacter)
+                ? TargetCharacter->GetUCombatActionComponent() : nullptr;
+            // 使用快照中的来源 ASC，保证反弹后受击方向/来源属于当前伤害归属者。
+            UAbilitySystemComponent* SourceASC = DamageSnapshot.IsValid()
+                ? DamageSnapshot.Data->GetContext().GetOriginalInstigatorAbilitySystemComponent() : nullptr;
+            if (IsValid(Actions) && IsValid(SourceASC))
+            {
+                bHitReactTriggered = Actions->TryGameplayAbilityByTag(CCTags::CCAbilityTrigger::BeHit,
+                    SourceASC, TargetASC, UAbilitySystemBlueprintLibrary::AbilityTargetDataFromHitResult(Hit));
+            }
+        }
+        UE_LOG(LogCCBuff, Log, TEXT("[Arrow][HitReact] Target=%s Triggered=%d"),
+            *GetNameSafe(OtherActor), bHitReactTriggered);
         
         UE_LOG(LogCCBuff, Log, TEXT("[Arrow][Hit] Arrow=%s Target=%s DamageStatus=%d Ratio=%.3f"),
             *GetNameSafe(this),

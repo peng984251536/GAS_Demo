@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystem/Abilities/CC_GameplayAbilityBase.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "TimerManager.h"
 #include "CC_FollowTarget.generated.h"
 
 class UAITask_MoveTo;
@@ -43,10 +44,29 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "AI|Movement", meta = (ClampMin = "1"))
 	float DefaultAcceptanceRadius = 50.f;
 
+	/**
+	 * 近战追击时比 MeleeReach 多走近的距离（厘米）：停止距离 = MeleeReach − 它（至少 10）。
+	 * 引擎的到达判定会把自身半径略微放大，正好停在 MeleeReach 边界时，行为树的攻击距离判断
+	 * （CC In Attack Range，按 MeleeReach）可能差一两厘米判为「够不着」，导致追到了却一直不出刀。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "AI|Movement", meta = (ClampMin = "0"))
+	float MeleeApproachMargin = 20.f;
+
+	/**
+	 * 一次移动最长持续时间（秒），超过后结束能力，由行为树重新判断再发起。
+	 * 与看门狗一起保证移动被打断（受击、新的移动请求）时能力一定会结束，行为树不会卡在这个节点。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "AI|Movement", meta = (ClampMin = "0.5"))
+	float MaxMoveDuration = 5.f;
+
 private:
 
-	/** 回退逻辑：围绕已知位置按角度候选选出可达点，然后移动过去。 */
-	void StartMoveToTarget(const ACC_BaseCharacter& Enemy, const FVector& knownLocation);
+	/**
+	 * 弓兵走位：在目标当前位置周围找一个射程内（MinRange～MaxRange）可达的站位走过去。
+	 * 候选为 2 个距离（射程中线、中线与最小射程之间）× 8 个方向，从自己相对目标的方向开始左右交替。
+	 * 一个都找不到（场地狭小、贴墙）时直接朝目标走到射程中线以内，不会原地放弃。
+	 */
+	void StartRangedApproach(const ACC_BaseCharacter& Enemy, AActor& Target);
 
 	/**
 	 * 创建 UAITask_MoveTo 并绑定完成回调。
@@ -65,6 +85,14 @@ private:
 	 */
 	void HandleMoveFinished(TEnumAsByte<EPathFollowingResult::Type> Result, AAIController* AIController);
 
+	/** 看门狗：移动已被接管或超时则结束能力（见 CCMoveTaskWatchdog）。 */
+	void CheckMoveWatchdog();
+
 	UPROPERTY(Transient)
 	TObjectPtr<UAITask_MoveTo> MoveTask;
+
+	FTimerHandle MoveWatchdogTimer;
+	TWeakObjectPtr<AAIController> WatchedController;
+	uint32 WatchedRequestId = 0;
+	float MoveStartTime = 0.f;
 };

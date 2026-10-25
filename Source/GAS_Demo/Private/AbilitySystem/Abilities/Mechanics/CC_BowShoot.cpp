@@ -125,8 +125,8 @@ void UCC_BowShoot::ActivateAbility(const FGameplayAbilitySpecHandle Handle, cons
     // 只算水平距离，避免地形高低差改变弓兵与目标的战斗距离判断。
     const float Distance = FVector::Dist2D(Enemy->GetActorLocation(), Target->GetActorLocation());
 
-    // 太近应由后撤能力处理，太远不能射击；CommitAbility 检查并支付 GAS 成本/冷却。
-    if (Distance < Config->MinRange || Distance > Config->MaxRange)
+    // 太远不能射击。太近时优先由行为树的后撤分支处理；退无可退时允许贴脸射箭，避免弓兵原地发呆。
+    if (Distance > Config->MaxRange)
     {
         UE_LOG(LogGAS_Demo, Log,
                TEXT("[BowAI][Shoot] Outside firing range: Enemy=%s Target=%s Distance=%.1f Min=%.1f Max=%.1f"),
@@ -205,6 +205,8 @@ void UCC_BowShoot::OnBowRelease(FGameplayEventData Payload)
         return;
     }
 
+    // 弓弦松开的那一帧播放；本能力只在服务器执行，联机时由主机播放。
+    PlayAudioEventOnAvatar(ReleaseSoundEvent);
     ReleaseArrow();
 }
 
@@ -236,7 +238,8 @@ void UCC_BowShoot::ReleaseArrow()
 
     // 1/ 动画播放期间目标可能跑近或跑远；离开合法射程就放弃这支箭。
     const float Distance = FVector::Dist2D(BaseCharacter->GetActorLocation(), Target->GetActorLocation());
-    if (Distance < Config->MinRange || Distance > Config->MaxRange)
+    // 只在超出最大射程时放弃这支箭（与激活时的检查一致）。
+    if (Distance > Config->MaxRange)
     {
         UE_LOG(LogGAS_Demo, Log,
                TEXT("[BowAI][Shoot] Release aborted by range: Enemy=%s Target=%s Distance=%.1f Min=%.1f Max=%.1f"),
@@ -295,16 +298,40 @@ void UCC_BowShoot::ReleaseArrow()
     {
         return;
     }
-    /**
-	 * Resolve：集中展开对称散射方向，不在 Behavior 中生成箭。
-	 */
+    PendingFire = Fire;
+    RemainingVolleys = FMath::Clamp(Fire.VolleyCount, 1, 8) - 1;
+    bFinishAfterVolleys = false;
+    ExecuteVolley(Fire);
+    if (RemainingVolleys > 0 && IsActive() && IsValid(BaseCharacter) && BaseCharacter->IsAlive())
+    {
+        GetWorld()->GetTimerManager().SetTimer(VolleyTimer, this, &ThisClass::FireNextVolley,
+            FMath::Clamp(Fire.VolleyInterval, 0.05f, 2.f), true);
+    }
+}
+
+void UCC_BowShoot::FireNextVolley()
+{
+    if (!IsActive() || !IsValid(BaseCharacter) || !BaseCharacter->IsAlive())
+    {
+        RemainingVolleys = 0;
+        EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+        return;
+    }
+    --RemainingVolleys;
+    ExecuteVolley(PendingFire);
+    if (RemainingVolleys <= 0)
+    {
+        GetWorld()->GetTimerManager().ClearTimer(VolleyTimer);
+        if (bFinishAfterVolleys)
+            EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+    }
+}
+
+void UCC_BowShoot::ExecuteVolley(const FCC_ProjectileFireContext& Fire)
+{
+    if (!GetWorld() || !IsValid(BaseCharacter) || !BaseCharacter->IsAlive()) return;
     TArray<FVector> Directions;
     Fire.Resolve(Directions);
-
-    UE_LOG(LogCCBuff, Log, TEXT("[Fire] Shooter=%s Target=%s Source=%s Count=%d Spread=%.1f Ratio=%.3f"),
-           *GetNameSafe(BaseCharacter), *GetNameSafe(Target), *SpawnSource, Directions.Num(), Fire.SpreadAngle,
-           Fire.Payload.DamageMultiplier);
-
     /**
 	 * Execute：先准备每支箭的快照与同齐射忽略列表，再完成生成并启动碰撞。
 	 * 已经发出的箭独立存在，后续 Buff 移除只影响下一次放箭。
@@ -352,6 +379,16 @@ void UCC_BowShoot::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGa
                               const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility,
                               bool bWasCancelled)
 {
+    // A normally completed montage waits for the resolved burst. Cancellation cancels queued shots.
+    if (!bWasCancelled && RemainingVolleys > 0 && GetWorld() &&
+        GetWorld()->GetTimerManager().IsTimerActive(VolleyTimer))
+    {
+        bFinishAfterVolleys = true;
+        return;
+    }
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(VolleyTimer);
+    RemainingVolleys = 0;
+    bFinishAfterVolleys = false;
     UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Shoot] End: Enemy=%s Cancelled=%d Released=%d Action=%s"),
            *GetNameSafe(GetAvatarActorFromActorInfo()), bWasCancelled, bArrowReleased, *GetNameSafe(OwnedAction));
 

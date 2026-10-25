@@ -153,3 +153,13 @@ FClosestActorWithTagResult UCC_BlueprintLibrary::FindClosestActorWithTag(
 
 	return Result;
 }
+
+
+FLinearColor UCC_BlueprintLibrary::GetColorFromString(const FString& Text)
+{
+	const uint32 Hash = FCrc::StrCrc32(*Text);
+	const float Hue = static_cast<float>(Hash % 360);
+
+	// HSV：色相、饱和度、亮度、透明度
+	return FLinearColor(Hue, 0.65f, 0.95f, 1.f).HSVToLinearRGB();
+}

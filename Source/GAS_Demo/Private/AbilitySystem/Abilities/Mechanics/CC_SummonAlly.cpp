@@ -3,6 +3,7 @@
 #include "GAS_Demo.h"
 #include "AbilitySystemComponent.h"
 #include "Actors/Character/CC_EnemyCharacter.h"
+#include "AI/CC_AIController.h"
 #include "Components/CC_SummonBuffShareComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
@@ -81,6 +82,20 @@ ACC_EnemyCharacter* UCC_SummonAlly::SpawnNearCaster() const
 			UCC_SummonBuffShareComponent* Share = NewObject<UCC_SummonBuffShareComponent>(Summon);
 			Share->RegisterComponent();
 			Share->StartSharing(BaseCharacter);
+			// 随从默认跟随施放者：没有目标时回到身边，只打施放者附近的敌人，追远了放弃目标回来
+			// （栓绳半径见 FCC_SquadOrder）。AutoPossessAI 已在 FinishSpawning 中完成附身。
+			if (ACC_AIController* SummonController = Cast<ACC_AIController>(Summon->GetController()))
+			{
+				FCC_SquadOrder FollowOrder;
+				FollowOrder.Order = ECC_SquadOrder::Follow;
+				FollowOrder.Anchor = BaseCharacter.Get();
+				SummonController->SetSquadOrder(FollowOrder);
+			}
+			else
+			{
+				UE_LOG(LogGAS_Demo, Warning, TEXT("[Summon] %s has no ACC_AIController; it will not follow %s"),
+					*GetNameSafe(Summon), *GetNameSafe(BaseCharacter));
+			}
 			UE_LOG(LogGAS_Demo, Log, TEXT("[Summon] %s summoned %s"), *GetNameSafe(BaseCharacter), *GetNameSafe(Summon));
 			return Summon;
 		}

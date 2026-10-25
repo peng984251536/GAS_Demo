@@ -27,11 +27,18 @@
 | 召唤 Buff | `UCC_SummonAlly`（授予即激活）在玩家身边召唤，成功后移除 Buff；`UCC_SummonBuffShareComponent` 把玩家的 Buff 同步给随从（各自独立计时，`Buff.NotShared` 不同步）；测试 `GAS_Demo.Buff.Summon` / `SummonShare`，见 [SummonAlly.zh-CN.md](SummonAlly.zh-CN.md) |
 | 三选一服务器事件 | `UCC_BuffSelectionComponent::OnServerPendingChanged / OnServerChoiceAccepted`，见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
 
+## NewBuff 选项池补充
+
+- `UCC_BuffBehavior_ApplyEffectOnDamage` 监听 DamageDealt，排除 DoT、友军和已死亡目标，施加独立子 GE；目前配置为不造成伤害的魅惑状态，不需要伤害递归链。
+- `UCC_BuffBehavior_RepeatVolley` 在现有 Projectile.Fire 上相加 VolleyCount、取最大 VolleyInterval；BowShoot 顺序执行，取消能力时清理未发射轮次。
+- 反弹资格 `Ability.Deflect.Projectile`：状态 GE 授予标签；`CCProjectileInteractions::DeflectInShape` 在近战有效帧查询箭，`ACC_ArrowProjectile::Deflect` 完成交接、转向和来源快照重建。检测统一由原生 MeleeHitBox Notify 的 Shapes 驱动；每支箭最多反弹一次。
+- 新资产配置与验收说明见 [NewBuffOffers.zh-CN.md](BuffSystem/NewBuffOffers.zh-CN.md)。
+
 ## 后续需求出现时再实现
 
-- ApplyEffectOnDamage 规则（监听已实现的 DamageDealt / DamageTaken 事件）；ProcDepth 防循环字段尚未加入 Context。
+- 能造成伤害的事件反应规则需要先补 ProcDepth 防循环字段；当前 ApplyEffectOnDamage 只用于不造成伤害的状态效果。
 - 近战等其他伤害来源的 Damage.Source.* 补齐；当前不扩大到全战斗流程。
-- 按状态标签选择动作集、移动射击、冻结、魅惑等具体玩法。
-- 爆炸箭、反弹规则及其专用基础设施；持续型召唤（Buff 结束时召唤物消失）如有需要再做 `UCC_BuffBehavior_Summon`；瞬时召唤已由 `UCC_GE_BuffSummon` 实现。
+- 按状态标签选择动作集、移动射击、冻结等具体玩法；魅惑复用已有阵营查询与 AI 状态订阅。
+- 爆炸箭、反弹分裂等额外组合规则；基础攻击反弹已具备。持续型召唤（Buff 结束时召唤物消失）如有需要再做 `UCC_BuffBehavior_Summon`；瞬时召唤已由 `UCC_GE_BuffSummon` 实现。
 
 实现代码已编译通过；已准备 GAS_Demo.Buff.FourExamples，按用户要求不再继续执行 UE 验证。后续实机测试由用户负责。

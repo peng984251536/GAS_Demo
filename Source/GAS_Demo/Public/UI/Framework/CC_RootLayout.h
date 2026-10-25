@@ -177,6 +177,8 @@ private:
 	void HandleDisplayed(UCommonActivatableWidget* Screen, FGameplayTag Layer);
 	/** 同步下层命中测试、过渡遮罩以及单机暂停。 */
 	void UpdateInteraction();
+	/** 最后一个菜单退场后，避开关闭按钮的 MouseUp，在下一帧恢复游戏输入。 */
+	void RestoreGameInputAfterMenu();
 	/** 解除仅由本布局持有的全部输入过滤。 */
 	void ReleaseInputTokens();
 
@@ -199,6 +201,9 @@ private:
 	uint32 AsyncRequestSerial = 0;
 	/** 临时提示到移除计时器的映射；弱引用不延长控件生命周期。 */
 	TMap<TWeakObjectPtr<UUserWidget>, FTimerHandle> NotificationTimers;
+	/** 延迟恢复输入，切图/销毁时主动取消。 */
+	FTimerHandle RestoreGameInputTimer;
+	bool bRestoreGameInputRequested = false;
 	/** 清理期间禁止回调重新打开页面。 */
 	bool bShuttingDown = false;
 	/** 临时脱离视口时禁止导航，但不是永久销毁。 */

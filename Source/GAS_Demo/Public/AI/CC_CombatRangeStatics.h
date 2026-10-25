@@ -38,6 +38,14 @@ public:
 	static bool IsInMeleeReach(const ACC_BaseCharacter* SelfActor, const AActor* TargetActor);
 
 	/**
+	 * 现在能不能攻击 Target：近战按边缘距离与 MeleeReach（IsInMeleeReach）；
+	 * 弓兵按水平中心距离不超过 MaxRange（与 UCC_BowShoot 的射程检查一致）；太近由行为树的后撤分支先处理。
+	 * 行为树装饰器「CC In Attack Range」使用它。
+	 */
+	UFUNCTION(BlueprintPure, Category = "AI|Combat")
+	static bool IsInAttackRange(const ACC_BaseCharacter* SelfCharacter, const AActor* Target);
+
+	/**
 	 * 是否按弓兵处理：角色配置了箭（ArrowProjectileClass）。与 CC_AttackIntend 的派发规则一致。
 	 */
 	UFUNCTION(BlueprintPure, Category = "AI|Combat")

@@ -24,7 +24,7 @@ void UCC_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 		this,
 		TEXT("PlayActionMontage"),
 		OwnedAction->Montage,
-		4.0f,
+		2.5f,
 		NAME_None,
 		true);	
 	

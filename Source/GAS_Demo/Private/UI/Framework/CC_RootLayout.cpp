@@ -3,6 +3,12 @@
 #include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
 #include "UI/WorldIndicator/CC_WorldIndicatorLayer.h"
+#include "Input/CommonUIActionRouterBase.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/SlateUser.h"
+#include "Widgets/SViewport.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/GameViewportClient.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
 #include "Components/Border.h"
@@ -266,6 +272,38 @@ void UCC_RootLayout::UpdateInteraction()
 		if (Entry.IsMenuLike() && Entry.Stack->GetNumWidgets() > 0) bBlockedByAbove = true;
 	}
 	if (Widget_InputShield) Widget_InputShield->SetVisibility(IsInputBlocked() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+
+	// CommonUI 在关闭回调内设置的捕获可能被当前按钮的 MouseUp 释放；
+	// 等所有菜单/过渡/异步锁都结束，再在下一帧重申已有的配置。
+	if (bAnyMenu) bRestoreGameInputRequested = true;
+	if (bRestoreGameInputRequested && !bAnyMenu && !IsInputBlocked()
+		&& !bShuttingDown && !bDetached && !RestoreGameInputTimer.IsValid() && GetWorld())
+	{
+		RestoreGameInputTimer = GetWorld()->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(this, &ThisClass::RestoreGameInputAfterMenu));
+	}
+}
+
+void UCC_RootLayout::RestoreGameInputAfterMenu()
+{
+	RestoreGameInputTimer.Invalidate();
+	// 如果下一帧前又打开菜单或开始加载，留到对应解锁回调再请求，不能抢新页面的焦点。
+	if (bShuttingDown || bDetached || HasMenu() || IsInputBlocked()) return;
+	bRestoreGameInputRequested = false;
+	UCommonUIActionRouterBase* Router = UCommonUIActionRouterBase::Get(*this);
+	ULocalPlayer* Player = GetOwningLocalPlayer();
+	if (!Router || !Player || !Player->ViewportClient || !FSlateApplication::IsInitialized()
+		|| Router->GetActiveInputMode() == ECommonInputMode::Menu) return;
+	const TSharedPtr<SViewport> Viewport = Player->ViewportClient->GetGameViewportWidget();
+	if (!Viewport.IsValid()) return;
+	FSlateApplication& Slate = FSlateApplication::Get();
+	const TSharedPtr<FSlateUser> SlateUser = Player->GetSlateUser();
+	if (!SlateUser.IsValid()) return;
+	// 不从编辑器、其他 PIE 实例或其他应用抢焦点。
+	if (!Slate.IsActive() || Slate.FindWidgetWindow(Viewport.ToSharedRef()) != Slate.GetActiveTopLevelWindow()) return;
+	Router->RefreshUIInputConfig();
+	Slate.SetUserFocus(SlateUser->GetUserIndex(), Viewport, EFocusCause::SetDirectly);
+	UE_LOG(LogGAS_Demo, Verbose, TEXT("[UI] Restored viewport input after menu exit."));
 }
 
 // 创建普通提示控件并设置可选移除计时器；提示不参与页面导航。
@@ -329,6 +367,9 @@ void UCC_RootLayout::ResetWorldContent()
 	if (bShuttingDown) return;
 	TGuardValue<bool> Clearing(bShuttingDown, true);
 	bDetached = true;
+	if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(RestoreGameInputTimer);
+	RestoreGameInputTimer.Invalidate();
+	bRestoreGameInputRequested = false;
 	OnShutdown.Broadcast();
 	OnShutdown.Clear();
 	if (bPausedWorld) UGameplayStatics::SetGamePaused(this, false);

@@ -7,15 +7,6 @@
 class UCC_UIController;
 class UCC_UIModel;
 
-/** 页面声明的输入需求，由 CommonUI 的 ActionRouter 统一应用。 */
-UENUM(BlueprintType)
-enum class ECC_UIInputMode : uint8
-{
-	Game,        // 仅游戏输入，适用于 HUD。
-	GameAndMenu, // 游戏与 UI 都可接收输入。
-	Menu         // 仅 UI 输入，并阻止角色移动和视角输入。
-};
-
 /** 通用页面基类：声明输入、焦点和关闭策略；页面栈负责激活、失活及复用。 */
 UCLASS(Abstract, Blueprintable)
 class GAS_DEMO_API UCC_ActivatableWidget : public UCommonActivatableWidget
@@ -70,10 +61,15 @@ protected:
 	/** 优先使用蓝图指定的焦点，否则查找默认名称对应的控件。 */
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 
-	/** 页面激活时所需的输入模式。 */
+	/**
+	 * 页面激活时所需的输入模式（官方 CommonUI 枚举），由 ActionRouter 统一应用：
+	 *   Game - 仅游戏输入，纯展示 HUD；
+	 *   All  - 游戏与 UI 共同输入，带按钮的 HUD（按下时捕获鼠标）；
+	 *   Menu - 仅 UI 输入，并屏蔽角色移动和视角（不捕获鼠标）。
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI|Input")
-	ECC_UIInputMode InputConfig = ECC_UIInputMode::Menu;
-	/** Game/GameAndMenu 模式的鼠标捕获方式；Menu 始终不捕获。 */
+	ECommonInputMode InputMode = ECommonInputMode::Menu;
+	/** 纯 Game 模式的鼠标捕获方式；混合模式按下时捕获，菜单模式不捕获。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|Input")
 	EMouseCaptureMode GameMouseCaptureMode = EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown;
 	/** 是否允许返回键关闭；主菜单底页可关闭此选项。 */

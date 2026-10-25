@@ -11,10 +11,13 @@ class GAS_DEMO_API UCC_BuffUIData : public UGameplayEffectUIData
 {
     GENERATED_BODY()
   public:
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buff|Display") FText DisplayName;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buff|Display")
+	FText DisplayName;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buff|Display", meta = (MultiLine = true))
     FText Description;
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buff|Display") TObjectPtr<UTexture2D> Icon;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buff|Display")
+	TObjectPtr<UTexture2D> Icon;
+	
     /**
      * 只影响是否展示在 Buff 栏，不影响 GE 的实际生效、持续时间或规则执行。
      */

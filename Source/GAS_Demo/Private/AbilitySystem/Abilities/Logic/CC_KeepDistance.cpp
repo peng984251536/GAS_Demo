@@ -2,6 +2,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
+#include "AI/CC_MoveTaskWatchdog.h"
 #include "Actors/Character/CC_EnemyCharacter.h"
 #include "Data/CC_CharacterConfig.h"
 #include "GameplayTags/CC_Tags.h"
@@ -87,40 +88,47 @@ void UCC_KeepDistance::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	{
 		Away = FVector::ForwardVector;
 	}
-	const float MidRange = (Config->MinRange + Config->MaxRange)*0.5f;
-	const float DesiredDistance = FMath::Min(Config->MaxRange, MidRange);
-	//const float CandidateAngles[] = {0.0f, 45.0f, -45.0f, 90.0f, -90.0f};
-	const float CandidateAngles[] = {0.0f, 30.0f, -30.0f, 60.0f, -60.0f};
+	const float MinRange = FMath::Max(0.f, Config->MinRange);
+	const float MaxRange = FMath::Max(MinRange + 1.f, Config->MaxRange);
+	const float MidRange = (MinRange + MaxRange) * 0.5f;
+	// 候选：2 个距离（射程中线、中线与最小射程之间）× 9 个方向。从背离目标的方向开始左右交替，
+	// 最多偏到 ±120°（贴墙时可以沿墙侧移），不往目标身后穿。
+	// 投影后只要离目标不小于 MinRange、不超过 MaxRange 就接受，不要求正好落在中线上：
+	// 墙边、角落里中线上的点常常投影不到或被挪近，原来的严格检查会让弓兵找不到退路而原地发呆。
+	const float CandidateRadii[] = {MidRange, (MinRange + MidRange) * 0.5f};
+	const float CandidateAngles[] = {0.0f, 30.0f, -30.0f, 60.0f, -60.0f, 90.0f, -90.0f, 120.0f, -120.0f};
+	const FVector QueryExtent(150.0f, 150.0f, 800.0f);
 	FVector Destination = FVector::ZeroVector;
 	bool bFoundDestination = false;
-	for (const float Angle : CandidateAngles)
+	for (const float Radius : CandidateRadii)
 	{
-		const FVector Candidate = TargetLocation + Away.RotateAngleAxis(Angle, FVector::UpVector) * DesiredDistance;
-		// 到时候范围的地点信息
-		FNavLocation OnNavMesh;
-		// 投影的信息
-		const FVector QueryExtent(150.0f, 150.0f, 800.0f);
-		if (!Nav->ProjectPointToNavigation(Candidate, OnNavMesh,QueryExtent)
-			|| FVector::Dist2D(OnNavMesh.Location, TargetLocation) < MidRange)
+		for (const float Angle : CandidateAngles)
 		{
-			UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Retreat] Candidate rejected by nav/range: Enemy=%s Angle=%.0f Candidate=%s"),
-				*GetNameSafe(Enemy), Angle, *Candidate.ToCompactString());
-			continue;
+			const FVector Candidate = TargetLocation + Away.RotateAngleAxis(Angle, FVector::UpVector) * Radius;
+			FNavLocation OnNavMesh;
+			const float CandidateDistance = Nav->ProjectPointToNavigation(Candidate, OnNavMesh, QueryExtent)
+				? FVector::Dist2D(OnNavMesh.Location, TargetLocation) : -1.f;
+			if (CandidateDistance < MinRange || CandidateDistance > MaxRange)
+			{
+				UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Retreat] Candidate rejected by nav/range: Enemy=%s Radius=%.0f Angle=%.0f Candidate=%s"),
+					*GetNameSafe(Enemy), Radius, Angle, *Candidate.ToCompactString());
+				continue;
+			}
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(
+				Enemy->GetWorld(), EnemyLocation, OnNavMesh.Location, Enemy);
+			if (IsValid(Path) && Path->IsValid() && !Path->IsPartial())
+			{
+				Destination = OnNavMesh.Location;
+				bFoundDestination = true;
+				break;
+			}
+			UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Retreat] Candidate has no complete path: Enemy=%s Radius=%.0f Angle=%.0f Destination=%s"),
+				*GetNameSafe(Enemy), Radius, Angle, *OnNavMesh.Location.ToCompactString());
 		}
-		// 之前的是两套导航系统
-		const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(
-			Enemy->GetWorld(), EnemyLocation, OnNavMesh.Location,Enemy);
-		// const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(
-		// 	Enemy->GetWorld(), EnemyLocation, OnNavMesh.Location);
-		if (IsValid(Path) && Path->IsValid() && !Path->IsPartial() &&
-			Path->GetPathLength() > KINDA_SMALL_NUMBER )
+		if (bFoundDestination)
 		{
-			Destination = OnNavMesh.Location;
-			bFoundDestination = true;
 			break;
 		}
-		UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Retreat] Candidate has no complete path: Enemy=%s Angle=%.0f Destination=%s"),
-			*GetNameSafe(Enemy), Angle, *OnNavMesh.Location.ToCompactString());
 	}
 	if (!bFoundDestination)
 	{
@@ -172,7 +180,7 @@ void UCC_KeepDistance::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	}
 	// AI Task 可能立即完成，回调必须先于 ReadyForActivation 绑定。
 	UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Retreat] Move started: Enemy=%s Target=%s Distance=%.1f Destination=%s DesiredDistance=%.1f"),
-		*GetNameSafe(Enemy), *GetNameSafe(Target), Distance, *Destination.ToCompactString(), DesiredDistance);
+		*GetNameSafe(Enemy), *GetNameSafe(Target), Distance, *Destination.ToCompactString(), MidRange);
 	
 	MoveTask->OnMoveTaskFinished.AddUObject(this, &ThisClass::HandleMoveFinished);
 	// UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Retreat] Task activating: Enemy=%s Task=%s State=%d PathStatus=%d Request=%u"),
@@ -182,6 +190,16 @@ void UCC_KeepDistance::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 
 	
 	MoveTask->ReadyForActivation();
+
+	// 可能已同步到达并结束；仍在移动时启动看门狗，防止移动被受击等打断后能力永远不结束、行为树卡在后撤节点。
+	if (IsActive() && IsValid(MoveTask) && GetWorld())
+	{
+		WatchedController = Controller;
+		WatchedRequestId = CCMoveTaskWatchdog::GetCurrentRequestId(Controller);
+		MoveStartTime = GetWorld()->GetTimeSeconds();
+		GetWorld()->GetTimerManager().SetTimer(MoveWatchdogTimer, this, &ThisClass::CheckMoveWatchdog,
+			CCMoveTaskWatchdog::CheckInterval, true);
+	}
 	
 	// if (IsActive() && IsValid(MoveTask) && GetWorld())
 	// {
@@ -237,6 +255,22 @@ void UCC_KeepDistance::StopMoveDiagnostics()
 	PathRequestFinishedHandle.Reset();
 }
 
+void UCC_KeepDistance::CheckMoveWatchdog()
+{
+	if (!IsActive() || !GetWorld())
+	{
+		return;
+	}
+	const bool bTimedOut = GetWorld()->GetTimeSeconds() - MoveStartTime > MaxRetreatDuration;
+	const bool bOrphaned = CCMoveTaskWatchdog::IsMoveOrphaned(WatchedController.Get(), WatchedRequestId);
+	if (bTimedOut || bOrphaned)
+	{
+		UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Retreat] Move %s: Enemy=%s, ending KeepDistance."),
+			bOrphaned ? TEXT("taken over / stopped") : TEXT("timed out"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, bOrphaned);
+	}
+}
+
 void UCC_KeepDistance::HandleMoveFinished(TEnumAsByte<EPathFollowingResult::Type> Result, AAIController* Controller)
 {
 	UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Retreat] Move finished: Enemy=%s Controller=%s Result=%d Active=%d Task=%s"),
@@ -258,6 +292,11 @@ void UCC_KeepDistance::EndAbility(const FGameplayAbilitySpecHandle Handle,
 	UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Retreat] End: Enemy=%s Cancelled=%d MoveTask=%s"),
 		*GetNameSafe(ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr), bWasCancelled, *GetNameSafe(MoveTask));
 	StopMoveDiagnostics();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(MoveWatchdogTimer);
+	}
+	WatchedController.Reset();
 	if (IsValid(MoveTask))
 	{
 		UAITask_MoveTo* Task = MoveTask;

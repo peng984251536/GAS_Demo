@@ -9,7 +9,8 @@
 UCC_CombatMainWidget::UCC_CombatMainWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 	ControllerClass = UCC_CombatMainController::StaticClass();
-	InputConfig = ECC_UIInputMode::Game;
+	// HUD 上有可点击按钮，需要游戏与 UI 共同输入。
+	InputMode = ECommonInputMode::All;
 	bIsBackHandler = false;
 	bAllowBack = false;
 	bAllowClose = false;

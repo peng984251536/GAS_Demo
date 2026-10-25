@@ -7,7 +7,7 @@ UCC_BuffSelectionScreen::UCC_BuffSelectionScreen(const FObjectInitializer& Objec
     : Super(ObjectInitializer)
 {
     ControllerClass = UCC_BuffSelectionController::StaticClass();
-    InputConfig = ECC_UIInputMode::Menu;
+    InputMode = ECommonInputMode::Menu;
     // 必须选一张才能继续，返回键只被消费、不关闭页面。
     bAllowBack = false;
 }

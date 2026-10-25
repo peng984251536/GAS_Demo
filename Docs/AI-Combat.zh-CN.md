@@ -124,7 +124,7 @@ PCA --> CFC
 | `CC_FollowTarget` | 近战：`UAITask_MoveTo` 以目标 Actor 为终点，可接受半径 = `MeleeReach`；弓兵：沿用现有选点 |
 | `UCC_CrowdAgentStatics::ApplyTier` | 改为 `UpdateAvoidanceLOD(Controller, DistanceToNearestPlayer)` |
 | `UCC_CharacterConfig` | 新增 `MeleeReach`（近战攻击距离，按双方胶囊体边缘计算） |
-| 近战距离判断 `BTD_Distance_Find` | 改用边缘距离和 `MeleeReach`（第 7 节） |
+| 近战距离判断 `BTD_Distance_Find` | 由 C++ 装饰器「CC In Attack Range」（`UBTDecorator_CC_InAttackRange`）取代（第 7 节） |
 
 ### 2.4 新增
 
@@ -205,6 +205,7 @@ Score = Distance
 | `RetaliationBonus` | 150 | 控制器 | 回敬的优惠 |
 | `BlockedPenalty` | 600 | 控制器 | 被挡目标的惩罚 |
 | `SwitchHysteresis` | 200 | 控制器（已有） | 切换目标所需的分数优势 |
+| `KeepTargetRadius` | 600 | 控制器 | 当前目标在这个距离内时，即使视觉这一刻没感知到也不丢失（贴身时视线常被武器、同伴短暂挡住）。0 关闭 |
 
 **对玩家的效果**：没有随从时，所有怪仍然都会选玩家（惩罚只改变相对排序，不会让怪放着唯一的目标不打）。有随从时，第 4 只以后的怪会倾向于去打附近的随从，玩家身边的压力自然被分走。
 
@@ -275,7 +276,7 @@ end
 @enduml
 ```
 
-## 6. 编队接口（只预留）
+## 6. 编队接口（Follow 已实现，其余预留）
 
 ### 6.1 类型
 
@@ -283,8 +284,8 @@ end
 UENUM(BlueprintType)
 enum class ECC_SquadOrder : uint8
 {
-    Free,     // 默认：自由交战（v3 唯一生效的行为）
-    Follow,   // 跟随锚点，只打交战半径内的敌人（预留）
+    Free,     // 默认：自由交战
+    Follow,   // 跟随锚点 + 栓绳（已实现，召唤的随从默认使用，见 6.4）
     Hold,     // 坚守锚点位置（预留）
     Charge,   // 冲锋：脱离阵型自由交战（v3 等同 Free）
     Retreat   // 撤退到锚点，不主动交战（预留）
@@ -296,7 +297,14 @@ struct FCC_SquadOrder
     ECC_SquadOrder Order = ECC_SquadOrder::Free;
     TObjectPtr<AActor> Anchor;         // 跟随 / 撤退的锚点，通常是玩家（蓝图可读写）
     FVector Location;                  // 坚守位置
-    float EngageRadius = 800.f;        // 跟随 / 坚守时离锚点多远内的敌人才打
+    float EngageRadius = 800.f;        // 跟随 / 坚守时离锚点多远内的敌人才会被选为新目标
+    float LeashRadius = 1200.f;        // 跟随时当前目标离锚点超过它就放弃
+    float ReturnRadius = 1500.f;       // 跟随时自己离锚点超过它就放弃一切目标、先回来
+};
+
+struct FCC_SquadRules                  // 纯逻辑，可单测
+{
+    static bool PassesFollowLeash(Order, AnchorLocation, SelfLocation, CandidateLocation, bIsCurrentTarget);
 };
 ```
 
@@ -304,15 +312,31 @@ struct FCC_SquadOrder
 
 | 接口 | v3 行为 |
 |---|---|
-| `SetSquadOrder(const FCC_SquadOrder&)`（BlueprintCallable） | 保存命令；写黑板 `SquadOrder`（键不存在时静默忽略）；`Follow` / `Hold` / `Retreat` 打一条 Warning「未实现，按 Free 处理」 |
+| `SetSquadOrder(const FCC_SquadOrder&)`（BlueprintCallable） | 保存命令；写黑板 `SquadOrder`（键不存在时静默忽略）并立即重选目标；`Hold` / `Retreat` 打一条 Warning「未实现，按 Free 处理」 |
 | `GetSquadOrder()`（BlueprintPure） | 返回当前命令 |
-| `PassesSquadConstraint(Candidate)`（私有） | v3 永远返回 true。**这是后续实现编队约束的唯一挂点**：在构建候选时过滤 |
+| `PassesSquadConstraint(Candidate)`（私有） | 构建候选时过滤。`Follow`：`FCC_SquadRules::PassesFollowLeash`；其他命令不过滤。以后实现 Hold / Retreat 也加在这里 |
+| `GetFollowAnchor()`（私有） | `Follow` 且锚点存活时返回锚点，否则为空（锚点倒地时暂停跟随） |
+| `UpdateFollowAnchorKey()`（私有） | 跟随中且没有目标时写黑板 `FollowAnchor`，否则清空。在 `ApplyTarget` 和 0.5 秒计时器中调用 |
 
-### 6.3 后续实现时的方向（本版不做）
+### 6.4 跟随（Follow）
+
+召唤的随从由 `UCC_SummonAlly` 在生成后下达 `Order = Follow, Anchor = 施放者`。
+
+| 规则 | 实现位置 |
+|---|---|
+| 新目标必须在锚点 `EngageRadius`（800）以内 | `PassesFollowLeash` |
+| 当前目标离锚点不超过 `LeashRadius`（1200）就继续打；两个半径不同，避免在边界反复丢失、重选 | `PassesFollowLeash` |
+| 自己离锚点超过 `ReturnRadius`（1500）不接受任何目标，先回来 | `PassesFollowLeash` |
+| 丢失目标时不写 `LastKnownLocation`，不进入搜索分支 | `ReevaluateTargetInternal` |
+| 没有目标时黑板 `FollowAnchor` = 锚点，行为树跟随分支 MoveTo 它 | `UpdateFollowAnchorKey` |
+
+「打还是跟」只由控制器决定（写不写 `TargetActor` / `FollowAnchor`），行为树只按黑板选分支，同一时间只有一个分支在驱动移动，跟随和追击不会抢移动权。敌人没有 Follow 命令，`FollowAnchor` 永远为空，跟随分支不会进入。
+
+### 6.5 后续实现时的方向（本版不做）
 
 - 新增 `UCC_SquadComponent`，挂在玩家或队长身上：成员列表、当前命令、阵型形状（横排 / 散开 / 圆阵）；`SetOrder` 遍历成员调用 `SetSquadOrder`
 - 跟随 / 坚守时由编队组件计算每个成员的阵型位置（**相对锚点**，不是相对敌人），重新引入黑板 `MoveLocation`；行为树按 `SquadOrder` 分支
-- `PassesSquadConstraint`：跟随 / 坚守时只接受离锚点 `EngageRadius` 内的敌人；撤退时不接受任何目标
+- `PassesSquadConstraint`：坚守时以坚守位置为锚点套用同样的栓绳；撤退时不接受任何目标
 - 玩家输入：数字键或轮盘下达命令
 
 ## 7. 行为树与黑板
@@ -324,26 +348,55 @@ struct FCC_SquadOrder
 | `TargetActor` | Object | 控制器（已有） | |
 | `LastKnownLocation` | Vector | 控制器（已有） | |
 | `IsBlocked` | Bool | 控制器（新增） | 挤不进去且没有更好目标时为 true |
-| `SquadOrder` | Enum `ECC_SquadOrder` | 控制器（新增，可选） | v3 行为树不需要读取，可先不加 |
+| `SquadOrder` | Enum `ECC_SquadOrder` | 控制器（新增，可选） | 行为树目前不需要读取，可先不加 |
+| `FollowAnchor` | Object（Base Class: Actor） | 控制器（新增） | 跟随命令下、没有目标时为锚点（玩家），否则为空。只有随从会写入 |
 
 ### 7.2 近战行为树（战斗部分）
 
 ```
 Selector（战斗，条件：TargetActor 已设置）
-├─ [在攻击距离内：边缘距离 ≤ MeleeReach] Sequence
+├─ [CC In Attack Range（TargetKey: TargetActor）] Sequence
 │     ├─ 攻击（原有 CC_AttackIntend 任务）
 │     └─ Wait AttackDelay，Random Deviation 0.3
 ├─ [IsBlocked == true，Observer Aborts: Lower Priority] Wait 0.5，Random Deviation 0.25
 └─ 发送事件 FollowTarget，等待能力结束
 ```
 
+根 Selector 的**最后**（优先级最低）加跟随分支，近战和会被召唤的弓兵都要加：
+
+```
+Selector（根）
+├─ 死亡 / 受击 等原有分支
+├─ 战斗分支（TargetActor 已设置，Observer Aborts: Lower Priority）  ← 原有
+├─ 搜索分支（LastKnownLocation 已设置）                           ← 原有，随从不会进入
+└─ [FollowAnchor 已设置，Observer Aborts: Self] Sequence             ← 新增
+      ├─ MoveTo（Blackboard Key: FollowAnchor，Acceptable Radius 250）
+      └─ Wait 0.3
+```
+
+- 战斗分支的 `TargetActor` 装饰器要设 **Observer Aborts: Lower Priority**（或 Both）：随从跟随途中看到敌人，立刻打断跟随去打
+- MoveTo 以 Actor 为目标会跟着玩家移动；多个随从靠 Crowd 分离自然散开，不会叠在一起
+
 - **不需要**监听 `MoveLocation`、不需要按档位分支
 - `Wait` 的随机偏差让同一目标周围的怪自然错开出手，这是去掉令牌后控制节奏的主要手段（成本为零，只改资产）
-- 攻击距离判断：`BTD_Distance_Find` 改为调用 `GetEdgeDistance2D` 与 `MeleeReach` 比较
+- 攻击距离判断：用 C++ 装饰器 **CC In Attack Range**（`UBTDecorator_CC_InAttackRange`，内部调用 `UCC_CombatRangeStatics::IsInAttackRange`）。近战按边缘距离 ≤ `MeleeReach`，弓兵按 `MinRange`～`MaxRange`。**不要再用 `BTD_Distance_Find`**：它继承自弓兵的 `BTD_Distance` 并调用了父类判断，近战的 `MaxRange` 又是视野半径（850），结果「看见就算在范围内」，怪会原地出刀不追击
+- 战斗相关的 FollowTarget / 攻击节点必须都在 `TargetActor` 装饰器下面。没有目标时触发 FollowTarget 会刷 `FollowTarget has no valid target`，也会挡住优先级更低的跟随分支
 
 ### 7.3 弓兵行为树
 
-不变。弓兵仍用 `BTD_Distance`（中心距离 + `MinRange` / `MaxRange`）、`CC_FollowTarget` 原选点逻辑、`CC_KeepDistance` 后撤。
+```
+③ Sequence [TargetActor Is Set，Observer Aborts: Both]
+└─ Selector
+   ├─ Sequence 后撤 [BTD_Distance MinOrMax=True（距离 < MinRange）]：KeepDistance → Wait 0.5
+   ├─ Sequence 射击 [CC In Attack Range]：BTT_TryActiveAttackAbility(BowShoot) → Wait
+   └─ BTT_ActiveAbility(FollowTarget)
+④ 搜索 [LastKnownLocation Is Set]：FollowTarget → Wait 0.5
+⑤ 跟随 [FollowAnchor Is Set，Observer Aborts: Self]：MoveTo → Wait
+```
+
+- 弓兵的「在攻击距离内」只看 `MaxRange`：太近由排在前面的后撤分支处理；退无可退（KeepDistance 找不到点）时落到射击分支贴脸射，`UCC_BowShoot` 也只拒绝超出 `MaxRange`。三个分支都不成立会让弓兵原地发呆
+- `CC_FollowTarget`（弓兵）：在目标**当前位置**周围按 2 个距离 × 8 个方向找射程内可达站位，投影后只要在 `MinRange`～`MaxRange` 内就接受；一个都找不到时直接朝目标走到射程中线以内。没有目标时（搜索）直接走到 `LastKnownLocation`
+- `CC_KeepDistance`：同样放宽为 2 个距离 × 9 个方向（最多偏 ±120°，可以沿墙侧移），落点在 `MinRange`～`MaxRange` 内即可
 
 ## 8. 移动与避障
 
@@ -351,15 +404,26 @@ Selector（战斗，条件：TargetActor 已设置）
 
 ```cpp
 UAITask_MoveTo::AIMoveTo(Controller, FVector::ZeroVector, /*GoalActor*/ Target,
-                         /*AcceptanceRadius*/ Config->MeleeReach,
+                         /*AcceptanceRadius*/ max(10, MeleeReach - MeleeApproachMargin),
                          /*StopOnOverlap*/ EAIOptionFlag::Enable);
 ```
 
 - 以 Actor 为终点时引擎会观察目标位置，目标移动后自动更新路径，不需要行为树重新触发
 - `StopOnOverlap` 开启时到达判定包含双方半径，即 R2 的边缘距离
 - 进入攻击距离后能力结束，行为树进入攻击分支
+- 停止距离比 `MeleeReach` 小 `MeleeApproachMargin`（`CC_FollowTarget` 的默认值 20）：引擎到达判定会把自身半径略微放大，若正好停在 `MeleeReach` 边界，攻击距离判断可能差一两厘米判为「够不着」，追到了却一直不出刀
 
-### 8.2 避障质量 LOD
+### 8.2 移动能力的看门狗
+
+`CC_FollowTarget` 和 `CC_KeepDistance` 发起 `UAITask_MoveTo` 后等 `OnMoveTaskFinished` 才结束。但移动被**新的移动请求顶掉**时，`UAITask_MoveTo` 会故意忽略这次结束；任务因资源被抢而挂起时也不广播。能力于是永远不结束，行为树等待它的 `BTT_ActiveAbility` 节点卡死（实测：弓兵后撤途中被攻击，行为树一直停在 KeepDistance）。
+
+两个能力都加了看门狗（`AI/CC_MoveTaskWatchdog.h`），每 0.25 秒检查：寻路组件已空闲或当前请求已不是自己发起的 → 结束能力（Cancelled）；超过 `MaxMoveDuration`（追击 5 秒）/ `MaxRetreatDuration`（后撤 3 秒）→ 结束能力，由行为树重新判断。日志：`[AI][Follow] ... move taken over / stopped`、`[BowAI][Retreat] Move timed out` 等。
+
+**以后新增任何「发起移动并等待结束」的能力，都要接这个看门狗。**
+
+行为树里激活能力用 C++ 任务 **CC Activate Ability**（`UBTTask_CC_ActivateAbility`，替代蓝图 `BTT_ActiveAbility`）：按标签激活、等能力结束后 Succeeded；没激活也没在运行则 Failed；**行为树中止节点时取消该能力**，能力不会脱离行为树继续运行。
+
+### 8.3 避障质量 LOD
 
 `UCC_CrowdAgentStatics::UpdateAvoidanceLOD`，由控制器 0.5 秒计时器调用：
 
@@ -371,7 +435,7 @@ UAITask_MoveTo::AIMoveTo(Controller, FVector::ZeroVector, /*GoalActor*/ Target,
 
 只有质量变化时才调用 `SetCrowdAvoidanceQuality`。
 
-### 8.3 项目设置
+### 8.4 项目设置
 
 Crowd Manager `MaxAgents` = 小怪上限 + 随从上限 + 玩家数 + 余量（例如 250）。
 
@@ -404,11 +468,12 @@ C++ 已完成，剩下的是本地编译和编辑器里的资产配置。
 1. **编译**：重新生成项目文件后编译。新增文件在 `Source/GAS_Demo/{Public,Private}/AI/Targeting`、`AI/Squad`、`AI/CC_CombatRangeStatics.*`、`Private/Tests/CC_TargetScoringTests.cpp`，不需要改 `Build.cs`
 2. **清理**：编译通过后删除仓库根目录 `_to_delete/`
 3. **角色配置**：每个近战的 `DA_CharacterConfig_*` 设置 `MeleeReach`（`Crash|AI` 分类，默认 80，边缘距离）
-4. **近战距离判断（必须）**：`BTD_Distance_Find` 改为调用 `IsInMeleeReach(Self, TargetActor)`。否则 FollowTarget 已停在 `MeleeReach` 内、行为树却按 `MinRange` 中心距离判断为「不在范围」，会反复触发 FollowTarget 而不出手
+4. **攻击距离判断（必须）**：行为树里用 C++ 装饰器「CC In Attack Range」替换 `BTD_Distance_Find`（弓兵的 `BTD_Distance` 也可以一并替换）。两套标准不一致时，怪要么停在跟前不出手，要么离得很远就原地出刀
 5. **黑板**：近战黑板新增 `IsBlocked`（Bool）。`SquadOrder`（Enum `ECC_SquadOrder`）可以先不加
 6. **近战行为树**：按 7.2 节加 `IsBlocked` 等待分支；攻击后的 `Wait` 设 Random Deviation（约 0.3）错开出手
 7. **项目设置**：Crowd Manager `MaxAgents` = 小怪上限 + 随从上限 + 玩家数 + 余量（例如 250）
-8. **测试**：Session Frontend → Automation 运行 `GAS_Demo.AI.TargetScoring` 与 `GAS_Demo.AI.TargetSelection`
+8. **测试**：Session Frontend → Automation 运行 `GAS_Demo.AI.TargetScoring`、`GAS_Demo.AI.TargetSelection`、`GAS_Demo.AI.SquadFollowLeash`
+9. **随从跟随**：黑板 `AI_BB_Enemy` 加 Object 键 `FollowAnchor`（Base Class: Actor）；随从会用到的行为树按 7.2 节末尾加跟随分支，并把战斗分支的 `TargetActor` 装饰器设为 Observer Aborts: Lower Priority
 
 调参入口：控制器 Class Defaults 的 `AI|Targeting`（`TargetScoring` 结构体、`TargetSwitchHysteresis`）、`AI|Blocked`、`AI|Crowd`（`HighAvoidanceDistance` / `MediumAvoidanceDistance`）；角色配置的 `MeleeReach`、`AttackDelay`。
 
@@ -416,7 +481,7 @@ C++ 已完成，剩下的是本地编译和编辑器里的资产配置。
 
 | 项 | 说明 | 建议 |
 |---|---|---|
-| `MeleeReach` 默认值 | 近战现在由 `BTD_Distance_Find` 读 `MinRange` 判断距离，含义混用。新字段只表示近战距离 | 默认 80（边缘距离），按 `UCC_Primary::HitBoxRadius` 和蒙太奇前冲距离调整 |
+| `MeleeReach` 默认值 | 近战现在由 `BTD_Distance_Find` 读 `MinRange` 判断距离，含义混用。新字段只表示近战距离 | 默认 80（边缘距离），按 Melee HitBox 通知的 Shapes 范围和蒙太奇前冲距离调整 |
 | `CC_Dash` 的 `ActivationBlockedTags = Attack` | v2.1 遗留，与本次改动无关，仍然待定 | 不变 |
 | 是否需要「同时攻击玩家人数」的硬上限 | D1 已定为不需要；如果实测玩家被围殴太难，可在评分里对玩家单独提高 `CrowdPenalty`，仍然不需要令牌 | 先不加 |
 

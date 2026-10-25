@@ -4,6 +4,12 @@
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 
+UCC_BuffOfferCardWidget::UCC_BuffOfferCardWidget(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer)
+{
+    ClickSoundEvent = TEXT("UI.Confirm");
+}
+
 void UCC_BuffOfferCardWidget::SetCardData(const FCC_BuffOfferCardData& InData, UCC_BuffSelectionScreen* InOwner)
 {
     Data = InData;

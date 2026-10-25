@@ -38,6 +38,8 @@ public class GAS_Demo : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"AssetRegistry",
+			// 脚步 Notify 读取地面物理材质的表面类型（UPhysicalMaterial）。
+			"PhysicsCore",
 			// UCC_DamageSettings（项目设置 → CC Damage）。
 			"DeveloperSettings",
 			// OnlineRoom 通过经典 OnlineSubsystem 的 Session 接口实现房间发现与加入。

@@ -3,6 +3,7 @@
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
 #include "AI/CC_CombatRangeStatics.h"
+#include "AI/CC_MoveTaskWatchdog.h"
 #include "Actors/Character/CC_BaseCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -52,113 +53,117 @@ void UCC_FollowTarget::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 			EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 			return;
 		}
+		// 停得比攻击距离再近一点，保证停下后攻击距离判断一定成立（见 MeleeApproachMargin）。
 		const float MeleeReach = UCC_CombatRangeStatics::GetMeleeReach(BaseCharacter);
-		UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Follow] %s: chase %s (melee reach %.1f)"),
-			*GetNameSafe(BaseCharacter), *GetNameSafe(TargetActor), MeleeReach);
-		StartMoveTask(AIController, FVector::ZeroVector, MeleeReach, TargetActor);
+		const float StopDistance = FMath::Max(10.f, MeleeReach - MeleeApproachMargin);
+		UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Follow] %s: chase %s (melee reach %.1f, stop %.1f)"),
+			*GetNameSafe(BaseCharacter), *GetNameSafe(TargetActor), MeleeReach, StopDistance);
+		StartMoveTask(AIController, FVector::ZeroVector, StopDistance, TargetActor);
 		return;
 	}
 
-	// 弓兵，或近战只剩最后已知位置：围绕已知位置按角度候选选点。
-	const FVector knownLocation = BaseCharacter->GetClosestActor().LastKnownLocation;
-	if (knownLocation == FVector::ZeroVector)
+	AAIController* AIController = Cast<AAIController>(BaseCharacter->GetController());
+	if (!IsValid(AIController))
 	{
-		UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Follow] %s: FollowTarget has no valid target."),
-			*GetNameSafe(BaseCharacter));
+		UE_LOG(LogGAS_Demo, Warning, TEXT("[AI][Follow] %s: no AIController."), *GetNameSafe(BaseCharacter));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
+	// 弓兵有目标：在目标当前位置周围找射程内的站位（不用 LastKnownLocation：那是锁定目标时的快照）。
+	if (IsValid(TargetActor))
+	{
+		StartRangedApproach(*BaseCharacter, *TargetActor);
+		return;
+	}
+
+	// 没有存活目标（目标离开视野）：直接走到最后看到它的位置搜索。
+	const FVector knownLocation = BaseCharacter->GetClosestActor().LastKnownLocation;
+	if (knownLocation == FVector::ZeroVector)
+	{
+		UE_LOG(LogGAS_Demo, Verbose, TEXT("[AI][Follow] %s: FollowTarget has no target and no last known location."),
+			*GetNameSafe(BaseCharacter));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
 	if (ShowDebug)
 	{
-		const FString Message = FString::Printf(
-			TEXT("[BowAI][Follow] %s: FollowTarget -> %s"),
-			*GetNameSafe(BaseCharacter),
-			*knownLocation.ToString());
+		const FString Message = FString::Printf(TEXT("[AI][Follow] %s: search -> %s"),
+			*GetNameSafe(BaseCharacter), *knownLocation.ToString());
 		UE_LOG(LogGAS_Demo, Log, TEXT("%s"), *Message);
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, Message);
 		}
 	}
-
-	StartMoveToTarget(*BaseCharacter,knownLocation);
+	StartMoveTask(AIController, knownLocation, DefaultAcceptanceRadius);
 }
 
-/**
- * 弓兵（或近战只剩已知位置时）：围绕已知位置按角度候选选出可达点。
- * @param Enemy
- * @param knownLocation
- */
-void UCC_FollowTarget::StartMoveToTarget(const ACC_BaseCharacter& Enemy, const FVector& TargetLocation)
+void UCC_FollowTarget::StartRangedApproach(const ACC_BaseCharacter& Enemy, AActor& Target)
 {
-
 	AAIController* AIController = Cast<AAIController>(Enemy.GetController());
 	UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(Enemy.GetWorld());
 	const UCC_CharacterConfig* Config = Enemy.GetCharacterConfig();
-	if (!IsValid(AIController)|| !IsValid(Nav) || !IsValid(Config))
+	if (!IsValid(AIController) || !IsValid(Nav) || !IsValid(Config))
 	{
-		UE_LOG(LogGAS_Demo, Warning, TEXT("[BowAI][Follow] %s: Cannot pursue %s without data."),
-			*GetNameSafe(&Enemy), *TargetLocation.ToString());
+		UE_LOG(LogGAS_Demo, Warning, TEXT("[BowAI][Follow] %s: Cannot approach %s without data."),
+			*GetNameSafe(&Enemy), *GetNameSafe(&Target));
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 		return;
 	}
 
+	const float MinRange = FMath::Max(0.f, Config->MinRange);
+	const float MaxRange = FMath::Max(MinRange + 1.f, Config->MaxRange);
+	const float MidRange = (MinRange + MaxRange) * 0.5f;
 	const FVector EnemyLocation = Enemy.GetActorLocation();
-	const float MidRange = (Config->MinRange + Config->MaxRange)*0.5f;
-	// 目标点应位于攻击范围中线附近；用范围宽度的一半会在很多配置下小于
-	// MidRange，导致所有候选点都被下面的距离检查过滤掉，能力立即结束并被行为树反复触发。
-	const float DesiredDistance = FMath::Max(MidRange, 50.0f);
-	//const float CandidateAngles[] = {0.0f, 45.0f, -45.0f, 90.0f, -90.0f};
-	const float CandidateAngles[] = {0.0f, 90.0f, 180.0f, 270.0f};
-	FVector Destination = FVector::ZeroVector;
-	bool bFoundDestination = false;
+	const FVector TargetLocation = Target.GetActorLocation();
+
+	// 从「自己相对目标的方向」开始找，尽量少绕路；重合时用自身朝向或世界 X 轴兜底。
 	FVector Away = (EnemyLocation - TargetLocation).GetSafeNormal2D();
 	if (Away.IsNearlyZero())
 	{
 		Away = Enemy.GetActorForwardVector().GetSafeNormal2D();
 	}
-	// 目标完全重合时也给导航一个稳定的方向；角度候选能绕开身后的静态障碍。
 	if (Away.IsNearlyZero())
 	{
 		Away = FVector::ForwardVector;
 	}
 
-	for (const float Angle : CandidateAngles)
+	const float CandidateRadii[] = {MidRange, (MinRange + MidRange) * 0.5f};
+	const float CandidateAngles[] = {0.f, 45.f, -45.f, 90.f, -90.f, 135.f, -135.f, 180.f};
+	const FVector QueryExtent(150.f, 150.f, 800.f);
+	for (const float Radius : CandidateRadii)
 	{
-		const FVector Candidate = TargetLocation + Away.RotateAngleAxis(Angle, FVector::UpVector) * DesiredDistance;
-		// 到时候范围的地点信息
-		FNavLocation OnNavMesh;
-		// 投影的信息
-		const FVector QueryExtent(150.0f, 150.0f, 800.0f);
-		if (!Nav->ProjectPointToNavigation(Candidate, OnNavMesh,QueryExtent)
-			|| FVector::Dist2D(OnNavMesh.Location, TargetLocation) < MidRange)
+		for (const float Angle : CandidateAngles)
 		{
-			continue;
+			const FVector Candidate = TargetLocation + Away.RotateAngleAxis(Angle, FVector::UpVector) * Radius;
+			FNavLocation OnNavMesh;
+			if (!Nav->ProjectPointToNavigation(Candidate, OnNavMesh, QueryExtent))
+			{
+				continue;
+			}
+			// 投影可能把点挪近或挪远一些：只要仍在射程内就接受，不要求正好在中线上。
+			const float Distance = FVector::Dist2D(OnNavMesh.Location, TargetLocation);
+			if (Distance < MinRange || Distance > MaxRange)
+			{
+				continue;
+			}
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(
+				Enemy.GetWorld(), EnemyLocation, OnNavMesh.Location);
+			if (IsValid(Path) && Path->IsValid() && !Path->IsPartial())
+			{
+				UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Follow] %s: stand point %s (radius %.0f, angle %.0f)"),
+					*GetNameSafe(&Enemy), *OnNavMesh.Location.ToCompactString(), Radius, Angle);
+				StartMoveTask(AIController, OnNavMesh.Location, DefaultAcceptanceRadius);
+				return;
+			}
 		}
-		// 之前的是两套导航系统
-		const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(
-			Enemy.GetWorld(), EnemyLocation, OnNavMesh.Location);
-		// const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(
-		// 	Enemy->GetWorld(), EnemyLocation, OnNavMesh.Location);
-		if (IsValid(Path) && Path->IsValid() && !Path->IsPartial() &&
-			Path->GetPathLength() > KINDA_SMALL_NUMBER )
-		{
-			Destination = OnNavMesh.Location;
-			bFoundDestination = true;
-			break;
-		}
-	}
-	if (!bFoundDestination)
-	{
-		UE_LOG(LogGAS_Demo, Warning,
-			TEXT("[BowAI][Follow] %s: no reachable destination near %s (desired %.1f, mid %.1f)."),
-			*GetNameSafe(&Enemy), *TargetLocation.ToString(), DesiredDistance, MidRange);
-		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
-		return;
 	}
 
-	StartMoveTask(AIController, Destination, DefaultAcceptanceRadius);
+	// 一个站位都找不到：直接朝目标走到射程中线以内（边缘距离），进入射程后行为树接着射击。
+	UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Follow] %s: no stand point around %s, approach directly (stop %.0f)."),
+		*GetNameSafe(&Enemy), *GetNameSafe(&Target), MidRange);
+	StartMoveTask(AIController, FVector::ZeroVector, MidRange, &Target);
 }
 
 void UCC_FollowTarget::StartMoveTask(AAIController* AIController, const FVector& Destination, float AcceptanceRadius,
@@ -178,6 +183,32 @@ void UCC_FollowTarget::StartMoveTask(AAIController* AIController, const FVector&
 	// 此原生委托同时覆盖蓝图的 OnMoveFinished 和 OnRequestFailed。
 	MoveTask->OnMoveTaskFinished.AddUObject(this, &ThisClass::HandleMoveFinished);
 	MoveTask->ReadyForActivation();
+
+	// 可能已同步到达并结束；仍在移动时启动看门狗。
+	if (IsActive() && IsValid(MoveTask) && GetWorld())
+	{
+		WatchedController = AIController;
+		WatchedRequestId = CCMoveTaskWatchdog::GetCurrentRequestId(AIController);
+		MoveStartTime = GetWorld()->GetTimeSeconds();
+		GetWorld()->GetTimerManager().SetTimer(MoveWatchdogTimer, this, &ThisClass::CheckMoveWatchdog,
+			CCMoveTaskWatchdog::CheckInterval, true);
+	}
+}
+
+void UCC_FollowTarget::CheckMoveWatchdog()
+{
+	if (!IsActive() || !GetWorld())
+	{
+		return;
+	}
+	const bool bTimedOut = GetWorld()->GetTimeSeconds() - MoveStartTime > MaxMoveDuration;
+	const bool bOrphaned = CCMoveTaskWatchdog::IsMoveOrphaned(WatchedController.Get(), WatchedRequestId);
+	if (bTimedOut || bOrphaned)
+	{
+		UE_LOG(LogGAS_Demo, Log, TEXT("[AI][Follow] %s: move %s, ending FollowTarget."),
+			*GetNameSafe(GetAvatarActorFromActorInfo()), bOrphaned ? TEXT("taken over / stopped") : TEXT("timed out"));
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, bOrphaned);
+	}
 }
 
 void UCC_FollowTarget::HandleMoveFinished(
@@ -230,6 +261,12 @@ void UCC_FollowTarget::EndAbility(const FGameplayAbilitySpecHandle Handle,
 			Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled));
 		return;
 	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(MoveWatchdogTimer);
+	}
+	WatchedController.Reset();
 
 	{
 		// 重新触发或被打断时，旧移动任务必须先解绑再结束：
