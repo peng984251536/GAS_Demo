@@ -18,10 +18,10 @@ protected:
 	virtual void NativeOnInitialized() override;
 
 	/** 悬停音效事件名，默认 UI.Hover。 */
-	UPROPERTY(EditDefaultsOnly, Category="Sound")
+	UPROPERTY(EditDefaultsOnly, Category="Sound", meta=(GetOptions="CC_AudioLibrary.GetAudioEventNames"))
 	FName HoverSoundEvent = TEXT("UI.Hover");
 
 	/** 点击音效事件名，默认 UI.Click；确认类按钮可改为 UI.Confirm。 */
-	UPROPERTY(EditDefaultsOnly, Category="Sound")
+	UPROPERTY(EditDefaultsOnly, Category="Sound", meta=(GetOptions="CC_AudioLibrary.GetAudioEventNames"))
 	FName ClickSoundEvent = TEXT("UI.Click");
 };

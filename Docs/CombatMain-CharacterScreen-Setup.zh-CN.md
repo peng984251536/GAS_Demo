@@ -291,7 +291,7 @@ Overlay_Root
       └─ VerticalBox_Content
          ├─ HorizontalBox_Header
          │  ├─ TextBlock_Title
-         │  └─ Button_Close
+         │  └─ CommonButtonBase_Close   [CC_ButtonBase 子类]
          │     └─ TextBlock_Close
          └─ HorizontalBox_Body
             ├─ VerticalBox_Stats
@@ -317,7 +317,7 @@ Overlay_Root
 | SizeBox_Window | Overlay Slot 水平/垂直 Center；Width = 1000，Height = 650 |
 | Border_Window | 深色底，Padding = 24 |
 | TextBlock_Title | “角色信息”，字号 28；Horizontal Box Slot Size = Fill |
-| Button_Close | Slot Size = Auto，Is Focusable = true |
+| CommonButtonBase_Close | Slot Size = Auto，Is Focusable = true |
 | TextBlock_Close | “关闭” |
 | HorizontalBox_Body | Vertical Box Slot Size = Fill；Padding Top = 24 |
 | VerticalBox_Stats | Horizontal Box Slot Size = Fill（权重 1），Padding Right = 16 |
@@ -336,7 +336,7 @@ Controller Class              = CC_CharacterScreenController（继承默认值�
 Input Config                  = Menu
 Allow Back                    = true
 Allow Close                   = true
-Default Focus Widget Name     = Button_Close
+Default Focus Widget Name     = CommonButtonBase_Close
 Buff Entry Class              = WBP_CharacterBuffEntry
 ```
 
@@ -386,14 +386,15 @@ C++ 在触发 On Buffs Changed 前已经同步了条目。这个事件只处理�
 
 ### 9.5 关闭页面
 
-在 **`WBP_CharacterScreen` 的 Event Graph** 中，选 Designer 里的 `Button_Close` 添加 `On Clicked`：
+关闭按钮由通用基类 `CC_ActivatableWidget` 自动绑定，**不需要在 Event Graph 接线**。只要 Designer 里的按钮满足两点：
 
-```text
-Button_Close.OnClicked
-    → Close Screen（Target = Self）
-```
+- 名称是 `CommonButtonBase_Close`；
+- 类型是 CommonButton，建议用继承 `CC_ButtonBase` 的按钮蓝图（自带悬停 / 点击音效）。普通 UMG `Button` 不会被绑定。
 
-Esc/手柄返回使用现有 CommonUI 配置。不要用 RemoveFromParent、直接 DeactivateWidget 或 AddToViewport 代替项目的页面栈接口。
+点击流程与 Esc / 手柄返回相同：先触发蓝图的 `On Handle Back Action`（返回 true 表示已处理、不关闭，可用于未保存提示），否则调用 Close Screen。
+如果以前按旧写法给 `Button_Close` 接过 `On Clicked → Close Screen`，改名后删掉这段连线。
+
+不要用 RemoveFromParent、直接 DeactivateWidget 或 AddToViewport 代替项目的页面栈接口。
 
 ### 9.6 调整属性列表
 

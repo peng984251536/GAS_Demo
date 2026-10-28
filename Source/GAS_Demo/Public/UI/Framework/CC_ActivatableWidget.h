@@ -6,8 +6,13 @@
 
 class UCC_UIController;
 class UCC_UIModel;
+class UCommonButtonBase;
 
-/** 通用页面基类：声明输入、焦点和关闭策略；页面栈负责激活、失活及复用。 */
+/**
+ * 通用页面基类：声明输入、焦点和关闭策略；页面栈负责激活、失活及复用。
+ * 可选关闭按钮：设计器里放一个名为 CommonButtonBase_Close 的 CommonButton，点击走与返回键相同的流程
+ * （先给蓝图 On Handle Back Action 处理机会，未处理才关闭）；bAllowClose 为 false 的页面会把它折叠。
+ */
 UCLASS(Abstract, Blueprintable)
 class GAS_DEMO_API UCC_ActivatableWidget : public UCommonActivatableWidget
 {
@@ -40,6 +45,10 @@ public:
 	UCC_UIModel* GetUIModel() const;
 
 protected:
+	/** 绑定可选的 CommonButtonBase_Close。子类重写时必须调用 Super。 */
+	virtual void NativeOnInitialized() override;
+	/** CommonButtonBase_Close 点击；默认与返回键一致，子类可重写。 */
+	virtual void NativeOnCloseButtonClicked();
 	/** 在蓝图激活事件前启用控制器并推送模型快照。 */
 	virtual void NativeOnActivated() override;
 	/** 在官方栈响应失活前解除控制器和模型监听。 */
@@ -87,8 +96,12 @@ protected:
 	/** 默认焦点控件名；蓝图 Get Desired Focus Target 的结果优先。 */
 	UPROPERTY(EditDefaultsOnly, Category="UI|Input")
 	FName DefaultFocusWidgetName;
+	/** 可选关闭按钮，名称必须是 CommonButtonBase_Close；建议用 CC_ButtonBase 的蓝图子类以获得音效。 */
+	UPROPERTY(BlueprintReadOnly, Category="UI|Lifecycle", meta=(BindWidgetOptional))
+	TObjectPtr<UCommonButtonBase> CommonButtonBase_Close;
 
 private:
+	void HandleCloseButtonClicked() { NativeOnCloseButtonClicked(); }
 	/** 创建本次入栈会话的控制器；不在构造函数中访问玩家或业务系统。 */
 	void EnsureController();
 	/** 模型变化转交展示回调，失活期间忽略通知。 */

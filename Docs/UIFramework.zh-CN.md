@@ -81,7 +81,7 @@ Get Owning Player → Get Root Layout For Player
 
 异步打开使用 `Show Screen Async`：RootLayout 接 Get Root Layout For Player，ScreenClass 传软类引用，Context 是可选上下文，默认 SuspendInput=true。Completed 输出已入栈的 Screen（不保证入场动画已结束）；Failed 表示无效层、类或加载失败。保存 AsyncAction 输出可以调用 Cancel；取消不发成功/失败事件。根布局 Shutdown 会立即取消挂起请求。加载完成遇到过渡时会等待，多个请求按就绪顺序处理，不保证发起顺序。关闭仍统一使用 CloseScreen，由 CommonUI 管理退出动画。
 
-通知：`Get Root Layout → Show Notification(普通 Widget 类, Duration)`，可用返回的控件调用 `Dismiss Notification`。计时使用游戏时间，暂停游戏时也暂停计时；Duration <= 0 表示手动关闭。多个通知共享全屏 Overlay，具体排版由通知蓝图负责。
+通知：`Get Root Layout → Show Notification(普通 Widget 类, Duration)`，可用返回的控件调用 `Dismiss Notification`。计时使用游戏时间，暂停游戏时也暂停计时；Duration <= 0 表示手动关闭。多个通知共享全屏 Overlay，具体排版由通知蓝图负责。 战斗提示（波次、升级等）已有现成的排队/合并/动画实现，直接调用静态入口 `UCC_ToastStatics::ShowToastText`，见 [ToastNotification.zh-CN.md](ToastNotification.zh-CN.md)。
 
 ## 生命周期与事件绑定
 

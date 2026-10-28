@@ -19,7 +19,7 @@ v2 相对 v1 的变化见第 18 节。
 | 复活无敌用 `Status.Invincible` | 用 `Status.DamageImmunity`（`CCDamageTags::Immunity`）——伤害 GE 已按它拒绝施加；`Status.Invincible` 在本项目用于抑制 Buff | 检查项 9 已确认 |
 | 离屏刷怪 `bPreferOffscreen` | `PreferredDistanceToPlayers`：优先离所有玩家都超过该距离的刷怪器（俯视角近似离屏） | 服务器不知道客户端相机 |
 | 落点"寻路可达" | 只做 `ProjectPointToNavigation`（`bProjectToNavigation`），不做路径查询 | 路径查询开销大，先观察是否需要 |
-| 选卡保护在 BuffSelection 配置 | `UCC_BuffSelectionComponent` 新增服务器事件 `OnServerPendingChanged / OnServerChoiceAccepted`，保护 GE 由 GameMode 施加与移除 | BuffSelection 保持与玩法无关 |
+| 选卡保护在 BuffSelection 配置 | `UCC_BuffSelectionComponent` 新增服务器事件 `OnServerSelectionActiveChanged / OnServerChoiceAccepted`，保护 GE 由 GameMode 施加与移除 | BuffSelection 保持与玩法无关 |
 | 结算页按钮 RPC | 走 `ACC_SurvivalPlayerState::ServerRequestPlayAgain / ServerRequestReturnToLobby`（PlayerState 归本连接所有） | 不需要新的 PlayerController 子类 |
 | 怪物类软引用 | 同设计；预加载当前档与下一档，未加载完成时同步加载并打警告 | |
 | 平衡 CSV | `Saved/Survival/Survival_<时间>.csv`，开发构建 | |
@@ -146,7 +146,7 @@ package "服务器" {
   [ACC_PlayerCharacter\nRevive()] as PC
   [UCC_AttributeSet\nOnOutOfHealth（Health < 0.1）] as AS
   [CC_Death\n结束时 HandleDeathFinished] as DA
-  [UCC_BuffSelectionComponent\nOnServerPendingChanged\nOnServerChoiceAccepted] as BS
+  [UCC_BuffSelectionComponent\nOnServerSelectionActiveChanged\nOnServerChoiceAccepted] as BS
   [UCC_BuffComponent\nResumeAfterRevive] as BC
 }
 
@@ -356,7 +356,7 @@ package "已有：修改" {
     + ResumeAfterRevive()
   }
   class UCC_BuffSelectionComponent <<modified>> {
-    + OnServerPendingChanged
+    + OnServerSelectionActiveChanged
     + OnServerChoiceAccepted
   }
   class UCC_CharacterConfig <<modified>> {
@@ -749,11 +749,12 @@ end
 deactivate GM
 
 == 选卡期间保护（联机；单机打开三选一会暂停世界，不施加） ==
-BS -> GM : OnServerPendingChanged(true)
+note over BS : 升级只通知主界面红点，点击入口并激活页面后开始保护
+BS -> GM : OnServerSelectionActiveChanged(true)
 GM -> GM : 施加 ChoosingProtectionEffect，记录句柄
 BS -> GM : OnServerChoiceAccepted(Option)
 GM -> KPS : Stats[BuffsChosen]++
-BS -> GM : OnServerPendingChanged(false)（选完 / ClearOffers）
+BS -> GM : OnServerSelectionActiveChanged(false)（选完 / ClearOffers）
 GM -> GM : 移除保护 GE（与施加对称）
 @enduml
 ```
@@ -970,7 +971,7 @@ end
 | 2 | `ACC_SurvivalGameMode`（继承 `ACC_RoomGameMode`）、GameState / PlayerState、TagStack 统计、全灭 → GameOver、结算页、作弊命令骨架 | 单机死亡进结算页，显示击杀数 |
 | 3 | 刷怪器 `SpawnOne` + 怪物 `SpawnParams` + `InitializeAttributes` 覆盖 + 人数缩放 GE | 作弊命令能刷出指定档位属性的怪 |
 | 4 | `UCC_WaveDirectorComponent`：波次、分帧队列、预警、落点筛选、回收、HUD | 定时循环刷怪无明显卡顿 |
-| 5 | `UCC_TeamProgressionComponent` 接入 `OfferBuffs`、选卡保护 | 击杀升级弹出三选一 |
+| 5 | `UCC_TeamProgressionComponent` 接入 `OfferBuffs`、选卡保护 | 击杀升级只亮红点，点击入口打开三选一 |
 | 6 | `UCC_RespawnComponent` + `Revive` + `ResumeAfterRevive` + 观战视角 | 联机阵亡后在队友身边复活，升级 Buff 仍在 |
 | 7 | 平衡 CSV、调试显示、测试补齐、更新 `BuffSystem-Roadmap`、关闭第 12 节检查项 | 测试通过 |
 

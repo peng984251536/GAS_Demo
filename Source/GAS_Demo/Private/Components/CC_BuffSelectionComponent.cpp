@@ -108,6 +108,9 @@ bool UCC_BuffSelectionComponent::EnqueueOffer(TArray<FCC_BuffOfferOption>&& Opti
     if (HasPendingOffer())
     {
         QueuedOffers.Add(MoveTemp(Offer));
+        CurrentOffer.PendingCount = QueuedOffers.Num() + 1;
+        GetOwner()->ForceNetUpdate();
+        if (IsLocalPlayer()) HandleOfferChangedLocally();
     }
     else
     {
@@ -133,6 +136,8 @@ void UCC_BuffSelectionComponent::SetCurrentOffer(FCC_BuffOffer&& Offer)
 {
     const bool bWasPending = HasPendingOffer();
     CurrentOffer = MoveTemp(Offer);
+    CurrentOffer.PendingCount = HasPendingOffer() ? QueuedOffers.Num() + 1 : 0;
+    if (!HasPendingOffer()) ServerSetSelectionActive_Implementation(false);
     GetOwner()->ForceNetUpdate();
     if (bWasPending != HasPendingOffer())
     {
@@ -246,15 +251,26 @@ void UCC_BuffSelectionComponent::HandleOfferChangedLocally()
         bChoiceInFlight = false;
     }
     OnOfferChanged.Broadcast();
-    if (HasPendingOffer())
-    {
-        TryOpenScreen();
-    }
-    else
+    if (!HasPendingOffer())
     {
         // 界面在没有选项后自行关闭，这里只停止尚未完成的打开重试。
         StopOpenRetry();
     }
+}
+
+bool UCC_BuffSelectionComponent::RequestOpenSelection()
+{
+    if (!IsLocalPlayer() || !HasPendingOffer() || !SelectionScreenClass) return false;
+    TryOpenScreen();
+    return true;
+}
+
+void UCC_BuffSelectionComponent::ServerSetSelectionActive_Implementation(bool bActive)
+{
+    const bool bNewActive = bActive && HasPendingOffer();
+    if (bSelectionActive == bNewActive) return;
+    bSelectionActive = bNewActive;
+    OnServerSelectionActiveChanged.Broadcast(bSelectionActive);
 }
 
 void UCC_BuffSelectionComponent::TryOpenScreen()

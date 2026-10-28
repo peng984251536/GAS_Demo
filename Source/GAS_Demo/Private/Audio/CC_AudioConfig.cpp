@@ -19,3 +19,9 @@ USoundBase* UCC_AudioConfig::PickSound(FName Event) const
 	}
 	return Variants.IsEmpty() ? nullptr : Variants[FMath::RandHelper(Variants.Num())];
 }
+
+FName UCC_AudioConfig::GetFootstepEvent(TEnumAsByte<EPhysicalSurface> Surface) const
+{
+	const FName* Found = FootstepSurfaceEvents.Find(Surface);
+	return Found && !Found->IsNone() ? *Found : DefaultFootstepEvent;
+}

@@ -2,12 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotify.h"
-#include "Chaos/ChaosEngineInterface.h"
 #include "AnimNotify_Footstep.generated.h"
 
 /**
- * 放在走 / 跑动画的落脚帧：从脚部骨骼向下检测地面，按物理材质的表面类型选择脚步音效事件，
- * 再从全局音效配置（UCC_AudioConfig）随机取一个变体在落脚点播放。
+ * 放在走 / 跑动画的落脚帧：从脚部骨骼向下检测地面，读取物理材质的表面类型，
+ * 到全局音效配置（UCC_AudioConfig::FootstepSurfaceEvents）查出脚步事件，随机取一个变体在落脚点播放。
+ * 表面 → 事件的映射只在全局配置里维护，Notify 本身不保存映射。
  * 动画在每台机器上都会播放，所以不需要网络同步；专用服务器跳过。
  * Notify 是共享资产，运行时不保存任何状态。
  */
@@ -25,25 +25,18 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footstep")
 	FName FootBone = TEXT("foot_l");
 
-	/** 没检测到地面，或地面表面类型不在下表中时使用的事件。 */
-	UPROPERTY(EditAnywhere, Category="Footstep")
-	FName DefaultEvent = TEXT("Footstep.Concrete");
-
 	/**
-	 * 物理材质表面类型 → 脚步事件，例如 SurfaceType1 → Footstep.Grass。
-	 * 表面类型在 项目设置 → Physics → Physical Surface 中命名，再给地面材质的物理材质选择对应类型。
+	 * 可选：强制使用的事件名，忽略地面材质（例如落地动画填 Movement.Land）。
+	 * 留空（None）时按地面表面类型查全局配置。
 	 */
-	UPROPERTY(EditAnywhere, Category="Footstep")
-	TMap<TEnumAsByte<EPhysicalSurface>, FName> SurfaceEvents;
+	UPROPERTY(EditAnywhere, Category="Footstep", meta=(GetOptions="CC_AudioLibrary.GetAudioEventNames"))
+	FName EventOverride;
 
 	/** 从脚部往下检测地面的距离（厘米）。 */
 	UPROPERTY(EditAnywhere, Category="Footstep", meta=(ClampMin="1.0"))
 	float TraceDistance = 60.f;
 
+	/** 叠乘在事件音量之上，例如潜行动画调小。音高随机、衰减、并发在音效配置的事件里设置。 */
 	UPROPERTY(EditAnywhere, Category="Footstep", meta=(ClampMin="0.0"))
 	float VolumeMultiplier = 1.f;
-
-	/** 每次在 1 ± 此值的范围内随机音高，减少重复感；0 表示不变。 */
-	UPROPERTY(EditAnywhere, Category="Footstep", meta=(ClampMin="0.0", ClampMax="0.5"))
-	float PitchVariation = 0.05f;
 };

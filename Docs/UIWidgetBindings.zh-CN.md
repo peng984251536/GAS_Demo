@@ -30,6 +30,15 @@
 
 CC_BuffSelectionScreen 的 `CardContainer` 改为 `PanelWidget_Cards`，类型仍为 UPanelWidget，可用 HorizontalBox 等派生类型。它保留 BindWidgetOptional，因为该页面明确支持在 On Buff Offer Changed 中完全自定义卡片布局、调用 ChooseOption，不使用自动生成容器。
 
+可选绑定的布局控件（不放也能编译；名称或类型不对时不报错，只是不生效）：
+
+| 所属类 | 控件名 | 类型 | 作用 |
+| --- | --- | --- | --- |
+| CC_ActivatableWidget（所有页面） | CommonButtonBase_Close | CommonButtonBase | 关闭按钮，流程同返回键；bAllowClose 为 false 的页面自动折叠 |
+| CC_CombatMainWidget | CommonButtonBase_BuffSelection | CommonButtonBase | 三选一入口，始终可点，无待选奖励时不打开页面 |
+| CC_CombatMainWidget | Widget_BuffRedDot | Widget（任意） | 红点，有待选奖励时显示 |
+| CC_CombatMainWidget | TextBlock_BuffRewardCount | TextBlock | 待选次数 |
+
 CC_HealthBarWidget、CC_BuffBarWidget、CC_MenuButton、CC_RootLayout、CC_WorldIndicatorLayer 中由 C++ 创建的控件属性也统一了类型前缀。这些 Transient 属性不是 Designer 的绑定要求，无需在蓝图中额外添加同名控件。
 
 ## 已有蓝图迁移

@@ -41,6 +41,10 @@ struct GAS_DEMO_API FCC_BuffOffer
     UPROPERTY(BlueprintReadOnly, Category = "Buff|Offer")
     int32 OfferId = 0;
 
+    /** 当前一轮与排队轮次的总数，由服务器维护并随选项复制给拥有者。 */
+    UPROPERTY(BlueprintReadOnly, Category = "Buff|Offer")
+    int32 PendingCount = 0;
+
     /** 本轮候选项，下标就是选择请求里的 OptionIndex。 */
     UPROPERTY(BlueprintReadOnly, Category = "Buff|Offer")
     TArray<FCC_BuffOfferOption> Options;

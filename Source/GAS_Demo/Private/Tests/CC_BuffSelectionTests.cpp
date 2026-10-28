@@ -117,12 +117,24 @@ bool FCCBuffSelectionServerFlowTest::RunTest(const FString& Parameters)
 
     TStrongObjectPtr<UCC_BuffOfferPool> Pool(MakePool(3));
     TestFalse(TEXT("空池不发起"), Selection->OfferBuffs(nullptr));
+    TestFalse(TEXT("没有奖励时不能打开选择"), Selection->RequestOpenSelection());
+    TArray<bool> ActiveChanges;
+    Selection->OnServerSelectionActiveChanged.AddLambda([&](bool bActive) { ActiveChanges.Add(bActive); });
     TestTrue(TEXT("第一轮直接展示"), Selection->OfferBuffs(Pool.Get()));
     TestTrue(TEXT("第二轮排队"), Selection->OfferBuffs(Pool.Get()));
     const FCC_BuffOffer First = Selection->GetCurrentOffer();
     TestEqual(TEXT("当前是第一轮"), First.OfferId, 1);
     TestEqual(TEXT("三个选项"), First.Options.Num(), 3);
     TestEqual(TEXT("排队一轮"), Selection->GetQueuedOfferCount(), 1);
+    TestEqual(TEXT("两轮奖励的待选次数"), Selection->GetPendingOfferCount(), 2);
+    TestFalse(TEXT("待选奖励不会自动进入选卡会话"), Selection->IsSelectionActive());
+    TestEqual(TEXT("未打开页面时不通知保护"), ActiveChanges.Num(), 0);
+    TestFalse(TEXT("未配置页面时打开失败"), Selection->RequestOpenSelection());
+    TestEqual(TEXT("打开失败不消耗奖励"), Selection->GetPendingOfferCount(), 2);
+    Selection->ServerSetSelectionActive(true);
+    Selection->ServerSetSelectionActive(true);
+    TestTrue(TEXT("页面激活后进入会话"), Selection->IsSelectionActive());
+    TestEqual(TEXT("重复激活只广播一次"), ActiveChanges.Num(), 1);
 
     TestEqual(TEXT("编号不符"), Selection->Resolve(99, 0), ECC_BuffChoiceResult::StaleOffer);
     TestEqual(TEXT("下标越界"), Selection->Resolve(1, 3), ECC_BuffChoiceResult::InvalidIndex);
@@ -130,6 +142,7 @@ bool FCCBuffSelectionServerFlowTest::RunTest(const FString& Parameters)
     Selection->NextResult = ECC_BuffChoiceResult::ApplyFailed;
     TestEqual(TEXT("施加失败"), Selection->Resolve(1, 0), ECC_BuffChoiceResult::ApplyFailed);
     TestEqual(TEXT("施加失败保留本轮"), Selection->GetCurrentOffer().OfferId, 1);
+    TestEqual(TEXT("失败不扣奖励次数"), Selection->GetPendingOfferCount(), 2);
 
     Selection->NextResult = ECC_BuffChoiceResult::Accepted;
     TestEqual(TEXT("施加成功"), Selection->Resolve(1, 1), ECC_BuffChoiceResult::Accepted);
@@ -138,6 +151,8 @@ bool FCCBuffSelectionServerFlowTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("施加的是选中的那一项"), Selection->Applied[0] == First.Options[1]);
     }
     TestEqual(TEXT("进入第二轮"), Selection->GetCurrentOffer().OfferId, 2);
+    TestEqual(TEXT("成功选择才扣一次"), Selection->GetPendingOfferCount(), 1);
+    TestTrue(TEXT("队列接上时继续选卡"), Selection->IsSelectionActive());
     TestEqual(TEXT("队列清空"), Selection->GetQueuedOfferCount(), 0);
     TestEqual(TEXT("重复提交第一轮被拒绝"), Selection->Resolve(1, 0), ECC_BuffChoiceResult::StaleOffer);
 
@@ -147,6 +162,11 @@ bool FCCBuffSelectionServerFlowTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("结果返回后不再锁定"), Selection->IsChoiceInFlight());
     TestFalse(TEXT("全部选完"), Selection->HasPendingOffer());
     TestEqual(TEXT("共施加两次"), Selection->Applied.Num(), 2);
+    TestEqual(TEXT("全部选完次数归零"), Selection->GetPendingOfferCount(), 0);
+    TestFalse(TEXT("全部选完结束保护"), Selection->IsSelectionActive());
+    TestEqual(TEXT("打开和选完各通知一次"), ActiveChanges.Num(), 2);
+    Selection->ServerSetSelectionActive(true);
+    TestFalse(TEXT("没有奖励不能开始保护"), Selection->IsSelectionActive());
 
     // 正式施加逻辑：控制器没有 Pawn 时返回 NoTarget，本轮保留。
     Selection->bUseDefaultApply = true;
@@ -154,6 +174,11 @@ bool FCCBuffSelectionServerFlowTest::RunTest(const FString& Parameters)
     const int32 Third = Selection->GetCurrentOffer().OfferId;
     TestEqual(TEXT("没有角色"), Selection->Resolve(Third, 0), ECC_BuffChoiceResult::NoTarget);
     TestEqual(TEXT("没有角色时保留本轮"), Selection->GetCurrentOffer().OfferId, Third);
+    Selection->ServerSetSelectionActive(true);
+    Selection->ServerSetSelectionActive(false);
+    TestFalse(TEXT("页面失活撤销保护"), Selection->IsSelectionActive());
+    TestEqual(TEXT("页面失活仍保留奖励"), Selection->GetPendingOfferCount(), 1);
+    Selection->ServerSetSelectionActive(true);
 
     // 自定义选项：无效项被丢弃，全部无效则不发起。
     TestFalse(TEXT("全无效选项不发起"), Selection->OfferOptions({Option(nullptr)}));
@@ -164,6 +189,8 @@ bool FCCBuffSelectionServerFlowTest::RunTest(const FString& Parameters)
     Selection->ClearOffers();
     TestFalse(TEXT("清空当前一轮"), Selection->HasPendingOffer());
     TestEqual(TEXT("清空队列"), Selection->GetQueuedOfferCount(), 0);
+    TestEqual(TEXT("清空奖励次数"), Selection->GetPendingOfferCount(), 0);
+    TestFalse(TEXT("清空同步结束会话"), Selection->IsSelectionActive());
     return true;
 }
 #endif

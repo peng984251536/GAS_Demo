@@ -102,7 +102,6 @@ void UCC_HitReact::ActivateAbility(const FGameplayAbilitySpecHandle Handle, cons
     // MontageTask->OnCancelled.AddDynamic(this, &ThisClass::OnMontageCancelled);
     // MontageTask->ReadyForActivation();
 
-    PlayAudioEventOnAvatar(HitSoundEvent);
     BaseCharacter->HandleHit();
 
     // 方式二：屏幕打印，调试时更直观

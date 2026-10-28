@@ -27,10 +27,6 @@ class GAS_DEMO_API UCC_BowShoot : public UCC_GameplayAbility
                             const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility,
                             bool bWasCancelled) override;
 
-    /** 放箭时播放的全局音效事件（见 Docs/AudioConfig）；设为 None 不播放。 */
-    UPROPERTY(EditDefaultsOnly, Category="Crash|Abilities|Audio")
-    FName ReleaseSoundEvent = TEXT("Attack.Swing");
-
   private:
     /** 动画 Notify 发来放箭事件时调用；必须是 UFUNCTION 才能绑定动态委托。 */
     UFUNCTION()

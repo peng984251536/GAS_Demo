@@ -65,8 +65,6 @@ void UCC_Primary::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const
 	MontageTask->OnInterrupted.AddDynamic(this, &ThisClass::OnMontageInterrupted);
 	MontageTask->OnCancelled.AddDynamic(this, &ThisClass::OnMontageCancelled);
 	MontageTask->ReadyForActivation();
-	// 蒙太奇已开始播放，再播放挥砍音效。
-	PlayAudioEventOnAvatar(AttackSoundEvent);
 	
 	// 方式二：屏幕打印，调试时更直观
 	if (GEngine && ShowDebug)

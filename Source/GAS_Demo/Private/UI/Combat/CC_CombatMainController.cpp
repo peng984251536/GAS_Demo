@@ -10,6 +10,29 @@
 #include "Game/Survival/CC_TeamProgressionComponent.h"
 #include "Game/Survival/CC_WaveDirectorComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/CC_BuffSelectionComponent.h"
+
+void UCC_CombatMainModel::SetPendingBuffRewards(int32 Value)
+{
+	if (PendingBuffRewards == Value) return;
+	PendingBuffRewards = Value;
+	NotifyChanged();
+}
+
+void UCC_CombatMainController::RefreshBuffRewards()
+{
+	const UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(GetPlayerController());
+	if (UCC_CombatMainModel* CombatModel = Cast<UCC_CombatMainModel>(GetModel()))
+	{
+		CombatModel->SetPendingBuffRewards(Selection ? Selection->GetPendingOfferCount() : 0);
+	}
+}
+
+bool UCC_CombatMainController::OpenBuffSelection()
+{
+	UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(GetPlayerController());
+	return CanHandleActions() && Selection && Selection->RequestOpenSelection();
+}
 
 void UCC_CombatMainModel::SetVitals(const FCC_PlayerVitals& Value)
 {
@@ -36,10 +59,19 @@ void UCC_CombatMainController::OnActivated()
 	}
 	Super::OnActivated();
 	BindSurvival();
+	if (UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(GetPlayerController()))
+	{
+		Selection->OnOfferChanged.AddUniqueDynamic(this, &ThisClass::RefreshBuffRewards);
+	}
+	RefreshBuffRewards();
 }
 
 void UCC_CombatMainController::OnDeactivated()
 {
+	if (UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(GetPlayerController()))
+	{
+		Selection->OnOfferChanged.RemoveDynamic(this, &ThisClass::RefreshBuffRewards);
+	}
 	if (APlayerController* Player = GetPlayerController()) Player->OnPossessedPawnChanged.RemoveDynamic(this, &ThisClass::HandlePawnChanged);
 	UnbindPawn();
 	UnbindSurvival();

@@ -8,8 +8,8 @@ UCC_BuffSelectionScreen::UCC_BuffSelectionScreen(const FObjectInitializer& Objec
 {
     ControllerClass = UCC_BuffSelectionController::StaticClass();
     InputMode = ECommonInputMode::Menu;
-    // 必须选一张才能继续，返回键只被消费、不关闭页面。
-    bAllowBack = false;
+    // 页面由玩家主动打开，返回键也可关闭；未选的奖励保留在服务器队列中，红点继续显示。
+    bAllowBack = true;
 }
 
 UCC_BuffSelectionModel* UCC_BuffSelectionScreen::GetSelectionModel() const

@@ -24,7 +24,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FCC_ServerChoiceAccepted, const FCC_BuffOffe
  * 服务器：OfferBuffs 抽取选项并排队，同一时间只展示一轮；收到选择后校验编号和下标，
  *         再通过当前 Pawn 的 UCC_BuffComponent 施加 GE，成功才进入下一轮。
  * 客户端：只收到自己的当前一轮（COND_OwnerOnly），RequestChoose 把选择发给服务器；
- *         本地玩家收到新一轮时自动打开配置好的界面。
+ *         新奖励只通知 HUD 更新红点，玩家点击入口后才打开选择界面。
  *
  * 组件不认识任何具体 Buff，也不修改 GE 配置；施加规则（叠层、免疫等）全部交给 GAS。
  */
@@ -66,6 +66,27 @@ public:
     /** 是否有一轮正在等待选择。 */
     UFUNCTION(BlueprintPure, Category = "Buff|Selection")
     bool HasPendingOffer() const { return CurrentOffer.IsValid(); }
+
+    /** 待选奖励总次数，包含当前一轮；UI 读取服务器快照，不自行累加。 */
+    UFUNCTION(BlueprintPure, Category = "Buff|Selection")
+    int32 GetPendingOfferCount() const { return CurrentOffer.PendingCount; }
+
+    /**
+     * 玩家点击入口后主动打开选择界面，不消耗奖励。
+     * 没有奖励或未配置页面时返回 false；根布局暂未就绪时沿用现有重试流程。
+     */
+    UFUNCTION(BlueprintCallable, Category = "Buff|Selection")
+    bool RequestOpenSelection();
+
+    /** 页面控制器在激活/失活时通知服务器，仅用于实际选卡期间的保护。 */
+    UFUNCTION(Server, Reliable)
+    void ServerSetSelectionActive(bool bActive);
+
+    /** 服务器读取选卡会话；待选但未打开界面时为 false。 */
+    bool IsSelectionActive() const { return bSelectionActive; }
+
+    /** 服务器选卡会话变化，供玩法层授予与撤销保护。 */
+    FCC_ServerOfferPendingChanged OnServerSelectionActiveChanged;
 
     /** 服务器上排在当前一轮之后的轮数；客户端始终为 0。 */
     UFUNCTION(BlueprintPure, Category = "Buff|Selection")
@@ -116,7 +137,7 @@ protected:
     /** 服务器端的完整校验与施加流程，RPC 和测试共用。 */
     ECC_BuffChoiceResult ResolveChoice(int32 OfferId, int32 OptionIndex);
 
-    /** 本地玩家收到新一轮时自动打开的界面；为空则不自动打开（可自己监听 OnOfferChanged）。 */
+    /** 玩家点击奖励入口后打开的界面；为空时保留奖励但不打开页面。 */
     UPROPERTY(EditDefaultsOnly, Category = "Buff|Selection|UI")
     TSubclassOf<UCC_ActivatableWidget> SelectionScreenClass;
 
@@ -140,7 +161,7 @@ private:
     void SetCurrentOffer(FCC_BuffOffer&& Offer);
     /** 当前一轮结束后展示下一轮，没有则清空。 */
     void AdvanceQueue();
-    /** 当前一轮变化后的本地处理：结束请求状态、广播、开关界面。 */
+    /** 当前奖励变化后的本地处理：结束旧请求并广播；不自动打开界面。 */
     void HandleOfferChangedLocally();
     APlayerController* GetOwningPlayer() const;
     bool IsLocalPlayer() const;
@@ -165,6 +186,7 @@ private:
 
     /** 客户端请求状态：等待结果期间禁止再次提交。 */
     bool bChoiceInFlight = false;
+    bool bSelectionActive = false;
     int32 InFlightOfferId = 0;
 
     /** 不受世界暂停影响的重试计时，用于根布局尚未就绪或正在过渡时打开界面。 */

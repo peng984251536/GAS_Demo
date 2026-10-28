@@ -47,11 +47,6 @@ public:
 		const FGameplayAbilityActivationInfo ActivationInfo,
 		const FGameplayEventData* TriggerEventData) override;
 	
-protected:
-	/** 攻击动作开始时播放的全局音效事件（见 Docs/AudioConfig）；设为 None 不播放。 */
-	UPROPERTY(EditDefaultsOnly, Category="Crash|Abilities|Audio")
-	FName AttackSoundEvent = TEXT("Attack.Swing");
-
 private:
 	int32 OwnedGeneration = -1;
 

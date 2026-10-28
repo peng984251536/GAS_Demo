@@ -205,8 +205,6 @@ void UCC_BowShoot::OnBowRelease(FGameplayEventData Payload)
         return;
     }
 
-    // 弓弦松开的那一帧播放；本能力只在服务器执行，联机时由主机播放。
-    PlayAudioEventOnAvatar(ReleaseSoundEvent);
     ReleaseArrow();
 }
 

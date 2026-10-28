@@ -20,12 +20,12 @@
 | 伤害来源元数据 | FCC_DamageRequest.SourceTags / DamageType 写入 Spec 动态标签，投射物填写 Damage.Source.Projectile；GE 修正器可按这些标签做条件增减伤 |
 | 伤害后事件 | AttributeSet 扣血后发送 Event.Combat.DamageDealt（来源）/ DamageTaken（目标），EventMagnitude 为实际扣血，Context 带暴击与命中点 |
 | 调试 | LogCCBuff；生命周期 Log，钩子及快照 Verbose |
-| 获取：三选一 | UCC_BuffOfferPool + UCC_BuffSelectionComponent（PlayerController 上，服务器抽取与校验）+ UCC_BuffSelectionScreen；见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
+| 获取：三选一 | 升级奖励排队，CombatMainModel 提供待选次数，蓝图显示红点并在点击后打开三选一；布局由蓝图负责；见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
 | 复活恢复 | `UCC_BuffComponent::ResumeAfterRevive`：撤销 `ClearBuffs(OwnerDeath)` 对保留实例（`bRemoveOnDeath=false`）的挂起，按 GAS 当前状态重新启用钩子与 Behavior；测试 `GAS_Demo.Buff.ResumeAfterRevive` |
 | 死亡与击杀者 | `UCC_AttributeSet::OnOutOfHealth`（带 Instigator / Causer）→ `ACC_BaseCharacter::HandleOutOfHealth` → `UCC_GameEventSubsystem::OnCharacterDied`；"击杀触发"类规则以后从这里接入 |
 | 实例级阵营 | `ACC_BaseCharacter::SetTeamOverride`（复制），`UCC_TeamStatics` 优先读取；召唤物继承召唤者阵营；测试 `GAS_Demo.Team.InstanceOverride` |
 | 召唤 Buff | `UCC_SummonAlly`（授予即激活）在玩家身边召唤，成功后移除 Buff；`UCC_SummonBuffShareComponent` 把玩家的 Buff 同步给随从（各自独立计时，`Buff.NotShared` 不同步）；测试 `GAS_Demo.Buff.Summon` / `SummonShare`，见 [SummonAlly.zh-CN.md](SummonAlly.zh-CN.md) |
-| 三选一服务器事件 | `UCC_BuffSelectionComponent::OnServerPendingChanged / OnServerChoiceAccepted`，见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
+| 三选一服务器事件 | `OnServerPendingChanged / OnServerChoiceAccepted`；`OnServerSelectionActiveChanged` 仅通知实际选卡会话，生存模式据此管理保护；见 [BuffSelection.zh-CN.md](BuffSelection.zh-CN.md) |
 
 ## NewBuff 选项池补充
 

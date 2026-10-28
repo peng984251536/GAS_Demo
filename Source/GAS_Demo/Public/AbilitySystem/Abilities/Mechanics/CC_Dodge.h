@@ -22,7 +22,19 @@ public:
 		const FGameplayAbilityActivationInfo ActivationInfo,
 		const FGameplayEventData* TriggerEventData) override;
 
+	virtual void EndAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		bool bReplicateEndAbility,
+		bool bWasCancelled) override;
 
+private:
+	/** 闪避期间把 CharacterMovement 的转向速度清零，避免边闪避边转身；结束时恢复。 */
+	void LockRotation(const FGameplayAbilityActorInfo* ActorInfo);
+	void RestoreRotation(const FGameplayAbilityActorInfo* ActorInfo);
 
-	
+	/** 激活前的转向速度（运行时状态，每次激活记录一次）。 */
+	FRotator SavedRotationRate = FRotator::ZeroRotator;
+	bool bRotationLocked = false;
 };

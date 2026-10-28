@@ -183,7 +183,7 @@ void ACC_SurvivalGameMode::EndMatch()
 	{
 		if (UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(It->Get()))
 		{
-			Selection->ClearOffers(); // 也会经由 OnServerPendingChanged 撤掉选卡保护
+			Selection->ClearOffers(); // 结束选卡会话并撤掉保护
 		}
 	}
 	FreezeEnemies();
@@ -324,9 +324,9 @@ void ACC_SurvivalGameMode::BindPlayer(APlayerController* Player)
 	if (UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(Player))
 	{
 		Binding.Selection = Selection;
-		Binding.PendingHandle = Selection->OnServerPendingChanged.AddUObject(this, &ThisClass::HandleOfferPendingChanged, WeakPS);
+		Binding.PendingHandle = Selection->OnServerSelectionActiveChanged.AddUObject(this, &ThisClass::HandleOfferPendingChanged, WeakPS);
 		Binding.AcceptedHandle = Selection->OnServerChoiceAccepted.AddUObject(this, &ThisClass::HandleChoiceAccepted, WeakPS);
-		if (Selection->HasPendingOffer())
+		if (Selection->IsSelectionActive())
 		{
 			HandleOfferPendingChanged(true, WeakPS);
 		}
@@ -354,7 +354,7 @@ void ACC_SurvivalGameMode::UnbindPlayer(ACC_SurvivalPlayerState* PlayerState)
 	}
 	if (UCC_BuffSelectionComponent* Selection = Binding->Selection.Get())
 	{
-		Selection->OnServerPendingChanged.Remove(Binding->PendingHandle);
+		Selection->OnServerSelectionActiveChanged.Remove(Binding->PendingHandle);
 		Selection->OnServerChoiceAccepted.Remove(Binding->AcceptedHandle);
 	}
 	Bindings.Remove(PlayerState);
@@ -405,7 +405,7 @@ void ACC_SurvivalGameMode::HandleDamageEvent(const FGameplayEventData* Payload,
 
 void ACC_SurvivalGameMode::HandleOfferPendingChanged(bool bHasPending, TWeakObjectPtr<ACC_SurvivalPlayerState> WeakPlayerState)
 {
-	// 单机打开三选一会暂停世界，不需要保护。
+	// 红点亮起不授予保护；仅实际选卡期间保护。单机打开会暂停世界，不需要保护。
 	const bool bEnable = bHasPending && IsMatchPlaying() && GetNetMode() != NM_Standalone;
 	SetChoosingProtection(WeakPlayerState.Get(), bEnable);
 }

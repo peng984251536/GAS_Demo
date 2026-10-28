@@ -4,6 +4,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "UI/Framework/CC_UIController.h"
 #include "UI/Framework/CC_UIModel.h"
+#include "CommonButtonBase.h"
 
 // 初始化页面默认策略：支持返回及焦点恢复。
 UCC_ActivatableWidget::UCC_ActivatableWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -28,6 +29,23 @@ TOptional<FUIInputConfig> UCC_ActivatableWidget::GetDesiredInputConfig() const
 	Config.bIgnoreLookInput = InputMode == ECommonInputMode::Menu;
 
 	return Config;
+}
+
+// 绑定可选关闭按钮；不允许关闭的页面（常驻 HUD）直接折叠它。
+void UCC_ActivatableWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	if (CommonButtonBase_Close)
+	{
+		CommonButtonBase_Close->OnClicked().AddUObject(this, &ThisClass::HandleCloseButtonClicked);
+		if (!bAllowClose) CommonButtonBase_Close->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+// 与返回键同一流程，蓝图可在 On Handle Back Action 里拦截（例如未保存提示）。
+void UCC_ActivatableWidget::NativeOnCloseButtonClicked()
+{
+	if (bAllowClose && !BP_OnHandleBackAction()) CloseScreen();
 }
 
 // 页面每次重建 Slate 时重新设置导航边界。
