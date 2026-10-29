@@ -18,7 +18,7 @@ class AAIController;
  * - 弓兵，或近战已没有存活目标（只剩 LastKnownLocation）：围绕已知位置按角度候选选出射程中线上的可达点。
  *
  * 允许重新触发：行为树再次发送 FollowTarget 事件时，旧的移动任务会在 EndAbility 中先解绑再结束，
- * 然后重新 MoveTo，不会出现两条移动任务互相取消。设计见 Docs/AI-Combat.zh-CN.md。
+ * 然后重新 MoveTo，不会出现两条移动任务互相取消。设计见 Docs/AI/AI-Combat.zh-CN.md。
  */
 UCLASS()
 class GAS_DEMO_API UCC_FollowTarget : public UCC_GameplayAbilityBase

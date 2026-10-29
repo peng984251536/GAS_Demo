@@ -424,7 +424,7 @@ def main():
     log('2. 给五个主按钮设画笔：T_MainMenu_LowPolyButton，')
     log('   Normal 3D7D89FF / Hovered E8783AFF / Pressed B64B25FF / Disabled 4A6470FF。')
     log('3. 背景图已经是 T_MainMenu_LowPolyMountains；如需替换直接改 Image_Background 的 Brush。')
-    log('4. 按钮由 CC_MainMenuWidget 自动绑定；多人页按 Docs/LANMenuWidgetSetup.zh-CN.md 单独创建。')
+    log('4. 按钮由 CC_MainMenuWidget 自动绑定；多人页按 Docs/UI/LANMenuWidgetSetup.zh-CN.md 单独创建。')
 
     OUT.write_text('\n'.join(lines), encoding='utf-8')
     unreal.log('mainmenu 布局生成结束 -> %s' % OUT)

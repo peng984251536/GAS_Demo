@@ -6,7 +6,7 @@
 class AActor;
 
 /**
- * 选目标评分参数（距离单位：厘米）。见 Docs/AI-Combat.zh-CN.md 第 4 节。
+ * 选目标评分参数（距离单位：厘米）。见 Docs/AI/AI-Combat.zh-CN.md 第 4 节。
  * 评分越小越好：
  *   Score = Distance
  *         + CrowdPenalty     × max(0, MeleeAttackers − MeleeSoftCap)   （只在自己是近战时计算）

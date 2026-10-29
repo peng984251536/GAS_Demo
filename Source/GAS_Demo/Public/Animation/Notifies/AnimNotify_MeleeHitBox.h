@@ -102,7 +102,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="HitBox", meta=(TitleProperty="{ShapeType} {AttachSocket}"))
 	TArray<FCC_MeleeHitShape> Shapes;
 
-	/** 运行时显示实际用于检测的形状与命中点；不改变编辑器预览。 */
+	/** 运行时显示实际用于检测的形状与命中点；不改变编辑器预览。受 cc.Debug.Melee 控制：1 = 只画勾选的通知，2 = 全部画。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="HitBox|Debug")
 	bool bDrawDebug = false;
 

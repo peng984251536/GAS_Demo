@@ -6,7 +6,7 @@
 class AActor;
 
 /**
- * 编队命令（编队层，见 Docs/AI-Combat.zh-CN.md 第 6 节）。
+ * 编队命令（编队层，见 Docs/AI/AI-Combat.zh-CN.md 第 6 节）。
  * 已实现：Free / Charge（自由交战）、Follow（跟随锚点 + 栓绳）。Hold / Retreat 仍按 Free 处理。
  */
 UENUM(BlueprintType)

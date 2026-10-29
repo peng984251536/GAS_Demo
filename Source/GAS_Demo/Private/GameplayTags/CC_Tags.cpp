@@ -110,6 +110,11 @@ namespace CCTags
 			"角色被魅惑，有效阵营变为施加者的阵营"
 		);
 		UE_DEFINE_GAMEPLAY_TAG(Dead, "CCTags.Status.Dead");
+		UE_DEFINE_GAMEPLAY_TAG_COMMENT(
+			RotationLocked,
+			"CCTags.Status.RotationLocked",
+			"角色转向被锁定（如闪避中）；计数归零才恢复转向"
+		);
 	}
 
 	namespace Attack

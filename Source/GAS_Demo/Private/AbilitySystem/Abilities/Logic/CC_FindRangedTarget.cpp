@@ -110,14 +110,14 @@ void UCC_FindRangedTarget::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	if (!Target.Actor.IsValid() ||
 		FVector::Distance(Target.Actor->GetActorLocation(),Enemy->GetActorLocation()) > CharacterConfig->MaxRange)
 	{
-		if (ShowDebug && IsValid(PreviousTarget))
+		if (ShouldShowDebug() && IsValid(PreviousTarget))
 		{
 			UE_LOG(LogGAS_Demo, Log,
 				TEXT("[BowAI][Find] Lost target: Enemy=%s Tag=%s Previous=%s Closest=%s Max=%.1f"),
 				*GetNameSafe(Enemy), *TargetTag.ToString(), *GetNameSafe(PreviousTarget), *GetNameSafe(Target.Actor.Get()),
 				CharacterConfig->MaxRange);
 		}
-		else if (ShowDebug)
+		else if (ShouldShowDebug())
 		{
 			UE_LOG(LogGAS_Demo, Verbose, TEXT("[BowAI][Find] No target: Enemy=%s Tag=%s Closest=%s Distance=%.1f Max=%.1f"),
 				*GetNameSafe(Enemy), *TargetTag.ToString(), *GetNameSafe(Target.Actor.Get()),
@@ -131,7 +131,7 @@ void UCC_FindRangedTarget::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	Enemy->SetClosestActor(Target);
 	AActor* TargetActor = Target.Actor.Get();
 	const float Distance = FVector::Distance(Target.LastKnownLocation,Enemy->GetActorLocation());
-	if (ShowDebug && PreviousTarget != TargetActor)
+	if (ShouldShowDebug() && PreviousTarget != TargetActor)
 	{
 		UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Find] Target acquired: Enemy=%s Previous=%s Target=%s Distance=%.1f Min=%.1f Max=%.1f"),
 			*GetNameSafe(Enemy), *GetNameSafe(PreviousTarget), *GetNameSafe(TargetActor), Distance,
@@ -147,7 +147,7 @@ void UCC_FindRangedTarget::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	}
 	// 索敌只记录当前目标并立即结束。贴身后的移动由 KeepDistance 独立负责，
 	// 避免行为树重复索敌时同时创建两条 MoveTo 任务，互相取消导致原地打圈。
-	if (ShowDebug && (PreviousTarget != TargetActor || Distance >= CharacterConfig->MinRange))
+	if (ShouldShowDebug() && (PreviousTarget != TargetActor || Distance >= CharacterConfig->MinRange))
 	{
 		UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Find] Too close; retreat needed: Enemy=%s Target=%s Distance=%.1f Min=%.1f"),
 			*GetNameSafe(Enemy), *GetNameSafe(TargetActor), Distance, CharacterConfig->MinRange);

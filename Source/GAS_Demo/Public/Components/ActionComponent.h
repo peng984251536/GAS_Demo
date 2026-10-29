@@ -27,6 +27,16 @@ public:
 	bool TryAttack(FGameplayTag GameplayTag);
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	bool TryDodge(FGameplayTag GameplayTag);
+
+	/**
+	 * 把输入方向写进动作事件（以"角色前方的目标点"形式存入 TargetData）。
+	 * 联机时 LastMoveInputDirection 只存在于拥有者客户端，不会同步到服务器；
+	 * 事件随能力激活一起发到服务器，服务器据此得到与客户端一致的朝向。方向为零时不写。
+	 */
+	static void SetEventInputDirection(FGameplayEventData& EventData, const AActor* Avatar, const FVector& Direction);
+
+	/** 读出 SetEventInputDirection 写入的方向（已压平到水平面并归一化）；没有时返回 false。 */
+	static bool GetEventInputDirection(const FGameplayEventData* EventData, FVector& OutDirection);
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	bool TryGameplayAbilityByTag(FGameplayTag GameplayTag,
 		UAbilitySystemComponent* SourceASC,

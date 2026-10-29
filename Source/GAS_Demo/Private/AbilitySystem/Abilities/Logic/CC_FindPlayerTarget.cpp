@@ -161,7 +161,7 @@ void UCC_FindPlayerTarget::HandleMoveFinished(
 	}
 
 	const bool bSucceeded = Result == EPathFollowingResult::Success;
-	if (ShowDebug)
+	if (ShouldShowDebug())
 	{
 		const FString Message = FString::Printf(TEXT("%s: MoveToTarget finished: %s"),
 			*GetNameSafe(GetAvatarActorFromActorInfo()),

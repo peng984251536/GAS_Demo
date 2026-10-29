@@ -1,4 +1,5 @@
 #include "Actors/Projectiles/CC_ArrowProjectile.h"
+#include "Debug/CC_DebugCVars.h"
 #include "Actors/Projectiles/CC_ProjectileInteractions.h"
 #include "Actors/Character/CC_BaseCharacter.h"
 
@@ -28,7 +29,10 @@ ACC_ArrowProjectile::ACC_ArrowProjectile()
 
     Collision = CreateDefaultSubobject<USphereComponent>(TEXT("Collision"));
     Collision->InitSphereRadius(8.0f);
-    Collision->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    // 只做查询（ProjectileMovement 的扫掠、Hit/Overlap 回调都属于查询），不参与物理，避免推挤角色。
+    Collision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    // 角色不能把箭当作地面踩上去；否则箭被销毁时会把它的速度传给角色，表现为被打飞。
+    Collision->CanCharacterStepUpOn = ECB_No;
     Collision->SetCollisionObjectType(ECC_WorldDynamic);
     Collision->SetCollisionResponseToAllChannels(ECR_Block);
     Collision->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
@@ -41,6 +45,7 @@ ACC_ArrowProjectile::ACC_ArrowProjectile()
     ArrowMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ArrowMesh"));
     ArrowMesh->SetupAttachment(Collision);
     ArrowMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    ArrowMesh->CanCharacterStepUpOn = ECB_No;
     // 原生类给出可见的默认箭模型；蓝图子类仍可以替换网格及朝向。
     static ConstructorHelpers::FObjectFinder<UStaticMesh> DefaultMesh(
         TEXT("/Game/ModularRPGHeroesPolyart/Meshes/Weapons/Arrow01SM.Arrow01SM"));
@@ -143,14 +148,14 @@ void ACC_ArrowProjectile::BeginPlay()
 void ACC_ArrowProjectile::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    if (!bDrawCollisionDebug || !IsValid(Collision))
+    if (!CCDebug::DrawProjectile(bDrawCollisionDebug) || !IsValid(Collision))
     {
         return;
     }
 
     // 使用碰撞组件的世界位置和缩放后半径，而不是箭模型尺寸或固定的 8 cm。
-    DrawDebugSphere(GetWorld(), Collision->GetComponentLocation(), Collision->GetScaledSphereRadius(), 16, FColor::Cyan,
-                    false, 0.0f, 0, 1.5f);
+    // DrawDebugSphere(GetWorld(), Collision->GetComponentLocation(), Collision->GetScaledSphereRadius(), 16, FColor::Cyan,
+    //                 false, 0.0f, 0, 1.5f);
 }
 
 void ACC_ArrowProjectile::OnArrowHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
@@ -193,7 +198,7 @@ void ACC_ArrowProjectile::ProcessImpact(AActor* OtherActor, const FHitResult& Hi
 	 * 每支箭只结算第一次有效碰撞，防止同步回调再次提交伤害。
 	 */
     bHitProcessed = true;
-    if (bDrawCollisionDebug)
+    if (CCDebug::DrawProjectile(bDrawCollisionDebug))
     {
         // 红圈是发生碰撞时球心的范围，黄点是表面接触点，便于检查命中偏移。
         DrawDebugSphere(GetWorld(), Hit.Location, Collision->GetScaledSphereRadius(), 16, FColor::Red, false, 2.0f, 0,

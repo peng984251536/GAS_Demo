@@ -1,4 +1,5 @@
 ﻿#include "Actors/Character/CC_PlayerCharacter.h"
+#include "Debug/CC_DebugCVars.h"
 #include "AI/Crowd/CC_PlayerCrowdAgentComponent.h"
 #include "GameplayTags/CC_Tags.h"
 #include "GAS_Demo.h"
@@ -101,8 +102,11 @@ void ACC_PlayerCharacter::OnRep_PlayerState()
 		return;
 
 	UE_LOG(LogGAS_Demo, Log, TEXT("ACC_PlayerCharacter::OnRep_PlayerState"));
-	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
-	FString::Printf(TEXT("ACC_PlayerCharacter::OnRep_PlayerState")));
+	if (GEngine && CCDebug::ShowMessages())
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
+			FString::Printf(TEXT("ACC_PlayerCharacter::OnRep_PlayerState")));
+	}
 
 	
 	// 能力系统在哪里管理  能力系统在哪里执行

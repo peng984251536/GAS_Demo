@@ -57,7 +57,7 @@ v2 相对 v1 的变化见第 18 节。
 | 房间 PlayerState 是 `ACC_RoomPlayerState`，`CopyProperties` 在无缝切图时复制业务数据 | 同上 | 生存 PlayerState 继承它；**本局统计不跨局复制** |
 | 三选一已完整实现，自带排队；无存活角色时返回 `NoTarget` 且本轮保留 | `UCC_BuffSelectionComponent` | 升级只需调用 `OfferBuffs(Pool)` |
 | 刷怪器使用 `SpawnActorDeferred` | `ACC_EnemySpawner::SpawnEnemies` | 可在 `FinishSpawning` 前写入本波参数 |
-| 刷怪器"不保证候选点位于可达导航区域" | `Docs/EnemySpawner.zh-CN.md` | 波次刷怪需加导航投影 |
+| 刷怪器"不保证候选点位于可达导航区域" | `Docs/Gameplay/EnemySpawner.zh-CN.md` | 波次刷怪需加导航投影 |
 | 属性初始化固定读 `CharacterConfig->InitializeAttributesEffect`，Level 1 | `ACC_BaseCharacter::InitializeAttributes` | 增加实例级覆盖；旧 GE 是常数时 Level 不影响 |
 | `HandleDeath` 由 Health 变化回调触发，**拿不到击杀者**，也**无防重入** | `ACC_BaseCharacter::OnHealthChange` | 改为 AttributeSet 的"生命耗尽"事件（第 7.1 节） |
 | 玩家 ASC 在 PlayerState，换 Pawn 不丢 GE；`UCC_BuffComponent` 在 Pawn 上 | `ACC_PlayerState` / `ACC_BaseCharacter` | 复活**复用原 Pawn**（第 13 节对照 Lyra 的取舍） |
@@ -66,12 +66,12 @@ v2 相对 v1 的变化见第 18 节。
 | 已有 `CCTags.Status.Invincible`、`Status.Death` | `CC_Tags.h` | 复活保护复用 Invincible；需确认伤害 GE 已按它拒绝施加 |
 | 包围系统已在目标 `!IsAlive()` 时释放槽位和令牌 | `CC_EngagementSubsystem.cpp` | 阵亡玩家不会被包围；寻敌选择是否跳过阵亡者仍需确认 |
 | 已启用 `ModularGameplay` 插件、Iris 复制 | `.uproject` / `Build.cs` | 可用 `UGameStateComponent`；复制写法与项目一致 |
-| UI 采用 View / Controller / Model，HUD 为 `CC_CombatMainController → Model → Widget` | `Docs/UIArchitecture.zh-CN.md` | 生存 HUD 扩展该 Controller/Model，Widget 不直接读 GameState |
+| UI 采用 View / Controller / Model，HUD 为 `CC_CombatMainController → Model → Widget` | `Docs/UI/UIArchitecture.zh-CN.md` | 生存 HUD 扩展该 Controller/Model，Widget 不直接读 GameState |
 | 引擎版本 5.6 | `.uproject` | 可用 `ULocalPlayerSaveGame` 做本地纪录 |
 
 ## 3. 模块划分与依赖
 
-> 本文所有 PlantUML 图的源文件在 [`Docs/Survival/`](Survival/)（01～11，图内"见 09 / 10"指该目录的文件编号），已按 v2.1 实现更新；改图时两处同步。
+> 本文所有 PlantUML 图的源文件在 [`Docs/Gameplay/Survival/`](Survival/)（01～11，图内"见 09 / 10"指该目录的文件编号），已按 v2.1 实现更新；改图时两处同步。
 
 ```plantuml
 @startuml 生存模式模块依赖

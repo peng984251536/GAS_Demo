@@ -61,7 +61,7 @@
 
 ### 规则
 
-当前已接入的事前决策点：`Hook.Projectile.Fire`（`UCC_BowShoot::ReleaseArrow`）。上下文为 `FCC_ProjectileFireContext`，具体实现见 [四种 Buff](BuffSystem/FourExamples.zh-CN.md)。其他钩子按需求后续添加。
+当前已接入的事前决策点：`Hook.Projectile.Fire`（`UCC_BowShoot::ReleaseArrow`）。上下文为 `FCC_ProjectileFireContext`，具体实现见 [四种 Buff](FourExamples.zh-CN.md)。其他钩子按需求后续添加。
 
 - **钩子放在决策点**，不放在每个函数里。动作游戏通常不超过十个：开始攻击、发射投射物、命中、计算伤害、扣血后、受击、闪避、击杀、死亡。
 - **不预先铺设钩子**。第一个真正需要它的 Buff 出现时再加。

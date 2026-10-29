@@ -13,7 +13,7 @@ class UCC_AbilitySystemComponent;
  *   - 等待：能力仍激活（IsAbilityWithTagActive）时保持 InProgress，结束后返回 Succeeded；
  *     没有激活也没有在运行时返回 Failed；
  *   - 打断：行为树中止本节点时取消该能力。原蓝图不取消，能力会脱离行为树继续运行，
- *     移动类能力因此可能永远等不到结束（见 Docs/AI-Combat.zh-CN.md 8.2）。
+ *     移动类能力因此可能永远等不到结束（见 Docs/AI/AI-Combat.zh-CN.md 8.2）。
  */
 UCLASS(DisplayName = "CC Activate Ability")
 class GAS_DEMO_API UBTTask_CC_ActivateAbility : public UBTTaskNode

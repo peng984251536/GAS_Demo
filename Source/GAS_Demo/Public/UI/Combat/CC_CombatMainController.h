@@ -95,7 +95,8 @@ private:
 	UFUNCTION() void HandleSurvivalChanged();
 	UFUNCTION() void HandleSurvivalPhaseChanged(ECC_MatchPhase NewPhase);
 	void RefreshSurvival();
+	/** 等待客户端 GameState 到达的订阅句柄，失活时解除。 */
+	FDelegateHandle GameStateSetHandle;
 	TWeakObjectPtr<ACC_SurvivalGameState> BoundSurvivalState;
 	TWeakObjectPtr<ACC_SurvivalPlayerState> BoundSurvivalPlayer;
-	FDelegateHandle GameStateSetHandle;
 };

@@ -85,7 +85,7 @@ public:
 
 	/**
 	 * 生命从正值变为 0 时广播一次；生命回到正值（复活、重新初始化）后才会再次广播。
-	 * 只在服务器触发，死亡判定与击杀归属统一从这里开始（见 Docs/SurvivalMode.zh-CN.md 7.1）。
+	 * 只在服务器触发，死亡判定与击杀归属统一从这里开始（见 Docs/Gameplay/SurvivalMode.zh-CN.md 7.1）。
 	 */
 	FCC_OutOfHealthEvent OnOutOfHealth;
 

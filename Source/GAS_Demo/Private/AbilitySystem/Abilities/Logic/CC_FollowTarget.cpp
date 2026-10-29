@@ -86,7 +86,7 @@ void UCC_FollowTarget::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
-	if (ShowDebug)
+	if (ShouldShowDebug())
 	{
 		const FString Message = FString::Printf(TEXT("[AI][Follow] %s: search -> %s"),
 			*GetNameSafe(BaseCharacter), *knownLocation.ToString());
@@ -222,7 +222,7 @@ void UCC_FollowTarget::HandleMoveFinished(
 	}
 
 	const bool bSucceeded = Result == EPathFollowingResult::Success;
-	if (ShowDebug)
+	if (ShouldShowDebug())
 	{
 		const FString Message = FString::Printf(TEXT("[BowAI][Follow] %s: MoveToTarget finished: %s"),
 			*GetNameSafe(GetAvatarActorFromActorInfo()),

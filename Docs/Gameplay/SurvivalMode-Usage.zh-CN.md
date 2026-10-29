@@ -1,6 +1,6 @@
 # 生存模式使用说明（波次刷怪 + 共享经验 + 倒计时复活）
 
-设计原理、类图和时序图见 `Docs/SurvivalMode.zh-CN.md`（第 0 节是实现与设计的差异）。本文只讲怎么接入、怎么调、出问题怎么查。
+设计原理、类图和时序图见 `Docs/Gameplay/SurvivalMode.zh-CN.md`（第 0 节是实现与设计的差异）。本文只讲怎么接入、怎么调、出问题怎么查。
 
 > 状态：C++ 已写完，**尚未在 UE 中编译与实机验证**。第一次编译若报错，按报错修正后再按本文接线。
 
@@ -154,7 +154,7 @@
 | Next Wave Server Time | 下一波倒计时：每帧用 GameState 的 **Get Seconds Until Server Time** 计算 |
 | Life State / Respawn Server Time | `Dead` / `Dying` 时显示复活倒计时（同上计算） |
 
-横幅类提示（"第 5 波""全队升级""某某阵亡 / 复活"）绑定 GameState 的 **On Match Message**，按 `Verb` 区分：`Survival.Msg.WaveStarted`（Magnitude = 波次）、`LevelUp`（Magnitude = 等级）、`PlayerDown` / `PlayerRevived`（Target = 玩家）、`MatchStarted`、`MatchEnded`。这些消息不可靠，只用于提示。 默认已由 `UCC_SurvivalToastRelay` 转成提示弹窗，文案与开关在项目设置 → CC Toast，见 [ToastNotification.zh-CN.md](ToastNotification.zh-CN.md)。
+横幅类提示（"第 5 波""全队升级""某某阵亡 / 复活"）绑定 GameState 的 **On Match Message**，按 `Verb` 区分：`Survival.Msg.WaveStarted`（Magnitude = 波次）、`LevelUp`（Magnitude = 等级）、`PlayerDown` / `PlayerRevived`（Target = 玩家）、`MatchStarted`、`MatchEnded`。这些消息不可靠，只用于提示。 默认已由 `UCC_SurvivalToastRelay` 转成提示弹窗，文案与开关在项目设置 → CC Toast，见 [ToastNotification.zh-CN.md](../UI/ToastNotification.zh-CN.md)。
 
 出生预警也可以在蓝图里画：波次组件的 **On Spawn Telegraph**（Location、Duration），与 Telegraph Cue 二选一或同时用。
 

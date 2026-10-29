@@ -1,7 +1,7 @@
 # 音效系统交接（2026-10-27）
 
 给后续对话 / 协作者的入口文档：音效系统怎么用、音效挑选台怎么用、怎么用 Python 把音效导入 UE。
-更细的配置说明见 `Docs/AudioConfig.zh-CN.md`。
+更细的配置说明见 `Docs/Audio/AudioConfig.zh-CN.md`。
 
 ---
 

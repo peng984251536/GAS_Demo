@@ -1,4 +1,4 @@
-> **已被 v3 取代（2026-10-20）**：槽位 + 令牌方案已删除，现行设计与接入步骤见 `Docs/AI-Combat.zh-CN.md`。本文仅作历史记录。
+> **已被 v3 取代（2026-10-20）**：槽位 + 令牌方案已删除，现行设计与接入步骤见 `Docs/AI/AI-Combat.zh-CN.md`。本文仅作历史记录。
 
 # 怪物包围寻路设计（槽位 + 令牌 + Detour Crowd）v2.2
 
@@ -959,20 +959,20 @@ stop
 
 | 文件 | 核对内容 |
 |---|---|
-| [CC_EngagementSubsystem.h](../Source/GAS_Demo/Public/AI/Engagement/CC_EngagementSubsystem.h) / [.cpp](../Source/GAS_Demo/Private/AI/Engagement/CC_EngagementSubsystem.cpp) | 接口、更新顺序、发放 / 回收、通知 |
-| [CC_EngagementTypes.h](../Source/GAS_Demo/Public/AI/Engagement/CC_EngagementTypes.h) | 枚举、配置与分配结果 |
-| [CC_EngagementGroup.h](../Source/GAS_Demo/Public/AI/Engagement/CC_EngagementGroup.h) | 组、成员、进展与通知缓存 |
-| [CC_SlotRing.h](../Source/GAS_Demo/Public/AI/Engagement/Slots/CC_SlotRing.h) / [.cpp](../Source/GAS_Demo/Private/AI/Engagement/Slots/CC_SlotRing.cpp) | 槽位生成、占用与增量分配 |
-| [CC_AttackTokenPool.h](../Source/GAS_Demo/Public/AI/Engagement/Tokens/CC_AttackTokenPool.h) | 纯逻辑令牌池 |
-| [CC_AIController.h](../Source/GAS_Demo/Public/AI/CC_AIController.h) / [.cpp](../Source/GAS_Demo/Private/AI/CC_AIController.cpp) | 目标同步、事件绑定、黑板回调 |
-| [CC_FollowTarget.cpp](../Source/GAS_Demo/Private/AbilitySystem/Abilities/Logic/CC_FollowTarget.cpp) | 移动能力与任务生命周期 |
-| [CC_AttackIntend.cpp](../Source/GAS_Demo/Private/AbilitySystem/Abilities/Intent/CC_AttackIntend.cpp) / [ActionComponent.cpp](../Source/GAS_Demo/Private/Components/ActionComponent.cpp) | 攻击意图到实际能力的派发 |
-| [CC_CrowdAgentStatics.cpp](../Source/GAS_Demo/Private/AI/Crowd/CC_CrowdAgentStatics.cpp) | Crowd 参数、档位与攻击状态切换 |
-| [CC_PlayerCrowdAgentComponent.cpp](../Source/GAS_Demo/Private/AI/Crowd/CC_PlayerCrowdAgentComponent.cpp) | 玩家组件注册 / 注销 |
+| [CC_EngagementSubsystem.h](../../Source/GAS_Demo/Public/AI/Engagement/CC_EngagementSubsystem.h) / [.cpp](../../Source/GAS_Demo/Private/AI/Engagement/CC_EngagementSubsystem.cpp) | 接口、更新顺序、发放 / 回收、通知 |
+| [CC_EngagementTypes.h](../../Source/GAS_Demo/Public/AI/Engagement/CC_EngagementTypes.h) | 枚举、配置与分配结果 |
+| [CC_EngagementGroup.h](../../Source/GAS_Demo/Public/AI/Engagement/CC_EngagementGroup.h) | 组、成员、进展与通知缓存 |
+| [CC_SlotRing.h](../../Source/GAS_Demo/Public/AI/Engagement/Slots/CC_SlotRing.h) / [.cpp](../../Source/GAS_Demo/Private/AI/Engagement/Slots/CC_SlotRing.cpp) | 槽位生成、占用与增量分配 |
+| [CC_AttackTokenPool.h](../../Source/GAS_Demo/Public/AI/Engagement/Tokens/CC_AttackTokenPool.h) | 纯逻辑令牌池 |
+| [CC_AIController.h](../../Source/GAS_Demo/Public/AI/CC_AIController.h) / [.cpp](../../Source/GAS_Demo/Private/AI/CC_AIController.cpp) | 目标同步、事件绑定、黑板回调 |
+| [CC_FollowTarget.cpp](../../Source/GAS_Demo/Private/AbilitySystem/Abilities/Logic/CC_FollowTarget.cpp) | 移动能力与任务生命周期 |
+| [CC_AttackIntend.cpp](../../Source/GAS_Demo/Private/AbilitySystem/Abilities/Intent/CC_AttackIntend.cpp) / [ActionComponent.cpp](../../Source/GAS_Demo/Private/Components/ActionComponent.cpp) | 攻击意图到实际能力的派发 |
+| [CC_CrowdAgentStatics.cpp](../../Source/GAS_Demo/Private/AI/Crowd/CC_CrowdAgentStatics.cpp) | Crowd 参数、档位与攻击状态切换 |
+| [CC_PlayerCrowdAgentComponent.cpp](../../Source/GAS_Demo/Private/AI/Crowd/CC_PlayerCrowdAgentComponent.cpp) | 玩家组件注册 / 注销 |
 
 ## 10. 测试计划
 
-当前 [CC_EngagementTests.cpp](../Source/GAS_Demo/Private/Tests/CC_EngagementTests.cpp) 已定义两个自动化测试：`GAS_Demo.AI.Engagement.SlotRing` 和 `GAS_Demo.AI.Engagement.TokenPool`。本次仅核对文档，没有运行测试或编译项目。
+当前 [CC_EngagementTests.cpp](../../Source/GAS_Demo/Private/Tests/CC_EngagementTests.cpp) 已定义两个自动化测试：`GAS_Demo.AI.Engagement.SlotRing` 和 `GAS_Demo.AI.Engagement.TokenPool`。本次仅核对文档，没有运行测试或编译项目。
 
 已存在的纯逻辑测试：
 

@@ -5,7 +5,7 @@ description: 在 GAS_Demo 中新增或修改 Buff、Debuff、祝福、状态效�
 
 # 新增 / 修改 Buff 的流程
 
-开始前先读 `Docs/BuffSystem.zh-CN.md`。若 Buff 与 `Docs/BuffSystem-Cookbook.zh-CN.md` 中的某个案例相似，照该案例实现。
+开始前先读 `Docs/Buff/BuffSystem.zh-CN.md`。若 Buff 与 `Docs/Buff/BuffSystem-Cookbook.zh-CN.md` 中的某个案例相似，照该案例实现。
 
 ## 第 1 步：归类（写代码之前完成）
 
@@ -24,7 +24,7 @@ description: 在 GAS_Demo 中新增或修改 Buff、Debuff、祝福、状态效�
 
 ## 第 2 步：检查依赖的基础设施
 
-查 `Docs/BuffSystem-Roadmap.zh-CN.md`：
+查 `Docs/Buff/BuffSystem-Roadmap.zh-CN.md`：
 
 - 依赖项已具备 → 继续。
 - 依赖项缺失 → **先停下**，向用户说明缺什么、建议的实现顺序，确认后再做。不要为了单个 Buff 在系统代码里写特例绕过。

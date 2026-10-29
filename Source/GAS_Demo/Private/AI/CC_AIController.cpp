@@ -23,7 +23,7 @@ namespace
 	/** 行为树读取的黑板键名，与黑板资产保持一致。 */
 	const FName TargetActorKey(TEXT("TargetActor"));
 	const FName LastKnownLocationKey(TEXT("LastKnownLocation"));
-	/** 群体战斗写入的黑板键名（见 Docs/AI-Combat.zh-CN.md 第 7 节）。键不存在时写入静默失败。 */
+	/** 群体战斗写入的黑板键名（见 Docs/AI/AI-Combat.zh-CN.md 第 7 节）。键不存在时写入静默失败。 */
 	const FName IsBlockedKey(TEXT("IsBlocked"));
 	const FName SquadOrderKey(TEXT("SquadOrder"));
 	/** 跟随命令下、没有目标时要跟随的 Actor（行为树的跟随分支 MoveTo 它）。 */

@@ -47,6 +47,9 @@ namespace CCTags
 		/** 被魅惑：有效阵营临时变为施加该效果者的阵营，见 UCC_TeamStatics::GetEffectiveTeam。 */
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Charmed);
 		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Dead);
+
+		/** 转向被锁定（如闪避中）。按计数使用：每个锁加一次、解锁减一次，归零才恢复转向。仅本地松散标签，不复制。 */
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(RotationLocked);
 	}
 
 	namespace Attack

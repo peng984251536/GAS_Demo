@@ -3,6 +3,8 @@
 #include "Actors/Character/CC_BaseCharacter.h"
 
 #include "AbilitySystemComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "Components/ActionComponent.h"
 #include "Data/CC_CharacterConfig.h"
@@ -39,6 +41,15 @@ ACC_BaseCharacter::ACC_BaseCharacter()
 	//PrimaryActorTick.bCanEverTick = true;
 
 	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+	// 防止混战时被推挤或弹飞：
+	// 1. 禁止其他角色踩到自己身上（胶囊体和 Mesh 都要设置）
+	GetCapsuleComponent()->CanCharacterStepUpOn = ECB_No;
+	GetMesh()->CanCharacterStepUpOn = ECB_No;
+	// 2. Mesh 只用于查询（近战 Overlap 仍能命中），不参与 Pawn 之间的物理阻挡
+	GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
+	// 3. 关闭角色移动对物理体的推力交互
+	GetCharacterMovement()->bEnablePhysicsInteraction = false;
 
 	// 被感知组件
 	StimuliSource = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("StimuliSource"));

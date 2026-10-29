@@ -44,7 +44,7 @@ class GAS_DEMO_API ACC_ArrowProjectile : public AActor
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
 
-    /** 在游戏视口绘制箭实际使用的球形碰撞；可在投射物蓝图中关闭。 */
+    /** 在游戏视口绘制箭实际使用的球形碰撞。受 cc.Debug.Projectile 控制：1 = 只画勾选的箭，2 = 全部画。 */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Arrow|Debug")
     bool bDrawCollisionDebug = true;
 

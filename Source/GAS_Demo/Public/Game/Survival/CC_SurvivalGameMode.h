@@ -22,7 +22,7 @@ struct FGameplayEventData;
  * 继承 ACC_RoomGameMode，复用房间准入（中途加入由房主选项决定）、无缝切图与返回大厅。
  * 波次与经验逻辑在 ACC_SurvivalGameState 的两个组件里，本类只负责把事件转给它们。
  * 角色不知道自己处于生存模式：死亡通过 UCC_GameEventSubsystem 转发到这里。
- * 设计见 Docs/SurvivalMode.zh-CN.md。
+ * 设计见 Docs/Gameplay/SurvivalMode.zh-CN.md。
  */
 UCLASS()
 class GAS_DEMO_API ACC_SurvivalGameMode : public ACC_RoomGameMode

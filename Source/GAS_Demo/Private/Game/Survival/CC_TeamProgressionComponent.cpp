@@ -43,6 +43,11 @@ void UCC_TeamProgressionComponent::StopProgression()
 	bRunning = false;
 }
 
+/**
+ * 击杀升级经验
+ * @param Amount 
+ * @return 
+ */
 int32 UCC_TeamProgressionComponent::AddExperience(float Amount)
 {
 	if (!GetOwner()->HasAuthority() || !bRunning || !Config || Amount <= 0.f)
@@ -50,8 +55,11 @@ int32 UCC_TeamProgressionComponent::AddExperience(float Amount)
 		return 0;
 	}
 	const int32 OldLevel = TeamLevel;
-	const int32 Gained = UCC_SurvivalModeConfig::ApplyExperience(Config->Progression, TeamLevel, TeamExperience, Amount);
-	ExperienceToNextLevel = UCC_SurvivalModeConfig::ComputeExperienceToNext(Config->Progression, TeamLevel);
+	const int32 Gained = UCC_SurvivalModeConfig::ApplyExperience(
+		Config->Progression, TeamLevel, TeamExperience, Amount);
+	
+	ExperienceToNextLevel = UCC_SurvivalModeConfig::ComputeExperienceToNext(
+		Config->Progression, TeamLevel);
 	NotifyChanged();
 
 	if (Gained > 0)
@@ -64,7 +72,10 @@ int32 UCC_TeamProgressionComponent::AddExperience(float Amount)
 		}
 		if (ACC_SurvivalGameState* GameState = GetGameState<ACC_SurvivalGameState>())
 		{
-			GameState->BroadcastMatchMessage(CCSurvivalTags::MsgLevelUp, nullptr, nullptr, static_cast<float>(TeamLevel));
+			GameState->BroadcastMatchMessage(
+				CCSurvivalTags::MsgLevelUp,
+				nullptr, nullptr,
+				static_cast<float>(TeamLevel));
 		}
 	}
 	return Gained;
@@ -78,6 +89,11 @@ void UCC_TeamProgressionComponent::GrantCatchUpOffers(APlayerController* Player)
 	}
 }
 
+/**
+ * 
+ * @param Player 
+ * @param Rounds 
+ */
 void UCC_TeamProgressionComponent::OfferRounds(APlayerController* Player, int32 Rounds) const
 {
 	if (!Player || Rounds <= 0 || !Config || !Config->Progression.BuffPool)

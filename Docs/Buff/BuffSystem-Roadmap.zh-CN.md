@@ -1,6 +1,6 @@
 # Buff 系统基础设施现状与待办
 
-此表以当前代码为准。实际四种 Buff 见 [FourExamples.zh-CN.md](BuffSystem/FourExamples.zh-CN.md)。
+此表以当前代码为准。实际四种 Buff 见 [FourExamples.zh-CN.md](FourExamples.zh-CN.md)。
 
 ## 已具备
 
@@ -32,7 +32,7 @@
 - `UCC_BuffBehavior_ApplyEffectOnDamage` 监听 DamageDealt，排除 DoT、友军和已死亡目标，施加独立子 GE；目前配置为不造成伤害的魅惑状态，不需要伤害递归链。
 - `UCC_BuffBehavior_RepeatVolley` 在现有 Projectile.Fire 上相加 VolleyCount、取最大 VolleyInterval；BowShoot 顺序执行，取消能力时清理未发射轮次。
 - 反弹资格 `Ability.Deflect.Projectile`：状态 GE 授予标签；`CCProjectileInteractions::DeflectInShape` 在近战有效帧查询箭，`ACC_ArrowProjectile::Deflect` 完成交接、转向和来源快照重建。检测统一由原生 MeleeHitBox Notify 的 Shapes 驱动；每支箭最多反弹一次。
-- 新资产配置与验收说明见 [NewBuffOffers.zh-CN.md](BuffSystem/NewBuffOffers.zh-CN.md)。
+- 新资产配置与验收说明见 [NewBuffOffers.zh-CN.md](NewBuffOffers.zh-CN.md)。
 
 ## 后续需求出现时再实现
 

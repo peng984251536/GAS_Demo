@@ -4,11 +4,11 @@
 
 角色面板分左右两栏：左侧是角色属性（名字、生命、法力，以及可配置的属性列表），右侧是当前持有的 Buff，每条显示名称、效果描述和剩余时间。
 
-它沿用 [UIArchitecture.zh-CN.md](UIArchitecture.zh-CN.md) 的 View / Controller / 展示 Model 分层，Buff 数据直接取自 Buff 系统（[BuffSystem-Architecture.zh-CN.md](BuffSystem-Architecture.zh-CN.md)）：从 `UCC_BuffComponent` 的复制快照读取列表，从 GE 上的 `UCC_BuffUIData` 读取显示信息。面板只读，不施加、不移除任何 Buff，也不认识任何具体 Buff。
+它沿用 [UIArchitecture.zh-CN.md](UIArchitecture.zh-CN.md) 的 View / Controller / 展示 Model 分层，Buff 数据直接取自 Buff 系统（[BuffSystem-Architecture.zh-CN.md](../Buff/BuffSystem-Architecture.zh-CN.md)）：从 `UCC_BuffComponent` 的复制快照读取列表，从 GE 上的 `UCC_BuffUIData` 读取显示信息。面板只读，不施加、不移除任何 Buff，也不认识任何具体 Buff。
 
 ## 图
 
-PlantUML 源文件和渲染图在 `Docs/Diagrams/`：
+PlantUML 源文件和渲染图在 `Docs/UI/Diagrams/`：
 
 | 图 | 内容 |
 | --- | --- |

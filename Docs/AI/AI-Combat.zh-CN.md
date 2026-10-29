@@ -1,6 +1,6 @@
 # 群体战斗 AI 设计 v3（骑砍式三层：个体自由交战 + 编队接口预留）
 
-> 状态：**已实现**（2026-10-20，`Gameplay` 分支，待本地编译与编辑器验证）。取代 v2.1 的 `Docs/AI-Engagement.zh-CN.md`（槽位 + 令牌）与 `Docs/AI-Engagement-Usage.zh-CN.md`。接入步骤见第 10 节。
+> 状态：**已实现**（2026-10-20，`Gameplay` 分支，待本地编译与编辑器验证）。取代 v2.1 的 `Docs/Archive/AI-Engagement.zh-CN.md`（槽位 + 令牌）与 `Docs/Archive/AI-Engagement-Usage.zh-CN.md`。接入步骤见第 10 节。
 > 目标规模：同屏 100～150 只小怪 + 若干随从 + 玩家，多对多混战。
 > 图均为 PlantUML，可直接粘贴到语雀「文本绘图 → PlantUML」。
 

@@ -24,7 +24,7 @@ struct FCC_EngagementRecord
  * - 不分配位置、不限制出手人数。站位由 Detour Crowd 的避让与推挤自然形成。
  *
  * 只在服务器上有数据（AIController 只存在于服务器），客户端上的实例 Tick 立即返回。
- * 设计见 Docs/AI-Combat.zh-CN.md。控制台变量 cc.Engagement.Debug 1 绘制攻击者 → 目标的连线。
+ * 设计见 Docs/AI/AI-Combat.zh-CN.md。控制台变量 cc.Engagement.Debug 1 绘制攻击者 → 目标的连线。
  */
 UCLASS()
 class GAS_DEMO_API UCC_EngagementSubsystem : public UTickableWorldSubsystem

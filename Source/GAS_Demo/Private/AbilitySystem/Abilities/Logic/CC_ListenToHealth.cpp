@@ -68,7 +68,7 @@ void UCC_ListenToHealth::HandleHealthChanged(const FOnAttributeChangeData& Data)
 		return;
 	}
 
-	if (ShowDebug && GEngine)
+	if (ShouldShowDebug() && GEngine)
 	{
 		UE_LOG(LogGAS_Demo, Log, TEXT("%s: GA_Health NewValue: %g"),
 				*GetNameSafe(GetAvatarActorFromActorInfo()), Data.NewValue);

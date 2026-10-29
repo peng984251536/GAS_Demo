@@ -2,6 +2,7 @@
 
 
 #include "Animation/Notifies/ANS_ComboWindow.h"
+#include "Debug/CC_DebugCVars.h"
 #include "GAS_Demo.h"
 
 #include "Actors/Character/CC_BaseCharacter.h"
@@ -14,9 +15,9 @@ void UANS_ComboWindow::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequen
 
 	if (!IsValid(MeshComp))
 	{
-		if(GEngine)
+		UE_LOG(LogGAS_Demo, Log, TEXT("UActionComponent::OpenCombo nullptr"));
+		if (GEngine && CCDebug::ShowMessages())
 		{
-			UE_LOG(LogGAS_Demo, Log, TEXT("UActionComponent::OpenCombo nullptr"));
 			GEngine->AddOnScreenDebugMessage(-1,3.0f,FColor::Red,
 				FString::Printf(TEXT("UActionComponent::OpenCombo nullptr")));
 		}
@@ -35,9 +36,9 @@ void UANS_ComboWindow::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequen
 	UActionComponent* Combat = BaseCharacter->GetUCombatActionComponent();
 	if (!IsValid(Combat))
 	{
-		if(GEngine)
+		UE_LOG(LogGAS_Demo, Log, TEXT("UActionComponent::OpenCombo nullptr"));
+		if (GEngine && CCDebug::ShowMessages())
 		{
-			UE_LOG(LogGAS_Demo, Log, TEXT("UActionComponent::OpenCombo nullptr"));
 			GEngine->AddOnScreenDebugMessage(-1,3.0f,FColor::Red,
 				FString::Printf(TEXT("UActionComponent::OpenCombo nullptr")));
 		}

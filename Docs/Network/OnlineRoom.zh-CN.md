@@ -44,7 +44,7 @@ OSS 适配器 `CC_OnlineSubsystemRoomBackend` 仅在 Private），房间 GameMod
    项目原本 GameMode 蓝图中的战斗业务需要转接到新模式；旧资产并未自动迁移。
 6. LobbyMap 的 World Settings → GameMode Override 指定 BP_RoomLobbyMode；战斗地图指定 BP_RoomGameMode。
 7. FrontEndMap 使用独立的前端 GameMode，无战斗 Pawn；本地控制器可继承 APlayerController。
-   前端地图显式装配主菜单，接入步骤见 Docs/LyraUI-Phase1.zh-CN.md。
+   前端地图显式装配主菜单，接入步骤见 Docs/UI/LyraUI-Phase1.zh-CN.md。
 8. 项目 Game Default Map 设为 FrontEndMap。可指定一张很小的 Transition Map；房间 GameMode 已启用
    bUseSeamlessTravel。打包时确保前端、大厅、战斗、过渡地图均被 Cook。
 

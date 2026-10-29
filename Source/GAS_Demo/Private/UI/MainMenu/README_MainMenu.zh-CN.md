@@ -1,6 +1,6 @@
 # 主菜单接入
 
-当前接入方法见 [LANMenuWidgetSetup.zh-CN.md](../../../../../Docs/LANMenuWidgetSetup.zh-CN.md)。
+当前接入方法见 [LANMenuWidgetSetup.zh-CN.md](../../../../../Docs/UI/LANMenuWidgetSetup.zh-CN.md)。
 
 职责边界：
 

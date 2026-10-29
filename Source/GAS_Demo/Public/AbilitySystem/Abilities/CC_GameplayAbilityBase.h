@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Debug/CC_DebugCVars.h"
 #include "UObject/Object.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 
@@ -20,9 +21,15 @@ class GAS_DEMO_API UCC_GameplayAbilityBase : public UGameplayAbility
 	GENERATED_BODY()
 
 public:
-	// 输入配置
+	/**
+	 * 本技能是否参与屏幕调试文字。总开关是控制台变量 cc.Debug.Messages（默认关），
+	 * 两者都为真才显示；想单独屏蔽某个吵的技能时在这里取消勾选。
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
 	bool ShowDebug = true;
+
+	/** C++ 中判断是否输出屏幕调试文字，统一走这里。 */
+	bool ShouldShowDebug() const { return ShowDebug && CCDebug::ShowMessages(); }
 
 protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category="Ability|", meta = (AllowPrivateAccess = "true"))

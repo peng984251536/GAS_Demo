@@ -73,7 +73,7 @@
       → DamageNumberSource.ShowNumber → AddIndicator → Layer 取控件 → 动画结束 FinishDamageNumber → RemoveIndicator → 指示器回池
 ```
 
-伤害数字的数值与触发规则见 [DamageSystem.zh-CN.md](DamageSystem.zh-CN.md#飘字)。
+伤害数字的数值与触发规则见 [DamageSystem.zh-CN.md](../Gameplay/DamageSystem.zh-CN.md#飘字)。
 
 ## 从旧实现迁移
 

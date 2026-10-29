@@ -77,6 +77,12 @@ void UCC_SurvivalToastRelay::Unbind()
 
 bool UCC_SurvivalToastRelay::GetBuiltinTemplate(FGameplayTag Tag, FCC_ToastTemplate& Out)
 {
+	
+	// UCC_ToastStatics::ShowToastText(this,
+	// 	LOCTEXT("LvUp", "全队升级"),
+	// 	 LOCTEXT("LvUpMsg", "等级 5"),
+	// 	  ECC_ToastStyle::Success);
+
 	Out = FCC_ToastTemplate();
 	if (Tag == CCSurvivalTags::MsgMatchStarted)
 	{

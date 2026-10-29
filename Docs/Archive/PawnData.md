@@ -1,6 +1,6 @@
 # 旧版 CC_PawnData 说明（已被替代）
 
-当前实现已经拆分为 `UCC_CharacterConfig` 和 `UCC_CharacterRuntimeData`，请阅读 [角色数据说明](CharacterData.md)。
+当前实现已经拆分为 `UCC_CharacterConfig` 和 `UCC_CharacterRuntimeData`，请阅读 [角色数据说明](../Gameplay/CharacterData.md)。
 下文仅保留首次迁移的历史记录；其中的编译/验证结果不适用于本次拆分，本次没有运行验证。
 
 这次只抽出 GameplayAbility 配置。属性初始化效果、动作数据、存活/受击状态仍使用现有实现。

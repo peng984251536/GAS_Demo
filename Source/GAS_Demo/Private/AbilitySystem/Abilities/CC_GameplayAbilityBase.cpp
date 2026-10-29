@@ -24,7 +24,7 @@ void UCC_GameplayAbilityBase::PreActivate(const FGameplayAbilitySpecHandle Handl
 	BaseCharacter = Cast<ACC_BaseCharacter>(GetAvatarActorFromActorInfo());
 	if (!IsValid(BaseCharacter))
 	{
-		if (GEngine && ShowDebug)
+		if (GEngine && ShouldShowDebug())
 		{
 			UE_LOG(LogGAS_Demo, Log, TEXT("UCC_GameplayAbility::ActivateAbility->ACC_BaseCharacter nullptr: %s"),
 				   *GetName());
@@ -41,7 +41,7 @@ void UCC_GameplayAbilityBase::PreActivate(const FGameplayAbilitySpecHandle Handl
 	// 纯查找能力可以没有战斗组件；使用组件的能力必须在使用前验证。
 	if (!IsValid(CombatComponent))
 	{
-		if (GEngine && ShowDebug)
+		if (GEngine && ShouldShowDebug())
 		{
 			UE_LOG(LogGAS_Demo, Log, TEXT("ActivateAbility->CombatComponent nullptr: %s"), *GetName());
 			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red,

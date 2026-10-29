@@ -18,10 +18,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Audio")
 	TSoftObjectPtr<UCC_AudioConfig> DefaultAudioConfig;
 
-	/** 首次同步加载；保留强引用以供后续全局访问。未配置或加载失败时返回 nullptr。 */
+	/**
+	 * 首次同步加载并加入 Root Set，供后续全局访问。未配置或加载失败时返回 nullptr。
+	 * 注意：不能把加载结果存到本类成员上。打包版本里 CDO 位于 "Disregard for GC" 池，
+	 * CDO 引用普通资产会在加载地图时触发 VerifyGCAssumptions 致命错误。
+	 */
 	static UCC_AudioConfig* GetAudioConfig();
-
-private:
-	UPROPERTY(Transient)
-	TObjectPtr<UCC_AudioConfig> LoadedAudioConfig;
 };

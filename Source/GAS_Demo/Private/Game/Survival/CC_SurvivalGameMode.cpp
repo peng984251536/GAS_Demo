@@ -175,7 +175,7 @@ void ACC_SurvivalGameMode::EndMatch()
 	{
 		return;
 	}
-	// 顺序见 Docs/SurvivalMode.zh-CN.md 6.1
+	// 顺序见 Docs/Gameplay/SurvivalMode.zh-CN.md 6.1
 	SurvivalState->GetWaveDirector()->StopDirector();
 	SurvivalState->GetProgression()->StopProgression();
 	Respawn->CancelAll();
@@ -502,6 +502,10 @@ bool ACC_SurvivalGameMode::ShouldCreditKill(const FCC_DeathInfo& Info) const
 	return false;
 }
 
+/**
+ * 怪物死亡触发游戏规则
+ * @param Info 
+ */
 void ACC_SurvivalGameMode::HandleEnemyDied(const FCC_DeathInfo& Info)
 {
 	ACC_SurvivalGameState* SurvivalState = GetSurvivalGameState();
@@ -515,6 +519,7 @@ void ACC_SurvivalGameMode::HandleEnemyDied(const FCC_DeathInfo& Info)
 	{
 		return;
 	}
+	// 拿到击杀者的 PlayerState
 	if (ACC_SurvivalPlayerState* KillerPS = Cast<ACC_SurvivalPlayerState>(Info.KillerPlayerState))
 	{
 		KillerPS->AddStat(CCSurvivalTags::StatKills, 1);
@@ -527,6 +532,10 @@ void ACC_SurvivalGameMode::HandleEnemyDied(const FCC_DeathInfo& Info)
 
 #pragma region 玩家阵亡复活与观战
 
+/**
+ * 角色死亡触发 游戏规则
+ * @param PlayerState 
+ */
 void ACC_SurvivalGameMode::HandlePlayerDied(ACC_SurvivalPlayerState* PlayerState)
 {
 	ACC_SurvivalGameState* SurvivalState = GetSurvivalGameState();

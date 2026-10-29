@@ -1,4 +1,5 @@
 #include "Animation/Notifies/AnimNotify_MeleeHitBox.h"
+#include "Debug/CC_DebugCVars.h"
 #include "Actors/Projectiles/CC_ProjectileInteractions.h"
 #include "Actors/Character/CC_BaseCharacter.h"
 #include "Utils/Team/CC_TeamStatics.h"
@@ -129,7 +130,7 @@ FGameplayAbilityTargetDataHandle UAnimNotify_MeleeHitBox::CollectTargetData(USke
 		CCProjectileInteractions::DeflectInShape(Owner, Location, Rotation, Collision);
 		TArray<FOverlapResult> Overlaps;
 		World->OverlapMultiByObjectType(Overlaps, Location, Rotation, Objects, Collision, Query);
-		if (bDrawDebug) Shape.DrawDebug(World, Location, Rotation, Scale, FColor::Red, 0.4f);
+		if (CCDebug::DrawMelee(bDrawDebug)) Shape.DrawDebug(World, Location, Rotation, Scale, FColor::Red, 0.4f);
 		for (const FOverlapResult& Overlap : Overlaps)
 		{
 			AActor* Target = Overlap.GetActor();
@@ -157,7 +158,7 @@ FGameplayAbilityTargetDataHandle UAnimNotify_MeleeHitBox::CollectTargetData(USke
 			Result.Add(new FGameplayAbilityTargetData_SingleTargetHit(Hit));
 			AddedActors.Add(Target);
 #if ENABLE_DRAW_DEBUG
-			if (bDrawDebug) DrawDebugPoint(World, Hit.ImpactPoint, 10.f, FColor::Green, false, 0.4f);
+			if (CCDebug::DrawMelee(bDrawDebug)) DrawDebugPoint(World, Hit.ImpactPoint, 10.f, FColor::Green, false, 0.4f);
 #endif
 		}
 	}

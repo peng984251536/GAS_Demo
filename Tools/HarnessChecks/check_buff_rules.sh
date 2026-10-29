@@ -3,7 +3,7 @@
 #   在仓库根目录运行：Tools/HarnessChecks/check_buff_rules.sh
 #   作为 Claude Code 的 PostToolUse hook：check_buff_rules.sh --hook（从 stdin 读取工具调用 JSON）
 #
-# 规则说明见 CLAUDE.md 与 Docs/BuffSystem.zh-CN.md，结构见 Docs/BuffSystem-Architecture.zh-CN.md。
+# 规则说明见 CLAUDE.md 与 Docs/Buff/BuffSystem.zh-CN.md，结构见 Docs/Buff/BuffSystem-Architecture.zh-CN.md。
 # ERROR ：违反硬性规则，退出码 1（hook 模式下退出码 2，把报错反馈给 Claude）。
 # LEGACY：已知遗留项或前置设施未完成，见 Roadmap，不影响退出码。
 #

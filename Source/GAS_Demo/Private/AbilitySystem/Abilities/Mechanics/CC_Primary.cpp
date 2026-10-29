@@ -67,7 +67,7 @@ void UCC_Primary::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const
 	MontageTask->ReadyForActivation();
 	
 	// 方式二：屏幕打印，调试时更直观
-	if (GEngine && ShowDebug)
+	if (GEngine && ShouldShowDebug())
 	{
 		UE_LOG(LogGAS_Demo, Log, TEXT("Ability Activated: %s"), *GetName());
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,

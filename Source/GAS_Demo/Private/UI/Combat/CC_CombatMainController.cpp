@@ -11,6 +11,7 @@
 #include "Game/Survival/CC_WaveDirectorComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/CC_BuffSelectionComponent.h"
+#include "UI/Toast/CC_ToastStatics.h"
 
 void UCC_CombatMainModel::SetPendingBuffRewards(int32 Value)
 {
@@ -30,8 +31,19 @@ void UCC_CombatMainController::RefreshBuffRewards()
 
 bool UCC_CombatMainController::OpenBuffSelection()
 {
-	UCC_BuffSelectionComponent* Selection = UCC_BuffSelectionComponent::FindForPlayer(GetPlayerController());
-	return CanHandleActions() && Selection && Selection->RequestOpenSelection();
+	if (!CanHandleActions()) return false;
+	UCC_BuffSelectionComponent* Selection =
+		UCC_BuffSelectionComponent::FindForPlayer(GetPlayerController());
+	if (!Selection) return false;
+	if (Selection->GetPendingOfferCount() <= 0)
+	{
+		UCC_ToastStatics::ShowToastText(GetPlayerController(),
+			FText::GetEmpty(),
+			NSLOCTEXT("CCCombatMain", "NoBuffRewards", "没有升级点"),
+			ECC_ToastStyle::Info);
+		return false;
+	}
+	return Selection->RequestOpenSelection();
 }
 
 void UCC_CombatMainModel::SetVitals(const FCC_PlayerVitals& Value)

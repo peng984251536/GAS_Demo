@@ -37,7 +37,7 @@ enum class EAlertLevel : uint8
  * 写入目标只有一个出口 ApplyTarget；行为树与技能只读黑板 / GetClosestActor。
  * 敌我判断全部交给 UCC_TeamStatics::IsHostile。
  *
- * 群体战斗（见 Docs/AI-Combat.zh-CN.md）——个体只锁目标、自由交战，包围由避障与推挤自然形成：
+ * 群体战斗（见 Docs/AI/AI-Combat.zh-CN.md）——个体只锁目标、自由交战，包围由避障与推挤自然形成：
  *   - 选目标评分：距离 + 拥挤惩罚 − 回敬优惠 + 被挡惩罚（FCC_TargetScoring），带切换迟滞；
  *   - ApplyTarget 中向 UCC_EngagementSubsystem（攻击者登记表）登记「谁在打谁」，供别人计算拥挤与回敬；
  *   - 被挡检测（近战）：离目标不远但持续挤不进去时，惩罚该目标并重选；没有更好的目标时写黑板 IsBlocked，

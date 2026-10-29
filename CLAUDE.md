@@ -4,17 +4,17 @@ UE5 + GAS 的动作战斗 Demo。C++ 源码在 `Source/GAS_Demo`，设计文档�
 
 ## 修改 Buff / 战斗机制前必读
 
-- 设计原则与分层：`Docs/BuffSystem.zh-CN.md`
-- 目标架构、类关系与时序图：`Docs/BuffSystem-Architecture.zh-CN.md`
-- AI 寻敌与阵营：`Docs/AI-Targeting.zh-CN.md`
-- AI 群体战斗（个体自由交战 + 攻击者登记表 + Detour Crowd，编队接口预留）：设计与接入 `Docs/AI-Combat.zh-CN.md`（取代旧的 `AI-Engagement*`）。新增攻击能力必须授予 `CCTags.CCAbilities.Attack`（攻击期间切 Crowd ObstacleOnly）。
-- 案例手册（分裂箭、爆炸箭、冻结、魅惑、反弹等）：`Docs/BuffSystem-Cookbook.zh-CN.md`
-- 基础设施现状与待办：`Docs/BuffSystem-Roadmap.zh-CN.md`
-- Buff 三选一（获取途径）：`Docs/BuffSelection.zh-CN.md`
-- 召唤 Buff（玩家身边召唤、召唤物继承阵营 `SetTeamOverride`、Buff 同步给召唤物 `Buff.NotShared`）：`Docs/SummonAlly.zh-CN.md`
-- 生存模式（波次刷怪、共享经验、倒计时复活、结算）：设计 `Docs/SurvivalMode.zh-CN.md`（第 0 节为实现偏差），接入与调参 `Docs/SurvivalMode-Usage.zh-CN.md`。死亡判定统一走 `UCC_AttributeSet::OnOutOfHealth` → `UCC_GameEventSubsystem::OnCharacterDied`，不要再在 Health 变化回调里判定死亡。
-- 音效系统（事件配置、`UCC_AudioLibrary` 播放入口、`CC Play Audio` / `CC Footstep` 动画通知、音效挑选台、UE Python 导入脚本）：先读 `Docs/AudioSystem-Handoff.zh-CN.md`，细节见 `Docs/AudioConfig.zh-CN.md`；挑选台工具在 `Tools/AudioPicker/`。
-- 提示弹窗（Toast：最多 3 条的堆栈，从下往上淡入淡出，动画在 WBP 的 `Anim_In`/`Anim_Out` 里做；统一用静态入口 `UCC_ToastStatics::ShowToast` / `ShowToastText`，生存模式消息由 `UCC_SurvivalToastRelay` 转换）：`Docs/ToastNotification.zh-CN.md`。不要自己 CreateWidget/AddToViewport 做提示。
+- 设计原则与分层：`Docs/Buff/BuffSystem.zh-CN.md`
+- 目标架构、类关系与时序图：`Docs/Buff/BuffSystem-Architecture.zh-CN.md`
+- AI 寻敌与阵营：`Docs/AI/AI-Targeting.zh-CN.md`
+- AI 群体战斗（个体自由交战 + 攻击者登记表 + Detour Crowd，编队接口预留）：设计与接入 `Docs/AI/AI-Combat.zh-CN.md`（取代旧的 `AI-Engagement*`）。新增攻击能力必须授予 `CCTags.CCAbilities.Attack`（攻击期间切 Crowd ObstacleOnly）。
+- 案例手册（分裂箭、爆炸箭、冻结、魅惑、反弹等）：`Docs/Buff/BuffSystem-Cookbook.zh-CN.md`
+- 基础设施现状与待办：`Docs/Buff/BuffSystem-Roadmap.zh-CN.md`
+- Buff 三选一（获取途径）：`Docs/Buff/BuffSelection.zh-CN.md`
+- 召唤 Buff（玩家身边召唤、召唤物继承阵营 `SetTeamOverride`、Buff 同步给召唤物 `Buff.NotShared`）：`Docs/Buff/SummonAlly.zh-CN.md`
+- 生存模式（波次刷怪、共享经验、倒计时复活、结算）：设计 `Docs/Gameplay/SurvivalMode.zh-CN.md`（第 0 节为实现偏差），接入与调参 `Docs/Gameplay/SurvivalMode-Usage.zh-CN.md`。死亡判定统一走 `UCC_AttributeSet::OnOutOfHealth` → `UCC_GameEventSubsystem::OnCharacterDied`，不要再在 Health 变化回调里判定死亡。
+- 音效系统（事件配置、`UCC_AudioLibrary` 播放入口、`CC Play Audio` / `CC Footstep` 动画通知、音效挑选台、UE Python 导入脚本）：先读 `Docs/Audio/AudioSystem-Handoff.zh-CN.md`，细节见 `Docs/Audio/AudioConfig.zh-CN.md`；挑选台工具在 `Tools/AudioPicker/`。
+- 提示弹窗（Toast：最多 3 条的堆栈，从下往上淡入淡出，动画在 WBP 的 `Anim_In`/`Anim_Out` 里做；统一用静态入口 `UCC_ToastStatics::ShowToast` / `ShowToastText`，生存模式消息由 `UCC_SurvivalToastRelay` 转换）：`Docs/UI/ToastNotification.zh-CN.md`。不要自己 CreateWidget/AddToViewport 做提示。
 - 新增或修改 Buff 时，按 `.claude/skills/add-buff/SKILL.md` 的流程执行。
 
 ## 硬性规则（违反即视为错误）
@@ -27,9 +27,13 @@ UE5 + GAS 的动作战斗 Demo。C++ 源码在 `Source/GAS_Demo`，设计文档�
 6. **共享配置不存实例状态**：Definition、Behavior 模板、DataAsset 运行时只读。Behavior 的 `UPROPERTY` 要么是 `EditDefaultsOnly` 配置，要么是 `Transient` 运行时状态。
 7. **钩子上下文的可修改字段必须注明合并方式**（`// 合并：相加 / 相乘 / 取最大 / OR`），适用于 `*HookContext`、`*FireContext`、`*Payload`。
 
+## 调试输出
+
+- 画线、屏幕调试文字必须受 `cc.Debug.*` 控制台变量控制，默认关闭；定义在 `Source/GAS_Demo/Public/Debug/CC_DebugCVars.h`，登记在 `Docs/Debug/DebugCVars.zh-CN.md`。
+
 ## 改完之后
 
 - 运行 `Tools/HarnessChecks/check_buff_rules.sh`，新增的报错必须处理或说明理由。确有理由的例外在行尾写 `// harness:allow R<编号> <理由>`。
 - 该脚本已配置为 Claude Code 的 PostToolUse hook（`.claude/settings.json`），每次编辑 `Source/GAS_Demo` 后自动检查被改的文件。
 - Buff 相关改动需补充或更新自动化测试（`Source/GAS_Demo/Private/Tests/`，命名 `GAS_Demo.Buff.*`）。
-- 基础设施状态有变化时，同步更新 `Docs/BuffSystem-Roadmap.zh-CN.md`。
+- 基础设施状态有变化时，同步更新 `Docs/Buff/BuffSystem-Roadmap.zh-CN.md`。
