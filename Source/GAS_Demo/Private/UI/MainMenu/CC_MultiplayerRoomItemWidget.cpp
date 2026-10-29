@@ -19,12 +19,12 @@ bool UCC_MultiplayerRoomEntry::RequestJoin()
 void UCC_MultiplayerRoomItemWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	Button_JoinRoom->OnClicked().AddUObject(this, &ThisClass::HandleJoinClicked);
+	CommonButtonBase_JoinRoom->OnClicked().AddUObject(this, &ThisClass::HandleJoinClicked);
 }
 
 void UCC_MultiplayerRoomItemWidget::NativeDestruct()
 {
-	Button_JoinRoom->OnClicked().RemoveAll(this);
+	CommonButtonBase_JoinRoom->OnClicked().RemoveAll(this);
 	RoomEntry = nullptr;
 	Super::NativeDestruct();
 }
@@ -34,7 +34,7 @@ void UCC_MultiplayerRoomItemWidget::NativeOnListItemObjectSet(UObject* ListItemO
 	IUserObjectListEntry::NativeOnListItemObjectSet(ListItemObject);
 	RoomEntry = Cast<UCC_MultiplayerRoomEntry>(ListItemObject);
 	const bool bCanJoin = RoomEntry && RoomEntry->CanJoin();
-	Button_JoinRoom->SetIsEnabled(bCanJoin);
+	CommonButtonBase_JoinRoom->SetIsEnabled(bCanJoin);
 	OnRoomItemChanged(RoomEntry ? RoomEntry->GetRoom() : FCC_RoomSummary(), bCanJoin);
 }
 

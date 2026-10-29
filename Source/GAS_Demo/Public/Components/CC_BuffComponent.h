@@ -78,6 +78,14 @@ class GAS_DEMO_API UCC_BuffComponent : public UActorComponent
     void ClearBuffs(ECC_BuffEndReason Reason = ECC_BuffEndReason::Reset);
 
     /**
+	 * 复活后恢复死亡时被挂起的 Buff（bRemoveOnDeath = false 的实例），与 ClearBuffs(OwnerDeath) 对称：
+	 * 清除 bSuspendedForDeath，按 GAS 当前状态重新启用钩子和 Behavior（仍被抑制的保持禁用）。
+	 * 只在服务器执行；没有挂起实例时什么也不做。
+	 */
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Buff")
+    void ResumeAfterRevive();
+
+    /**
 	 * 返回客户端可展示数据的副本，不暴露服务器的 Behavior 实例或可修改的 GAS 存储。
 	 * @return 当前已记录的 Buff 展示条目。
 	 */

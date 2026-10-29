@@ -4,6 +4,7 @@
 #include "AbilitySystem/Abilities/CC_GameplayAbility.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "Actors/Projectiles/CC_ProjectileFireContext.h"
 #include "CC_BowShoot.generated.h"
 
 class UAbilityTask_WaitGameplayEvent;
@@ -32,6 +33,12 @@ class GAS_DEMO_API UCC_BowShoot : public UCC_GameplayAbility
     void OnBowRelease(FGameplayEventData Payload);
     /** 放箭决策点按 Build → Modify → Resolve → Execute 执行；默认一支箭。 */
     void ReleaseArrow();
+    void ExecuteVolley(const FCC_ProjectileFireContext& Fire);
+    void FireNextVolley();
+    UPROPERTY(Transient) FCC_ProjectileFireContext PendingFire;
+    FTimerHandle VolleyTimer;
+    int32 RemainingVolleys = 0;
+    bool bFinishAfterVolleys = false;
 
     UPROPERTY(Transient)
     TObjectPtr<UAbilityTask_WaitGameplayEvent> ReleaseEventTask;

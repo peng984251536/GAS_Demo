@@ -2,19 +2,64 @@
 
 #include "AbilitySystemComponent.h"
 
-#include "Character/CC_EnemyCharacter.h"
-#include "Character/Combat/CC_ArrowProjectile.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
+#include "Actors/Projectiles/CC_ArrowProjectile.h"
 #include "Components/ActionComponent.h"
 #include "Components/CC_BuffComponent.h"
 #include "Data/Buff/CC_BuffTags.h"
 #include "Data/Buff/CC_BuffDebug.h"
-#include "Character/Combat/CC_ProjectileFireContext.h"
+#include "Actors/Projectiles/CC_ProjectileFireContext.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/AbilityData/CombatActionData.h"
 #include "Data/CC_CharacterConfig.h"
 #include "GameplayTags/CC_Tags.h"
 #include "Engine/World.h"
 #include "GAS_Demo.h"
+
+namespace
+{
+    /**
+     * 计算出箭方向：从出箭点指向目标的身体中心（Actor 位置即胶囊体中心），
+     * 按目标水平速度做提前量（迭代一次修正飞行时间），再在圆锥内加随机误差。
+     * 箭没有重力，沿直线飞行，所以直接指向预判点即可命中。
+     * @param Origin 出箭点。
+     * @param Target 目标。
+     * @param ArrowSpeed 箭速（厘米/秒）。
+     * @param LeadFactor 提前量比例，0 表示不预判。
+     * @param AimErrorDegrees 随机误差圆锥的半角（度）。
+     * @param OutDirection 单位方向。
+     * @return 方向有效时返回 true；出箭点与瞄准点重合时返回 false。
+     */
+    bool ComputeArrowAimDirection(const FVector& Origin, const AActor& Target, float ArrowSpeed, float LeadFactor,
+                                  float AimErrorDegrees, FVector& OutDirection)
+    {
+        const FVector TargetLocation = Target.GetActorLocation();
+        // 只用水平速度预判：目标跳跃时不把箭射向天空。
+        const FVector TargetVelocity = Target.GetVelocity() * FVector(1.f, 1.f, 0.f);
+        const float Speed = FMath::Max(1.f, ArrowSpeed);
+
+        FVector AimPoint = TargetLocation;
+        if (LeadFactor > 0.f && !TargetVelocity.IsNearlyZero())
+        {
+            float FlightTime = FVector::Dist(Origin, TargetLocation) / Speed;
+            AimPoint = TargetLocation + TargetVelocity * FlightTime * LeadFactor;
+            FlightTime = FVector::Dist(Origin, AimPoint) / Speed;
+            AimPoint = TargetLocation + TargetVelocity * FlightTime * LeadFactor;
+        }
+
+        const FVector ToAim = AimPoint - Origin;
+        if (ToAim.IsNearlyZero())
+        {
+            return false;
+        }
+        OutDirection = ToAim.GetSafeNormal();
+        if (AimErrorDegrees > 0.f)
+        {
+            OutDirection = FMath::VRandCone(OutDirection, FMath::DegreesToRadians(AimErrorDegrees)).GetSafeNormal();
+        }
+        return true;
+    }
+}
 
 UCC_BowShoot::UCC_BowShoot()
 {
@@ -26,8 +71,8 @@ UCC_BowShoot::UCC_BowShoot()
     bRetriggerInstancedAbility = true;
     // 资产标签用于按 Tag 查找已授予的能力；它本身不等于“已经激活”。
     SetAssetTags(FGameplayTagContainer(CCTags::CCAbilityTrigger::BowShoot));
-    // 激活期间给 ASC 挂上 Attack 状态；KeepDistance 会据此暂缓后撤。
-    //ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
+    // 激活期间给 ASC 挂上 Attack 状态：KeepDistance 据此暂缓后撤；AI 控制器据此切换 Crowd ObstacleOnly。
+    ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
 
     // 收到 BowShoot 游戏事件时自动激活本能力，事件携带本次要播放的动作数据。
     FAbilityTriggerData Trigger;
@@ -80,8 +125,8 @@ void UCC_BowShoot::ActivateAbility(const FGameplayAbilitySpecHandle Handle, cons
     // 只算水平距离，避免地形高低差改变弓兵与目标的战斗距离判断。
     const float Distance = FVector::Dist2D(Enemy->GetActorLocation(), Target->GetActorLocation());
 
-    // 太近应由后撤能力处理，太远不能射击；CommitAbility 检查并支付 GAS 成本/冷却。
-    if (Distance < Config->MinRange || Distance > Config->MaxRange)
+    // 太远不能射击。太近时优先由行为树的后撤分支处理；退无可退时允许贴脸射箭，避免弓兵原地发呆。
+    if (Distance > Config->MaxRange)
     {
         UE_LOG(LogGAS_Demo, Log,
                TEXT("[BowAI][Shoot] Outside firing range: Enemy=%s Target=%s Distance=%.1f Min=%.1f Max=%.1f"),
@@ -191,7 +236,8 @@ void UCC_BowShoot::ReleaseArrow()
 
     // 1/ 动画播放期间目标可能跑近或跑远；离开合法射程就放弃这支箭。
     const float Distance = FVector::Dist2D(BaseCharacter->GetActorLocation(), Target->GetActorLocation());
-    if (Distance < Config->MinRange || Distance > Config->MaxRange)
+    // 只在超出最大射程时放弃这支箭（与激活时的检查一致）。
+    if (Distance > Config->MaxRange)
     {
         UE_LOG(LogGAS_Demo, Log,
                TEXT("[BowAI][Shoot] Release aborted by range: Enemy=%s Target=%s Distance=%.1f Min=%.1f Max=%.1f"),
@@ -219,6 +265,15 @@ void UCC_BowShoot::ReleaseArrow()
         }
     }
 
+    // 出箭点用弓上的箭模型，方向不能用它的朝向：那是放箭那一帧的动画姿势，与目标位置无关。
+    // 改为从出箭点指向目标（含提前量与随机误差）；计算失败时才保留上面的模型 / 角色朝向。
+    FVector AimDirection;
+    if (ComputeArrowAimDirection(Origin, *Target, Config->ArrowSpeed, Config->ArrowLeadFactor,
+                                 Config->ArrowAimErrorDegrees, AimDirection))
+    {
+        Direction = AimDirection;
+    }
+
     /**
 	 * Build：只读取射击配置与动作，默认仍然发射一支完整伤害的箭。
 	 */
@@ -241,16 +296,40 @@ void UCC_BowShoot::ReleaseArrow()
     {
         return;
     }
-    /**
-	 * Resolve：集中展开对称散射方向，不在 Behavior 中生成箭。
-	 */
+    PendingFire = Fire;
+    RemainingVolleys = FMath::Clamp(Fire.VolleyCount, 1, 8) - 1;
+    bFinishAfterVolleys = false;
+    ExecuteVolley(Fire);
+    if (RemainingVolleys > 0 && IsActive() && IsValid(BaseCharacter) && BaseCharacter->IsAlive())
+    {
+        GetWorld()->GetTimerManager().SetTimer(VolleyTimer, this, &ThisClass::FireNextVolley,
+            FMath::Clamp(Fire.VolleyInterval, 0.05f, 2.f), true);
+    }
+}
+
+void UCC_BowShoot::FireNextVolley()
+{
+    if (!IsActive() || !IsValid(BaseCharacter) || !BaseCharacter->IsAlive())
+    {
+        RemainingVolleys = 0;
+        EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+        return;
+    }
+    --RemainingVolleys;
+    ExecuteVolley(PendingFire);
+    if (RemainingVolleys <= 0)
+    {
+        GetWorld()->GetTimerManager().ClearTimer(VolleyTimer);
+        if (bFinishAfterVolleys)
+            EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+    }
+}
+
+void UCC_BowShoot::ExecuteVolley(const FCC_ProjectileFireContext& Fire)
+{
+    if (!GetWorld() || !IsValid(BaseCharacter) || !BaseCharacter->IsAlive()) return;
     TArray<FVector> Directions;
     Fire.Resolve(Directions);
-
-    UE_LOG(LogCCBuff, Log, TEXT("[Fire] Shooter=%s Target=%s Source=%s Count=%d Spread=%.1f Ratio=%.3f"),
-           *GetNameSafe(BaseCharacter), *GetNameSafe(Target), *SpawnSource, Directions.Num(), Fire.SpreadAngle,
-           Fire.Payload.DamageMultiplier);
-
     /**
 	 * Execute：先准备每支箭的快照与同齐射忽略列表，再完成生成并启动碰撞。
 	 * 已经发出的箭独立存在，后续 Buff 移除只影响下一次放箭。
@@ -298,6 +377,16 @@ void UCC_BowShoot::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGa
                               const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility,
                               bool bWasCancelled)
 {
+    // A normally completed montage waits for the resolved burst. Cancellation cancels queued shots.
+    if (!bWasCancelled && RemainingVolleys > 0 && GetWorld() &&
+        GetWorld()->GetTimerManager().IsTimerActive(VolleyTimer))
+    {
+        bFinishAfterVolleys = true;
+        return;
+    }
+    if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(VolleyTimer);
+    RemainingVolleys = 0;
+    bFinishAfterVolleys = false;
     UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Shoot] End: Enemy=%s Cancelled=%d Released=%d Action=%s"),
            *GetNameSafe(GetAvatarActorFromActorInfo()), bWasCancelled, bArrowReleased, *GetNameSafe(OwnedAction));
 

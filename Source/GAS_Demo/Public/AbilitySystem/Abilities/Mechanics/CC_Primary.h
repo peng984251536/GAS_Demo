@@ -31,10 +31,12 @@ class GAS_DEMO_API UCC_Primary : public UCC_GameplayAbility
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable,Category = "Crash|Abilities")
-	TArray<FHitResultAndActor> HitBoxOverlapText();
-	//UFUNCTION(BlueprintCallable,Category = "Crash|Abilities")
-	void DrawHitBoxOverlapDebugs(const TArray<FHitResultAndActor>& Hits,const FVector& HitBoxLocation) const;
+	/** 激活期间授予 CCTags.CCAbilities.Attack（见构造函数注释）。 */
+	UCC_Primary();
+
+	/** 只读取命中通知已检测的 TargetData，不执行碰撞查询。 */
+	UFUNCTION(BlueprintCallable, BlueprintPure=false, Category="Crash|Abilities|Attack")
+	TArray<FHitResultAndActor> HitBoxOverlapFromEvent(const FGameplayEventData& Payload) const;
 	UFUNCTION(BlueprintCallable,Category = "Crash|Abilities")
 	void SendEventToActor(const TArray<FHitResultAndActor>& Hits);
 
@@ -48,17 +50,6 @@ public:
 private:
 	int32 OwnedGeneration = -1;
 
-	
-
-	
-	UPROPERTY(EditDefaultsOnly,Category="Crash|Abilities")
-	float HitBoxRadius = 100.0f;
-	UPROPERTY(EditDefaultsOnly,Category="Crash|Abilities")
-	float HitBoxForwardOffset = 200.0f;
-	UPROPERTY(EditDefaultsOnly,Category="Crash|Abilities")
-	float HitBoxElevationOffset = 20.0f;
-
-	
 	UFUNCTION(BlueprintCallable, Category="Crash|Abilities|Attack")
 	void SetAttackFacingFromAvatarInput(
 		float InterpSpeed = 18.0f);

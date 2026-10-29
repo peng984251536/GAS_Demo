@@ -2,7 +2,7 @@
 #include "UI/WorldIndicator/CC_WorldIndicator.h"
 #include "UI/WorldIndicator/CC_WorldIndicatorSettings.h"
 #include "UI/WorldIndicator/CC_WorldIndicatorSubsystem.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Data/CC_CharacterConfig.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"

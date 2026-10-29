@@ -6,8 +6,9 @@
 #include "AbilitySystem/CC_AbilitySystemComponent.h"
 
 #include "Animation/AnimMontage.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "Data/AbilityData/CombatActionData.h"
+#include "Components/ActionComponent.h"
 
 UCC_GameplayAbility::UCC_GameplayAbility()
 {
@@ -78,6 +79,14 @@ void UCC_GameplayAbility::PreActivate(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 
+	// 联机：输入方向只存在于拥有者客户端。动作事件携带了按键时的方向，在播放蒙太奇之前写回角色，
+	// 让服务器上的 ANS_ComboStart / 攻击转向与客户端一致（否则服务器一直用默认的 +X 方向）。
+	FVector InputDirection;
+	if (IsValid(BaseCharacter) && UActionComponent::GetEventInputDirection(TriggerEventData, InputDirection))
+	{
+		BaseCharacter->SetLastMoveInputDirection(InputDirection);
+	}
+
 	OwnedAction = TriggerEventData
 		              ? Cast<UCombatActionData>(const_cast<UObject*>(TriggerEventData->OptionalObject.Get()))
 		              : nullptr;
@@ -92,7 +101,7 @@ void UCC_GameplayAbility::PreActivate(const FGameplayAbilitySpecHandle Handle,
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		// 方式二：屏幕打印，调试时更直观
-		if (GEngine && ShowDebug)
+		if (GEngine && ShouldShowDebug())
 		{
 			UE_LOG(LogGAS_Demo, Log, TEXT("ActivateAbility->CombatComponent:Montage nullptr: %s"), *GetName());
 			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red,

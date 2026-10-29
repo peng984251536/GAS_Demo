@@ -1,5 +1,5 @@
 #include "Tests/CC_BuffTestTypes.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "GameplayTags/CC_Tags.h"
 #include "Damage/CC_DamageTags.h"
 #include "Data/Buff/CC_BuffRulesComponent.h"

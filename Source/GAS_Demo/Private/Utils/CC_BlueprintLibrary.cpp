@@ -6,8 +6,8 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -152,4 +152,14 @@ FClosestActorWithTagResult UCC_BlueprintLibrary::FindClosestActorWithTag(
 	Result.LastKnownLocation = ClosestActor->GetActorLocation();
 
 	return Result;
+}
+
+
+FLinearColor UCC_BlueprintLibrary::GetColorFromString(const FString& Text)
+{
+	const uint32 Hash = FCrc::StrCrc32(*Text);
+	const float Hue = static_cast<float>(Hash % 360);
+
+	// HSV：色相、饱和度、亮度、透明度
+	return FLinearColor(Hue, 0.65f, 0.95f, 1.f).HSVToLinearRGB();
 }

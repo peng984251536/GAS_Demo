@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayTagContainer.h"
-#include "Data/GASInputTypes.h"
+#include "Input/GASInputTypes.h"
 #include "CC_PlayerController.generated.h"
 
 class UInputAction;
@@ -67,5 +67,6 @@ private:
 	void Input_Move(const FInputActionValue& InputActionValue);
 	void Input_Dodge(const FInputActionValue& InputActionValue);
 	void Input_Attack(const FInputActionValue& InputActionValue);
+
 	
 };

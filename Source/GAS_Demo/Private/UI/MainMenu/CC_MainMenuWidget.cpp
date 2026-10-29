@@ -8,7 +8,7 @@ UCC_MainMenuWidget::UCC_MainMenuWidget(const FObjectInitializer& ObjectInitializ
 	ControllerClass = UCC_MainMenuController::StaticClass();
 	bAllowBack = false;
 	bAllowClose = false;
-	DefaultFocusWidgetName = TEXT("Button_SinglePlayer");
+	DefaultFocusWidgetName = TEXT("CommonButtonBase_SinglePlayer");
 }
 
 // 搜索属于主菜单意图；控制器负责发起异步请求并打开结果页面。
@@ -36,21 +36,21 @@ UCC_MainMenuController* UCC_MainMenuWidget::GetMainMenuController() const
 void UCC_MainMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	Button_SinglePlayer->OnClicked().AddUObject(this, &ThisClass::HandleSinglePlayerClicked);
-	Button_HostRoom->OnClicked().AddUObject(this, &ThisClass::HandleHostClicked);
-	Button_Multiplayer->OnClicked().AddUObject(this, &ThisClass::HandleMultiplayerClicked);
-	Button_LeaveRoom->OnClicked().AddUObject(this, &ThisClass::HandleLeaveClicked);
-	Button_Quit->OnClicked().AddUObject(this, &ThisClass::HandleQuitClicked);
+	CommonButtonBase_SinglePlayer->OnClicked().AddUObject(this, &ThisClass::HandleSinglePlayerClicked);
+	CommonButtonBase_HostRoom->OnClicked().AddUObject(this, &ThisClass::HandleHostClicked);
+	CommonButtonBase_Multiplayer->OnClicked().AddUObject(this, &ThisClass::HandleMultiplayerClicked);
+	CommonButtonBase_LeaveRoom->OnClicked().AddUObject(this, &ThisClass::HandleLeaveClicked);
+	CommonButtonBase_Quit->OnClicked().AddUObject(this, &ThisClass::HandleQuitClicked);
 	RefreshScreen();
 }
 
 void UCC_MainMenuWidget::NativeDestruct()
 {
-	Button_SinglePlayer->OnClicked().RemoveAll(this);
-	Button_HostRoom->OnClicked().RemoveAll(this);
-	Button_Multiplayer->OnClicked().RemoveAll(this);
-	Button_LeaveRoom->OnClicked().RemoveAll(this);
-	Button_Quit->OnClicked().RemoveAll(this);
+	CommonButtonBase_SinglePlayer->OnClicked().RemoveAll(this);
+	CommonButtonBase_HostRoom->OnClicked().RemoveAll(this);
+	CommonButtonBase_Multiplayer->OnClicked().RemoveAll(this);
+	CommonButtonBase_LeaveRoom->OnClicked().RemoveAll(this);
+	CommonButtonBase_Quit->OnClicked().RemoveAll(this);
 	Super::NativeDestruct();
 }
 
@@ -71,12 +71,12 @@ void UCC_MainMenuWidget::RefreshScreen()
 	const FCC_MainMenuState State = GetMainMenuState();
 	const bool bReady = IsActivated() && !State.bBusy;
 	const bool bIdle = State.RoomState == ECC_RoomAsyncState::Idle;
-	Button_SinglePlayer->SetIsEnabled(bReady && bIdle);
-	Button_HostRoom->SetIsEnabled(bReady && bIdle && State.bRoomServiceAvailable);
-	Button_Multiplayer->SetIsEnabled(bReady && bIdle && State.bRoomServiceAvailable);
-	Button_LeaveRoom->SetIsEnabled(bReady && State.bRoomServiceAvailable &&
+	CommonButtonBase_SinglePlayer->SetIsEnabled(bReady && bIdle);
+	CommonButtonBase_HostRoom->SetIsEnabled(bReady && bIdle && State.bRoomServiceAvailable);
+	CommonButtonBase_Multiplayer->SetIsEnabled(bReady && bIdle && State.bRoomServiceAvailable);
+	CommonButtonBase_LeaveRoom->SetIsEnabled(bReady && State.bRoomServiceAvailable &&
 		(State.RoomState == ECC_RoomAsyncState::InRoom || State.RoomState == ECC_RoomAsyncState::RecoveryRequired));
-	Button_Quit->SetIsEnabled(bReady);
+	CommonButtonBase_Quit->SetIsEnabled(bReady);
 	OnMainMenuStateChanged(State);
 }
 

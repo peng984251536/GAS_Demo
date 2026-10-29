@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
-#include "Utils/FBufferedAbilityInput.h"
+#include "Input/FBufferedAbilityInput.h"
 #include "CC_AbilitySystemComponent.generated.h"
 
 
@@ -24,6 +24,11 @@ public:
 	UFUNCTION(BlueprintCallable,Category="Ability|Abilities")
 	void AddAbilityLevel(TSubclassOf<UGameplayAbility> AbilityClass,int32 Level);
 
+	/** 查询带指定资产标签的能力是否正在运行，供行为树等外部调用。 */
+	UFUNCTION(BlueprintCallable, Category="Ability|Input")
+	bool IsAbilityWithTagActive(const FGameplayTag& AbilityTag) const;
+
+	
 	// UFUNCTION(BlueprintCallable,Category="Ability|Abilities")
 	// bool HandleComboInput(
 	// const FGameplayTag& AttackAbilityTag);
@@ -63,8 +68,7 @@ protected:
 	// 	ECCAbilityLinkType LinkType);
 	// UFUNCTION(BlueprintCallable, Category="Ability|Input")
 	// bool IsBufferedInputFresh(float MaxBufferTime) const;
-	UFUNCTION(BlueprintCallable, Category="Ability|Input")
-	bool IsAbilityWithTagActive(const FGameplayTag& AbilityTag) const;
+
 	
 
 };

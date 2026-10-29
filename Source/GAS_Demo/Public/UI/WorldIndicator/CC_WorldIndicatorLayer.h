@@ -54,7 +54,7 @@ private:
 	void ReleaseAll();
 
 	/** 放控件的画布，根控件。 */
-	UPROPERTY(Transient) TObjectPtr<UCanvasPanel> Canvas;
+	UPROPERTY(Transient) TObjectPtr<UCanvasPanel> CanvasPanel_Indicators;
 	/** 引擎自带的 UserWidget 对象池，按控件类复用。 */
 	UPROPERTY(Transient) FUserWidgetPool WidgetPool;
 	UPROPERTY(Transient) TMap<TObjectPtr<UCC_WorldIndicator>, FCC_WorldIndicatorWidgetEntry> ActiveWidgets;

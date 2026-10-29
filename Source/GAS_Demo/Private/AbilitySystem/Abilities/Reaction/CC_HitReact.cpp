@@ -7,6 +7,42 @@
 #include "BrainComponent.h"
 #include "Utils/CC_BlueprintLibrary.h"
 
+UCC_HitReact::UCC_HitReact()
+{
+    /**
+     * 霸体由 GE 授予通用 SuperArmor 状态标签；受击系统只读标签，不查询具体 Buff。
+     * 放在 ActivationBlockedTags 里，由 GAS 在激活前拦截：受击能力根本不会进入 ActivateAbility。
+     * 这里只阻止受击能力，不阻止伤害结算，因此霸体与伤害免疫是不同状态。
+     * 注意：蓝图子类若在 Class Defaults 里改过 Activation Blocked Tags，会整体覆盖这里的默认值，需在蓝图里一并保留这两个标签。
+     */
+    ActivationBlockedTags.AddTag(CCTags::Status::SuperArmor);
+    ActivationBlockedTags.AddTag(CCTags::Status::Death);
+
+    /**
+     * 受击由服务器判定（命中、伤害都在服务器结算后才发 BeHit 事件），因此由服务器发起：
+     * 服务器先激活，再通知拥有者客户端激活，两边都播放受击动画；其他客户端通过 ASC 的蒙太奇复制看到。
+     * 不能用默认的 LocalPredicted：它要求由控制方发起，服务器替客户端玩家的角色激活会被 GAS 拒绝，
+     * 表现为"以客户端身份游玩时没有受击动画"（主机和 AI 在服务器本地控制，不受影响）。
+     */
+    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated;
+}
+
+bool UCC_HitReact::CanActivateAbility(const FGameplayAbilitySpecHandle Handle,
+                                      const FGameplayAbilityActorInfo* ActorInfo,
+                                      const FGameplayTagContainer* SourceTags,
+                                      const FGameplayTagContainer* TargetTags,
+                                      FGameplayTagContainer* OptionalRelevantTags) const
+{
+    // 先跑 GAS 自带检查（含 ActivationBlockedTags：霸体、死亡）。
+    if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+    {
+        return false;
+    }
+    // 标签之外的存活状态：尸体不能重新创建受击动画任务。
+    const ACC_BaseCharacter* HitCharacter = ActorInfo ? Cast<ACC_BaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
+    return IsValid(HitCharacter) && HitCharacter->IsAlive() && !HitCharacter->IsActorBeingDestroyed();
+}
+
 /**
  * 暂停/恢复 avatar 所属 AI 的行为树逻辑（PauseLogic/ResumeLogic，保留行为树状态）。
  * 只对 AAIController 生效：玩家（PlayerController）安全空转；未运行行为树（无 BrainComponent）安全空转。
@@ -60,20 +96,7 @@ void UCC_HitReact::ActivateAbility(const FGameplayAbilitySpecHandle Handle, cons
                                    const FGameplayAbilityActivationInfo ActivationInfo,
                                    const FGameplayEventData* TriggerEventData)
 {
-    // 必须在 Super 分发受击蓝图之前拦截，避免尸体重新创建动画任务。
-    /**
-	 * 霸体由 GE 授予通用 SuperArmor 状态标签；受击系统只读标签，不查询具体 Buff。
-	 * 这里只跳过受击能力，不阻止伤害结算，因此霸体与伤害免疫是不同状态。
-	 */
-    const ACC_BaseCharacter* HitCharacter = ActorInfo ? Cast<ACC_BaseCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
-    const UAbilitySystemComponent* HitASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
-    if (!IsValid(HitCharacter) || !HitCharacter->IsAlive() || HitCharacter->IsActorBeingDestroyed() ||
-        !IsValid(HitASC) || HitASC->HasMatchingGameplayTag(CCTags::Status::Death) ||
-        HitASC->HasMatchingGameplayTag(CCTags::Status::SuperArmor))
-    {
-        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-        return;
-    }
+    // 霸体、死亡、存活检查都已在 CanActivateAbility 中完成，能走到这里说明可以受击。
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
     if (!IsActive())
     {
@@ -105,7 +128,7 @@ void UCC_HitReact::ActivateAbility(const FGameplayAbilitySpecHandle Handle, cons
     BaseCharacter->HandleHit();
 
     // 方式二：屏幕打印，调试时更直观
-    if (GEngine && ShowDebug)
+    if (GEngine && ShouldShowDebug())
     {
         UE_LOG(LogGAS_Demo, Log, TEXT("Ability Activated: %s"), *GetName());
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,

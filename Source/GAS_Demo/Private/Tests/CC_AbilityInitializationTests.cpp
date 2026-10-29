@@ -4,8 +4,8 @@
 
 #include "AbilitySystem/Abilities/Logic/CC_ListenToHealth.h"
 #include "AbilitySystemComponent.h"
-#include "Attribute/CC_AttributeSet.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Components/ActionComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"

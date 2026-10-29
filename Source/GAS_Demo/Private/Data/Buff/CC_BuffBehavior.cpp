@@ -105,6 +105,10 @@ void UCC_BuffBehavior::Shutdown(ECC_BuffEndReason Reason)
     Component.Reset();
 }
 
+/**
+ * 向目标 ASC 订阅事件
+ * @param Tag 
+ */
 void UCC_BuffBehavior::ListenGameplayEvent(FGameplayTag Tag)
 {
     UAbilitySystemComponent* ASC = View.TargetASC.Get();

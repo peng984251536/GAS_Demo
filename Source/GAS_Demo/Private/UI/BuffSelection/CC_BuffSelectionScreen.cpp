@@ -7,9 +7,9 @@ UCC_BuffSelectionScreen::UCC_BuffSelectionScreen(const FObjectInitializer& Objec
     : Super(ObjectInitializer)
 {
     ControllerClass = UCC_BuffSelectionController::StaticClass();
-    InputConfig = ECC_UIInputMode::Menu;
-    // 必须选一张才能继续，返回键只被消费、不关闭页面。
-    bAllowBack = false;
+    InputMode = ECommonInputMode::Menu;
+    // 页面由玩家主动打开，返回键也可关闭；未选的奖励保留在服务器队列中，红点继续显示。
+    bAllowBack = true;
 }
 
 UCC_BuffSelectionModel* UCC_BuffSelectionScreen::GetSelectionModel() const
@@ -40,13 +40,13 @@ void UCC_BuffSelectionScreen::NativeOnModelChanged()
 
 void UCC_BuffSelectionScreen::RebuildCards(const UCC_BuffSelectionModel& Model)
 {
-    if (!CardContainer || !CardClass)
+    if (!PanelWidget_Cards || !CardClass)
     {
         return;
     }
     if (BuiltOfferId != Model.GetOfferId())
     {
-        CardContainer->ClearChildren();
+        PanelWidget_Cards->ClearChildren();
         SpawnedCards.Reset();
         BuiltOfferId = Model.GetOfferId();
         for (const FCC_BuffOfferCardData& CardData : Model.GetCards())
@@ -56,7 +56,7 @@ void UCC_BuffSelectionScreen::RebuildCards(const UCC_BuffSelectionModel& Model)
             {
                 continue;
             }
-            CardContainer->AddChild(Card);
+            PanelWidget_Cards->AddChild(Card);
             Card->SetCardData(CardData, this);
             SpawnedCards.Add(Card);
         }

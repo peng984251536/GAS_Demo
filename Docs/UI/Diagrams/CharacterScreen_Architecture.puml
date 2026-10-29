@@ -1,0 +1,238 @@
+@startuml CharacterScreen_Architecture
+' 角色面板架构图：沿用项目 UI 框架的 View / Controller / 展示 Model 分层。
+' Buff 数据来自 UCC_BuffComponent 的复制快照，显示信息来自 GE 上的 UCC_BuffUIData。
+' 灰 = 已有 UI 框架；绿 = 已有 GAS / Buff 系统；蓝 = 本次新增 C++；橙 = 由你在编辑器中制作的 WBP。
+
+skinparam defaultFontName "Noto Sans CJK SC"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #555555
+  ArrowColor #444444
+}
+skinparam class<<Framework>> {
+  BackgroundColor #EEEEEE
+  BorderColor #888888
+}
+skinparam class<<New>> {
+  BackgroundColor #E3EDFC
+  BorderColor #3B6FD1
+}
+skinparam class<<Blueprint>> {
+  BackgroundColor #FCEBDC
+  BorderColor #C76A1C
+}
+skinparam class<<Existing>> {
+  BackgroundColor #E6F4EA
+  BorderColor #3D8B55
+}
+
+title 角色面板 · 架构图（基于 ui/framework-review-fixes 的 Buff 系统）
+
+package "UI 框架（已有）" {
+  class UCC_RootLayout <<Framework>> {
+    + ShowScreen(Layer, ScreenClass, Context)
+    + CloseScreen(Screen)
+  }
+  abstract class UCC_ActivatableWidget <<Framework>> {
+    # ControllerClass
+    + PrepareForDisplay(Context)
+    + GetUIModel()
+    + CloseScreen()
+    # NativeOnActivated()
+    # NativeOnDeactivated()
+    # NativeOnModelChanged()
+  }
+  class UCC_UIController <<Framework>> {
+    # ModelClass
+    + Activate() / Deactivate() / Release()
+    + GetPlayerController()
+    # OnActivated()
+    # OnDeactivated()
+  }
+  class UCC_UIModel <<Framework>> {
+    + OnChanged
+    # NotifyChanged()
+  }
+  class FCC_PlayerVitals <<Framework>> <<struct>> {
+    Health / MaxHealth
+    Mana / MaxMana
+    GetHealthPercent() / GetManaPercent()
+  }
+}
+
+package "角色面板 · View" {
+  abstract class UCC_CharacterScreenWidget <<New>> {
+    # BuffList : UPanelWidget <<BindWidgetOptional>>
+    # BuffEntryClass
+    - EntriesById : TMap<int32, Entry>
+    - SeenStatsRevision / SeenBuffsRevision
+    + GetBuffRemainingTime(Buff) : float
+    # NativeOnActivated()
+    # NativeOnModelChanged()
+    # <<BP Event>> OnStatsChanged(Name, Vitals, Stats)
+    # <<BP Event>> OnBuffsChanged(Buffs)
+    - SyncBuffList(Buffs)
+  }
+  abstract class UCC_CharacterBuffEntryWidget <<New>> {
+    # Icon / NameText / DescriptionText <<BindWidgetOptional>>
+    # TimeText / TimeBar <<BindWidgetOptional>>
+    # NameWithStacksFormat / InfiniteDurationText
+    + SetBuff(Buff)
+    + GetRemainingTime() : float
+    # NativeTick()
+    # <<BP Event>> OnBuffSet(Buff)
+  }
+}
+
+package "角色面板 · Controller" {
+  class UCC_CharacterScreenController <<New>> {
+    # DisplayedStats : TArray<FCC_CharacterStatConfig>
+    # DebuffTag : FGameplayTag
+    - BoundCharacter / BoundASC / BoundBuffs（弱引用）
+    - AttributeHandles
+    # OnActivated() / OnDeactivated()
+    - HandlePawnChanged(Old, New)
+    - HandleASCReady(ASC, AttributeSet)
+    - BindASC() / BindBuffComponent() / UnbindPawn()
+    - HandleAttributeChanged() → RefreshStats()
+    - HandleBuffsChanged() → RefreshBuffs()
+  }
+  class FCC_CharacterStatConfig <<New>> <<struct>> {
+    Attribute : FGameplayAttribute
+    Label : FText
+    Format : Integer / Decimal / Percent
+  }
+}
+
+package "角色面板 · 展示 Model" {
+  class UCC_CharacterScreenModel <<New>> {
+    - DisplayName : FText
+    - Vitals : FCC_PlayerVitals
+    - Stats : TArray<FCC_CharacterStatEntry>
+    - Buffs : TArray<FCC_CharacterBuffEntry>
+    - StatsRevision / BuffsRevision
+    + GetDisplayName() / GetVitals()
+    + GetStats() / GetBuffs()
+    - SetStats(Name, Vitals, Stats)
+    - SetBuffs(Buffs)
+  }
+  class FCC_CharacterStatEntry <<New>> <<struct>> {
+    Attribute / Label
+    Value : float
+    ValueText : FText（已格式化）
+  }
+  class FCC_CharacterBuffEntry <<New>> <<struct>> {
+    InstanceId : int32
+    EffectClass
+    DisplayName / Description / Icon
+    StackCount / Level
+    bIsDebuff / bIsInhibited
+    Duration / EndServerTime
+    BuffTags
+  }
+}
+
+package "GAS 与 Buff 系统（已有）" {
+  class ACC_BaseCharacter <<Existing>> {
+    OnASCInitialized
+    GetBuffComponent()
+  }
+  class UAbilitySystemComponent <<Existing>> {
+    GetGameplayAttributeValueChangeDelegate()
+    GetNumericAttribute()
+  }
+  class UCC_AttributeSet <<Existing>> {
+    Health / MaxHealth / Mana / MaxMana
+    AttackPower / Defense
+    CriticalChance / CriticalMultiplier
+    MoveSpeedMultiplier …
+  }
+  class UCC_BuffComponent <<Existing>> {
+    + OnBuffsChanged
+    + GetActiveBuffs() : TArray<FCC_ReplicatedBuffItem>
+    - ReplicatedBuffs : FastArray
+  }
+  class FCC_ReplicatedBuffItem <<Existing>> <<struct>> {
+    InstanceId / EffectClass / BuffTags
+    StackCount / Level / bIsInhibited
+    Duration / EndServerTime
+  }
+  class UCC_BuffUIData <<Existing>> {
+    DisplayName / Description / Icon
+    bHiddenInUI
+  }
+}
+
+package "UE 编辑器（由你负责）" {
+  class WBP_CharacterScreen <<Blueprint>> {
+    左侧：名字、血蓝、属性列表
+    右侧：BuffList 容器
+    实现 OnStatsChanged
+  }
+  class WBP_CharacterBuffEntry <<Blueprint>> {
+    Icon / NameText / DescriptionText
+    TimeText / TimeBar
+    实现 OnBuffSet（配色、半透明）
+  }
+}
+
+' ---- 继承 ----
+UCC_ActivatableWidget <|-- UCC_CharacterScreenWidget
+UCC_UIController <|-- UCC_CharacterScreenController
+UCC_UIModel <|-- UCC_CharacterScreenModel
+UCC_CharacterScreenWidget <|-- WBP_CharacterScreen
+UCC_CharacterBuffEntryWidget <|-- WBP_CharacterBuffEntry
+
+' ---- 所有权与引用 ----
+UCC_RootLayout --> UCC_ActivatableWidget : ShowScreen(UI.Layer.GameMenu)
+UCC_CharacterScreenWidget *-- UCC_CharacterScreenController : 强引用\n每次入栈新建
+UCC_CharacterScreenController *-- UCC_CharacterScreenModel : 强引用
+UCC_CharacterScreenController *-- "*" FCC_CharacterStatConfig
+UCC_CharacterScreenModel *-- FCC_PlayerVitals
+UCC_CharacterScreenModel *-- "*" FCC_CharacterStatEntry
+UCC_CharacterScreenModel *-- "*" FCC_CharacterBuffEntry
+UCC_CharacterScreenWidget ..> UCC_CharacterScreenModel : 订阅 OnChanged\n只读
+UCC_CharacterScreenWidget o-- "*" UCC_CharacterBuffEntryWidget : BuffList 中按 InstanceId 复用
+
+' ---- 数据来源（只读）----
+UCC_CharacterScreenController ..> ACC_BaseCharacter : 弱引用
+UCC_CharacterScreenController ..> UAbilitySystemComponent : 属性委托（按句柄）
+UCC_CharacterScreenController ..> UCC_BuffComponent : OnBuffsChanged\nGetActiveBuffs()
+UCC_CharacterScreenController ..> UCC_BuffUIData : EffectClass CDO\nFindComponent
+ACC_BaseCharacter *-- UCC_BuffComponent
+UAbilitySystemComponent o-- UCC_AttributeSet
+UCC_BuffComponent *-- "*" FCC_ReplicatedBuffItem
+
+note right of UCC_BuffComponent
+  服务器：ActiveGE 增删、叠层、刷新时长、抑制 → NotifyChanged → OnBuffsChanged
+  客户端：FastArray PostReplicatedReceive → OnBuffsChanged
+  两端走同一个委托，控制器不区分网络角色。
+end note
+
+note bottom of UCC_CharacterBuffEntryWidget
+  剩余时间 = EndServerTime − GameState.GetServerWorldTimeSeconds()
+  与 CC_BuffBarWidget / BuffComponent::GetRemainingTime 同一算法；
+  每帧在条目里算，不进 Model，不触发整页刷新。
+end note
+
+note right of UCC_CharacterScreenController
+  过滤规则与 CC_BuffBarWidget 一致：
+  没有 UCC_BuffUIData 或 bHiddenInUI 的不显示。
+  减益判断只看 BuffTags 是否含 DebuffTag，
+  不认识任何具体 Buff（CLAUDE.md 规则 1）。
+end note
+
+legend left
+  |= 颜色 |= 含义 |
+  |<#EEEEEE>| 已有 UI 框架 |
+  |<#E6F4EA>| 已有 GAS / Buff 系统 |
+  |<#E3EDFC>| 本次新增 C++ |
+  |<#FCEBDC>| WBP，由你在编辑器中制作 |
+endlegend
+
+@enduml

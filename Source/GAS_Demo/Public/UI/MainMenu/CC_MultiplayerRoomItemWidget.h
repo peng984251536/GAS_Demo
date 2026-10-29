@@ -2,7 +2,7 @@
 
 #include "Blueprint/IUserObjectListEntry.h"
 #include "Blueprint/UserWidget.h"
-#include "OnlineRoom/CC_RoomTypes.h"
+#include "Subsystems/CC_RoomTypes.h"
 #include "CC_MultiplayerRoomItemWidget.generated.h"
 
 class UCommonButtonBase;
@@ -27,7 +27,7 @@ private:
 	friend class UCC_MultiplayerScreenWidget;
 };
 
-/** ListView 行基类；每一行都拥有自己的 Button_JoinRoom。 */
+/** ListView 行基类；每一行都拥有自己的 CommonButtonBase_JoinRoom。 */
 UCLASS(Abstract, Blueprintable)
 class GAS_DEMO_API UCC_MultiplayerRoomItemWidget : public UUserWidget, public IUserObjectListEntry
 {
@@ -42,7 +42,7 @@ protected:
 	void OnRoomItemChanged(const FCC_RoomSummary& Room, bool bCanJoin);
 	/** Designer 中必需的行内加入按钮。 */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="UI|Multiplayer")
-	TObjectPtr<UCommonButtonBase> Button_JoinRoom;
+	TObjectPtr<UCommonButtonBase> CommonButtonBase_JoinRoom;
 
 private:
 	UFUNCTION() void HandleJoinClicked();

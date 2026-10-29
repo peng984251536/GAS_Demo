@@ -1,0 +1,43 @@
+@startuml 波次刷怪
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+autonumber
+
+participant "UCC_WaveDirector\nComponent" as WD
+participant "ACC_EnemySpawner" as SP
+participant "客户端\n(Cue / OnSpawnTelegraph)" as CUE
+participant "ACC_EnemyCharacter" as EN
+participant "ASC(怪物)" as ASC
+
+[-> WD : WaveTimer 到时（游戏时间，单机三选一暂停时同步暂停）
+activate WD
+WD -> WD : 写上一波平衡 CSV\nCurrentWave++，Tier = FindTier(Wave)
+WD -> WD : Players = 存活玩家数（本波取样）\nCount = ComputeCount(Tier, Wave, CountMultiplier(Players) × SpawnCountScale)\n截断到 MaxAlive - 存活 - 队列
+WD -> WD : Params = { InitEffect, EffectLevel = Wave,\nHealthScale = HealthMultiplier(Players),\nExperienceMultiplier, bIsSet }
+loop Count 次
+  WD -> WD : PickEnemyClass：按权重（RandomStream）\n未预加载完成则同步加载并警告
+  WD -> WD : PickSpawner：受控刷怪器中\n离所有玩家 ≥ Preferred → ≥ MinDistance → 最远
+  WD -> SP : FindSpawnLocation(Class, bProjectToNavigation, RandomStream)
+  SP --> WD : 地面 + 坡度 + NavMesh 投影 + 胶囊无阻挡
+  WD -> WD : SpawnQueue.Add({Spawner, Class, Location, ReadyTime = Now + Telegraph, Params})
+  WD -> CUE : MulticastSpawnTelegraph(Location, Duration, Cue)
+end
+WD -> WD : 广播 Survival.Msg.WaveStarted\n预加载下一档怪物类\nScheduleNextWave(Interval × WaveIntervalScale)
+deactivate WD
+
+loop QueueTimer 每 TickInterval
+  WD -> WD : 取 ReadyTime 已到的前 SpawnsPerTick 个
+  WD -> SP : SpawnEnemyAt(Class, Location, Params)
+  activate SP
+  SP -> EN : SpawnActorDeferred → SetSpawnParams → FinishSpawning
+  EN -> ASC : BeginPlay → InitializeAttributes：\nInitEffect @ Level = Wave\nMaxHealth / Health 基础值 × HealthScale
+  SP --> WD : Enemy（失败则丢弃）
+  deactivate SP
+  WD -> WD : AliveEnemies.Add，TeamStats.EnemiesSpawned++
+end
+
+loop CleanupTimer 每 2 秒
+  WD -> WD : 清除已死亡 / 已销毁的记录
+  WD -> EN : 离所有存活玩家 > LeashDistance\n持续 ≥ LeashTime → Destroy（不给经验、不计击杀）
+end
+@enduml

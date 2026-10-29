@@ -9,22 +9,22 @@ UCC_MultiplayerScreenWidget::UCC_MultiplayerScreenWidget(const FObjectInitialize
 {
 	ControllerClass = UCC_MultiplayerScreenController::StaticClass();
 	bAllowBack = true;
-	DefaultFocusWidgetName = TEXT("Button_Refresh");
+	DefaultFocusWidgetName = TEXT("CommonButtonBase_Refresh");
 }
 
 void UCC_MultiplayerScreenWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	Button_Refresh->OnClicked().AddUObject(this, &ThisClass::HandleRefreshClicked);
-	Button_Back->OnClicked().AddUObject(this, &ThisClass::HandleBackClicked);
+	CommonButtonBase_Refresh->OnClicked().AddUObject(this, &ThisClass::HandleRefreshClicked);
+	CommonButtonBase_Back->OnClicked().AddUObject(this, &ThisClass::HandleBackClicked);
 	RefreshScreen();
 }
 
 void UCC_MultiplayerScreenWidget::NativeDestruct()
 {
-	Button_Refresh->OnClicked().RemoveAll(this);
-	Button_Back->OnClicked().RemoveAll(this);
-	List_Rooms->ClearListItems();
+	CommonButtonBase_Refresh->OnClicked().RemoveAll(this);
+	CommonButtonBase_Back->OnClicked().RemoveAll(this);
+	ListView_Rooms->ClearListItems();
 	RoomEntries.Reset();
 	Super::NativeDestruct();
 }
@@ -53,17 +53,17 @@ void UCC_MultiplayerScreenWidget::RefreshScreen()
 
 	const bool bCanInteract = IsActivated() && State.bRoomServiceAvailable && !State.bBusy;
 	const bool bCanJoin = bCanInteract && State.RoomState == ECC_RoomAsyncState::Idle;
-	Button_Refresh->SetIsEnabled(bCanJoin);
-	Button_Back->SetIsEnabled(IsActivated());
+	CommonButtonBase_Refresh->SetIsEnabled(bCanJoin);
+	CommonButtonBase_Back->SetIsEnabled(IsActivated());
 
-	List_Rooms->ClearListItems();
+	ListView_Rooms->ClearListItems();
 	RoomEntries.Reset(State.Rooms.Num());
 	for (const FCC_RoomSummary& Room : State.Rooms)
 	{
 		UCC_MultiplayerRoomEntry* Entry = NewObject<UCC_MultiplayerRoomEntry>(this);
 		Entry->Initialize(Room, this, bCanJoin && Room.bJoinable);
 		RoomEntries.Add(Entry);
-		List_Rooms->AddItem(Entry);
+		ListView_Rooms->AddItem(Entry);
 	}
 	OnMultiplayerStateChanged(State);
 }

@@ -3,11 +3,15 @@
 #include "UI/Framework/CC_UIController.h"
 #include "UI/Framework/CC_UIModel.h"
 #include "UI/Combat/CC_CombatTypes.h"
+#include "UI/Survival/CC_SurvivalUITypes.h"
 #include "AttributeSet.h"
 #include "CC_CombatMainController.generated.h"
 
 class UAbilitySystemComponent;
 class ACC_BaseCharacter;
+class ACC_SurvivalGameState;
+class ACC_SurvivalPlayerState;
+class AGameStateBase;
 class APawn;
 struct FOnAttributeChangeData;
 
@@ -23,11 +27,23 @@ public:
 	/** 蓝图以一份快照读取玩家血蓝数据。 */
 	UFUNCTION(BlueprintPure, Category="UI|Combat")
 	FCC_PlayerVitals GetVitals() const { return Vitals; }
+	/** 生存模式数据（波次、经验、击杀、复活倒计时）；不在生存模式地图时 bActive 为 false。 */
+	UFUNCTION(BlueprintPure, Category="UI|Combat")
+	FCC_SurvivalHUDSnapshot GetSurvival() const { return Survival; }
+	/** 尚未领取的升级奖励次数；蓝图用大于零控制红点与按钮状态。 */
+	UFUNCTION(BlueprintPure, Category="UI|Combat")
+	int32 GetPendingBuffRewards() const { return PendingBuffRewards; }
 private:
+	/** 用服务器队列快照更新展示次数，不在模型中发放或消耗奖励。 */
+	void SetPendingBuffRewards(int32 Value);
+	UPROPERTY(Transient) int32 PendingBuffRewards = 0;
 	/** 控制器一次性写入四项属性，有变化时广播。 */
 	void SetVitals(const FCC_PlayerVitals& Value);
+	/** 控制器写入生存模式快照，有变化时广播。 */
+	void SetSurvival(const FCC_SurvivalHUDSnapshot& Value);
 	/** 本地展示副本，真实属性仍由 GAS 管理。 */
 	UPROPERTY(Transient) FCC_PlayerVitals Vitals;
+	UPROPERTY(Transient) FCC_SurvivalHUDSnapshot Survival;
 	friend class UCC_CombatMainController;
 };
 
@@ -39,12 +55,17 @@ class GAS_DEMO_API UCC_CombatMainController : public UCC_UIController
 public:
 	/** 指定战斗主界面专用模型。 */
 	UCC_CombatMainController();
+	/** 转发玩家的强化按钮点击；没有奖励、页面被覆盖或过渡中时拒绝。 */
+	UFUNCTION(BlueprintCallable, Category="UI|Combat")
+	bool OpenBuffSelection();
 protected:
 	/** 监听角色切换，并立即绑定当前 Pawn。 */
 	virtual void OnActivated() override;
 	/** 解除玩家、角色和 ASC 订阅。 */
 	virtual void OnDeactivated() override;
 private:
+	/** 监听奖励通知并读取完整次数；页面恢复时也主动读取一次。 */
+	UFUNCTION() void RefreshBuffRewards();
 	/** 解绑旧 Pawn，订阅新 Pawn 的 ASC 就绪事件。 */
 	UFUNCTION() void HandlePawnChanged(APawn* OldPawn, APawn* NewPawn);
 	/** ASC 晚于 Pawn 初始化时补做绑定。 */
@@ -65,4 +86,17 @@ private:
 	TWeakObjectPtr<UAbilitySystemComponent> BoundASC;
 	/** 本控制器创建的四项属性委托句柄。 */
 	TMap<FGameplayAttribute, FDelegateHandle> AttributeHandles;
+
+	// --- 生存模式（可选：地图不是生存模式时不绑定） ---
+	/** 绑定生存模式 GameState 与本地 PlayerState；GameState 尚未复制到达时等待 GameStateSetEvent。 */
+	void BindSurvival();
+	void UnbindSurvival();
+	void HandleGameStateSet(AGameStateBase* GameState);
+	UFUNCTION() void HandleSurvivalChanged();
+	UFUNCTION() void HandleSurvivalPhaseChanged(ECC_MatchPhase NewPhase);
+	void RefreshSurvival();
+	/** 等待客户端 GameState 到达的订阅句柄，失活时解除。 */
+	FDelegateHandle GameStateSetHandle;
+	TWeakObjectPtr<ACC_SurvivalGameState> BoundSurvivalState;
+	TWeakObjectPtr<ACC_SurvivalPlayerState> BoundSurvivalPlayer;
 };

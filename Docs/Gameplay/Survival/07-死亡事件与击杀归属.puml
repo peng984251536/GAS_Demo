@@ -1,0 +1,52 @@
+@startuml 死亡事件与击杀归属
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+autonumber
+
+participant "UCC_DamageStatics\n::ApplyDamage" as DMG
+participant "UCC_AttributeSet\n(受害者)" as AS
+participant "UCC_ListenToHealth\n→ CC_Death" as LH
+participant "ACC_BaseCharacter\n(受害者)" as CH
+participant "UCC_GameEventSubsystem" as GES
+participant "ACC_SurvivalGameMode" as GM
+
+DMG -> AS : 伤害 GE 执行（Damage 中间属性）
+activate AS
+AS -> AS : SetHealth(Health - Damage)
+AS -> LH : Health 变化回调（同步，早于下面的广播）
+activate LH
+LH -> CH : 死亡能力激活 → HandleDeath()
+note right of CH
+  HandleDeath 幂等：
+  IsAlive() 为 false 时直接返回
+  清理：SetAlive(false)、ClearBuffs(OwnerDeath)
+end note
+deactivate LH
+AS -> AS : SendDamageEvents（DamageTaken / DamageDealt，原逻辑）
+alt Health < 0.1 且 !bOutOfHealth
+  AS -> AS : bOutOfHealth = true\n从 Context 解析 Instigator（来源 ASC 的 Avatar）/ Causer
+  AS -> CH : OnOutOfHealth(Instigator, Causer, Spec, Magnitude)
+  activate CH
+  alt bDeathReported 或 属性集已不属于本 Pawn
+    CH --> AS : 忽略
+  else 首次
+    CH -> CH : bDeathReported = true\nHandleDeath()（已清理则跳过）
+    CH -> GES : OnCharacterDied(Victim, Killer, Causer, KillerPlayerState)
+    GES -> GM : HandleCharacterDied(Info)
+    note right of GM : 见 09（敌人）/ 10（玩家）
+  end
+  deactivate CH
+end
+deactivate AS
+
+... 死亡蒙太奇播完 ...
+LH -> CH : CC_Death.FinishOwnedAction\n角色仍死亡 → HandleDeathFinished()
+CH -> GES : OnCharacterDeathFinished(Character)
+GES -> GM : HandleCharacterDeathFinished
+
+note over AS
+  Health 回到 >= 0.1（复活回血、重新初始化）时
+  PostAttributeChange 清除 bOutOfHealth；
+  复活 / 重生时角色清除 bDeathReported
+end note
+@enduml

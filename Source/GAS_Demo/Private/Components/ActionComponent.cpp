@@ -2,15 +2,17 @@
 
 
 #include "Components\ActionComponent.h"
+#include "Debug/CC_DebugCVars.h"
 #include "GAS_Demo.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/Combat/CC_ArrowProjectile.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Actors/Projectiles/CC_ArrowProjectile.h"
 #include "Data/CC_CharacterConfig.h"
 #include "GameplayTags/CC_Tags.h"
+#include "Abilities/GameplayAbilityTargetTypes.h"
 
 
 // namespace
@@ -113,9 +115,9 @@ void UActionComponent::OpenComboWindowForMontage(
 	if (!IsValid(CurrentAction)
 		|| CurrentAction->Montage != SourceAnimation)
 	{
-		if(GEngine)
+		UE_LOG(LogGAS_Demo, Log, TEXT("UActionComponent::OpenCombo nullptr"));
+		if (GEngine && CCDebug::ShowMessages())
 		{
-			UE_LOG(LogGAS_Demo, Log, TEXT("UActionComponent::OpenCombo nullptr"));
 			GEngine->AddOnScreenDebugMessage(-1,3.0f,FColor::Red,
 				FString::Printf(TEXT("UActionComponent::OpenCombo nullptr")));
 		}
@@ -211,6 +213,7 @@ bool UActionComponent::TryAttack(FGameplayTag GameplayTag)
 		EventData.Instigator = GetOwner();
 		EventData.Target = GetOwner();
 		EventData.OptionalObject = NextAction;
+		SetEventInputDirection(EventData, Character, Character->GetLastMoveInputDirection());
 		const int32 TriggeredCount = ASC->HandleGameplayEvent(ExecutionTag, &EventData);
 		UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Action] Attack event: Character=%s Tag=%s Action=%s Montage=%s Triggered=%d"),
 			*GetNameSafe(Character), *ExecutionTag.ToString(), *GetNameSafe(NextAction),
@@ -226,6 +229,7 @@ bool UActionComponent::TryAttack(FGameplayTag GameplayTag)
 		EventData.Instigator = GetOwner();
 		EventData.Target = GetOwner();
 		EventData.OptionalObject = NextAction;
+		SetEventInputDirection(EventData, Character, Character->GetLastMoveInputDirection());
 		const int32 TriggeredCount = ASC->HandleGameplayEvent(ExecutionTag, &EventData);
 		UE_LOG(LogGAS_Demo, Log, TEXT("[BowAI][Action] Bow event: Character=%s Tag=%s Action=%s Montage=%s Triggered=%d"),
 			*GetNameSafe(Character), *ExecutionTag.ToString(), *GetNameSafe(NextAction),
@@ -255,8 +259,48 @@ bool UActionComponent::TryDodge(FGameplayTag GameplayTag)
 	EventData.Instigator = GetOwner();
 	EventData.Target = GetOwner();
 	EventData.OptionalObject = DodgeActionData;
+	SetEventInputDirection(EventData, Character, Character->GetLastMoveInputDirection());
 	
 	return ASC->HandleGameplayEvent(GameplayTag, &EventData) > 0;
+}
+
+void UActionComponent::SetEventInputDirection(FGameplayEventData& EventData, const AActor* Avatar,
+	const FVector& Direction)
+{
+	const FVector FlatDirection = Direction.GetSafeNormal2D();
+	if (!IsValid(Avatar) || FlatDirection.IsNearlyZero())
+	{
+		return;
+	}
+	// 起点 = 角色位置，终点 = 输入方向上 1 米处；读取时取两点之差，与角色位置偏差无关。
+	const FVector Origin = Avatar->GetActorLocation();
+	FGameplayAbilityTargetData_LocationInfo* Data = new FGameplayAbilityTargetData_LocationInfo();
+	Data->SourceLocation.LocationType = EGameplayAbilityTargetingLocationType::LiteralTransform;
+	Data->SourceLocation.LiteralTransform = FTransform(Origin);
+	Data->TargetLocation.LocationType = EGameplayAbilityTargetingLocationType::LiteralTransform;
+	Data->TargetLocation.LiteralTransform = FTransform(Origin + FlatDirection * 100.f);
+	EventData.TargetData.Add(Data);
+}
+
+bool UActionComponent::GetEventInputDirection(const FGameplayEventData* EventData, FVector& OutDirection)
+{
+	if (!EventData)
+	{
+		return false;
+	}
+	for (int32 Index = 0; Index < EventData->TargetData.Num(); ++Index)
+	{
+		const FGameplayAbilityTargetData* Data = EventData->TargetData.Get(Index);
+		// 只认本函数写入的 LocationInfo；受击事件里的命中结果（SingleTargetHit）不会被误读。
+		if (!Data || Data->GetScriptStruct() != FGameplayAbilityTargetData_LocationInfo::StaticStruct()
+			|| !Data->HasOrigin() || !Data->HasEndPoint())
+		{
+			continue;
+		}
+		OutDirection = (Data->GetEndPoint() - Data->GetOrigin().GetLocation()).GetSafeNormal2D();
+		return !OutDirection.IsNearlyZero();
+	}
+	return false;
 }
 
 bool UActionComponent::TryGameplayAbilityByTag(FGameplayTag GameplayTag,
@@ -274,16 +318,8 @@ bool UActionComponent::TryGameplayAbilityByTag(FGameplayTag GameplayTag,
 			*GetNameSafe(IsValid(TargetASC) ? TargetASC->GetAvatarActor() : nullptr));
 		return false;
 	}
-	if (GameplayTag == CCTags::CCAbilityTrigger::BeHit)
-	{
-		const ACC_BaseCharacter* HitCharacter = Cast<ACC_BaseCharacter>(TargetASC->GetAvatarActor());
-		if (!IsValid(HitCharacter) || !HitCharacter->IsAlive() || HitCharacter->IsActorBeingDestroyed()
-			|| TargetASC->HasMatchingGameplayTag(CCTags::Status::Death)
-		|| TargetASC->HasMatchingGameplayTag(CCTags::Status::SuperArmor))
-		{
-			return false;
-		}
-	}
+	// 受击能否发生（霸体、死亡、存活）统一由 UCC_HitReact::CanActivateAbility 判断；
+	// 被拦截时 HandleGameplayEvent 返回 0，本函数自然返回 false。这里不再重复判断。
 	UCC_AbilitySystemComponent* OwnerASC = ResolveASC();
 	const ACC_BaseCharacter* Character = IsValid(OwnerASC)
 		? Cast<ACC_BaseCharacter>(OwnerASC->GetAvatarActor()) : nullptr;
@@ -364,9 +400,9 @@ UCC_AbilitySystemComponent* UActionComponent::ResolveASC() const
 		UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(GetOwner());
 	if(!IsValid(ASC))
 	{
-		if(GEngine)
+		UE_LOG(LogGAS_Demo, Log, TEXT("UAbilitySystemComponent is nullptr"));
+		if (GEngine && CCDebug::ShowMessages())
 		{
-			UE_LOG(LogGAS_Demo, Log, TEXT("UAbilitySystemComponent is nullptr"));
 			GEngine->AddOnScreenDebugMessage(-1,3.0f,FColor::Red,
 				FString::Printf(TEXT("UAbilitySystemComponent is nullptr")));
 		}
@@ -377,9 +413,9 @@ UCC_AbilitySystemComponent* UActionComponent::ResolveASC() const
 		return UCC_ASC;
 	}	
 
-	if(GEngine)
+	UE_LOG(LogGAS_Demo, Log, TEXT("UAbilitySystemComponent is nullptr"));
+	if (GEngine && CCDebug::ShowMessages())
 	{
-		UE_LOG(LogGAS_Demo, Log, TEXT("UAbilitySystemComponent is nullptr"));
 		GEngine->AddOnScreenDebugMessage(-1,3.0f,FColor::Red,
 			FString::Printf(TEXT("UAbilitySystemComponent is nullptr")));
 	}

@@ -1,0 +1,182 @@
+@startuml 生存模式类图
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "已有：Game" {
+  class ACC_RoomGameMode <<existing>>
+  class ACC_RoomPlayerState <<existing>>
+  class ACC_GameState <<existing>>
+}
+
+package "Game/Survival：规则" {
+  class ACC_SurvivalGameMode <<new>> {
+    # Config : UCC_SurvivalModeConfig*
+    # StartTimeout : float = 10
+    # Respawn : UCC_RespawnComponent*
+    --
+    + StartMatch() / EndMatch()
+    + IsMatchPlaying() : bool
+    + HandlePlayerRevived(PS)
+    + RequestPlayAgain() / RequestReturnToLobby()
+    + DebugAddExperience / DebugReviveAll / DebugToggleGodMode
+    # InitGame()：?SurvivalConfig= / ?SurvivalSeed=
+    # HandleStartingNewPlayer()：中途加入追赶
+    # Logout()
+    - HandleCharacterDied(FCC_DeathInfo)
+    - HandleCharacterDeathFinished(Character)
+    - ShouldCreditKill(Info) : bool
+    - IsTeamWiped() : bool
+    - BindPlayer / UnbindPlayer：统计、选卡保护
+    - SetChoosingProtection(PS, bEnable)
+  }
+  class UCC_RespawnComponent <<new>> {
+    + SchedulePlayer(PS)
+    + NotifyDeathFinished(PS)
+    + Cancel(PS) / CancelAll()
+    + ReviveNow(PS) : bool
+    + FindReviveLocation(Anchor, Reviving) : FVector
+    - TryRevive(PS, bForce)
+    - PickAnchor(Exclude)
+    - Pending : TMap<PS, FPending>
+  }
+}
+
+package "Game/Survival：复制状态" {
+  class ACC_SurvivalGameState <<new>> {
+    + MatchStartServerTime / MatchEndServerTime [Rep]
+    - Phase : ECC_MatchPhase [Rep]
+    - TeamStats : FCC_StatTagStackContainer [Rep]
+    # ResultScreenClass / ResultScreenLayer
+    --
+    + GetPhase() / GetTeamStat(Tag)
+    + GetMatchElapsedSeconds()
+    + GetSecondsUntilServerTime(Time)
+    + GetSurvivalPlayers()
+    + SetPhase() / AddTeamStat()（服务器）
+    + MulticastMatchMessage [NetMulticast, Unreliable]
+    + OnPhaseChanged / OnTeamStatsChanged / OnMatchMessage
+  }
+  class UCC_WaveDirectorComponent <<new, GameStateComponent>> {
+    - CurrentWave / NextWaveServerTime / AliveEnemyCount [Rep]
+    .. 仅服务器 ..
+    - SpawnQueue : TArray<FCC_PendingSpawn>
+    - AliveEnemies / FarTimes / Spawners
+    - RandomStream
+    --
+    + StartDirector(Config, Seed) / StopDirector()
+    + NotifyEnemyRemoved(Enemy)
+    + DebugSetWave / DebugSkipWave / DebugClearEnemies
+    - AdvanceWave() / TickSpawnQueue()
+    - CleanupStrayEnemies()
+    - PickSpawner() / PickEnemyClass()
+    - MulticastSpawnTelegraph [NetMulticast, Unreliable]
+    + OnWaveStateChanged / OnSpawnTelegraph
+  }
+  class UCC_TeamProgressionComponent <<new, GameStateComponent>> {
+    - TeamLevel / TeamExperience / ExperienceToNextLevel [Rep]
+    --
+    + StartProgression(Config) / StopProgression()
+    + AddExperience(Amount) : int32
+    + GrantCatchUpOffers(PC)
+    + OnProgressChanged
+  }
+  class ACC_SurvivalPlayerState <<new>> {
+    - Stats : FCC_StatTagStackContainer [Rep]
+    - LifeState : ECC_PlayerLifeState [Rep]
+    - RespawnServerTime : double [Rep]
+    --
+    + GetStat / GetLifeState / GetRespawnRemainingSeconds
+    + AddStat / SetLifeState / SetRespawnServerTime（服务器）
+    + ServerRequestPlayAgain() [Server]
+    + ServerRequestReturnToLobby() [Server]
+    + CanControlMatch() : bool
+    + OnSurvivalStateChanged
+  }
+  enum ECC_MatchPhase {
+    WaitingToStart
+    Playing
+    GameOver
+  }
+  enum ECC_PlayerLifeState {
+    Alive
+    Dying
+    Dead
+  }
+}
+
+package "Subsystems" {
+  class UCC_GameEventSubsystem <<new, WorldSubsystem>> {
+    + OnCharacterDied
+    + OnCharacterDeathFinished
+  }
+  class FCC_DeathInfo <<struct>> {
+    + Victim / Killer / DamageCauser
+    + KillerPlayerState
+  }
+}
+
+package "已有：修改" {
+  class UCC_AttributeSet <<modified>> {
+    + OnOutOfHealth : FCC_OutOfHealthEvent
+    + OutOfHealthThreshold = 0.1 {static}
+    - bOutOfHealth : bool
+  }
+  class ACC_BaseCharacter <<modified>> {
+    + HandleDeath()：幂等
+    + HandleDeathFinished()
+    # BindOutOfHealth(Attributes)
+    # HandleOutOfHealth(Instigator, Causer, Spec, Magnitude)
+    - bDeathReported : bool
+  }
+  class ACC_PlayerCharacter <<modified>> {
+    + Revive(Location, ReviveEffect) : bool
+  }
+  class ACC_EnemyCharacter <<modified>> {
+    - SpawnParams : FCC_EnemySpawnParams [Transient]
+    + SetSpawnParams(Params)
+    + GetExperienceReward() : float
+    # InitializeAttributes()：InitEffect @ 波次 + HealthScale
+  }
+  class ACC_EnemySpawner <<modified>> {
+    + bManagedByWaveDirector : bool
+    + FindSpawnLocation(Class, bProjectToNav, Random, Out) : bool
+    + SpawnEnemyAt(Class, Location, Params)
+    + SpawnEnemies()：行为不变
+  }
+  class UCC_BuffComponent <<modified>> {
+    + ResumeAfterRevive()
+  }
+  class UCC_BuffSelectionComponent <<modified>> {
+    + OnServerPendingChanged
+    + OnServerChoiceAccepted
+  }
+  class UCC_CharacterConfig <<modified>> {
+    + ExperienceReward : float = 10
+  }
+}
+
+ACC_RoomGameMode <|-- ACC_SurvivalGameMode
+ACC_RoomPlayerState <|-- ACC_SurvivalPlayerState
+ACC_GameState <|-- ACC_SurvivalGameState
+ACC_SurvivalGameMode *-- UCC_RespawnComponent
+ACC_SurvivalGameMode ..> UCC_GameEventSubsystem : 订阅
+ACC_SurvivalGameMode ..> UCC_BuffSelectionComponent : 订阅服务器事件
+ACC_SurvivalGameMode --> ACC_SurvivalGameState
+ACC_SurvivalGameState *-- UCC_WaveDirectorComponent
+ACC_SurvivalGameState *-- UCC_TeamProgressionComponent
+ACC_SurvivalGameState --> ECC_MatchPhase
+ACC_SurvivalPlayerState --> ECC_PlayerLifeState
+UCC_GameEventSubsystem ..> FCC_DeathInfo
+UCC_AttributeSet ..> ACC_BaseCharacter : OnOutOfHealth
+ACC_BaseCharacter ..> UCC_GameEventSubsystem : 发布
+ACC_BaseCharacter <|-- ACC_PlayerCharacter
+ACC_BaseCharacter <|-- ACC_EnemyCharacter
+ACC_PlayerCharacter ..> UCC_BuffComponent : 复活时恢复
+UCC_WaveDirectorComponent --> ACC_EnemySpawner
+ACC_EnemySpawner ..> ACC_EnemyCharacter : 写 SpawnParams
+ACC_EnemyCharacter ..> UCC_CharacterConfig : 基础经验
+UCC_TeamProgressionComponent ..> UCC_BuffSelectionComponent : OfferBuffs
+UCC_RespawnComponent ..> ACC_PlayerCharacter : Revive
+@enduml

@@ -1,0 +1,111 @@
+@startuml 生存模式配置数据
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam classAttributeIconSize 0
+hide empty members
+
+class UCC_SurvivalModeConfig <<PrimaryDataAsset，只读>> {
+  + Waves : FCC_WaveSettings
+  + Spawning : FCC_SpawnPacingSettings
+  + PlayerScaling : FCC_PlayerScalingSettings
+  + Progression : FCC_ProgressionSettings
+  + Respawn : FCC_RespawnSettings
+  --
+  + FindTier(Settings, Wave) {static}
+  + ComputeCount(Tier, Wave, CountScale) {static}
+  + EvaluateMultiplier(Curve, X) {static}
+  + ComputeExperienceToNext(Settings, Level) {static}
+  + ApplyExperience(Settings, Level, Exp, Amount) {static}
+  + ComputeRespawnDelay(Settings, DeathCount) {static}
+  + IsDataValid()
+}
+
+class FCC_WaveSettings <<struct>> {
+  + FirstWaveDelay = 5
+  + WaveInterval = 20
+  + MaxAliveEnemies = 60
+  + bAdvanceWhenCleared = false
+  + Tiers : TArray<FCC_WaveTier>
+}
+
+class FCC_WaveTier <<struct>> {
+  + StartWave（首档 = 1，严格递增）
+  + InitEffect : TSubclassOf<UGameplayEffect>
+  + Enemies : TArray<FCC_WeightedEnemy>
+  + BaseCount = 5
+  + CountPerWave = 1
+  + ExperienceMultiplier = 1
+}
+
+class FCC_WeightedEnemy <<struct>> {
+  + EnemyClass : TSoftClassPtr<ACC_EnemyCharacter>
+  + Weight = 1
+}
+
+class FCC_SpawnPacingSettings <<struct>> {
+  + SpawnsPerTick = 2
+  + TickInterval = 0.1
+  + TelegraphDuration = 0.8
+  + TelegraphCue : FGameplayTag
+  + MinDistanceToPlayers = 800
+  + PreferredDistanceToPlayers = 1600
+  + bProjectToNavigation = true
+  + LeashDistance = 4000
+  + LeashTime = 8
+}
+
+class FCC_PlayerScalingSettings <<struct>> {
+  + CountMultiplier : FRuntimeFloatCurve
+  + HealthMultiplier : FRuntimeFloatCurve
+}
+note right of FCC_PlayerScalingSettings
+  X = 存活玩家数，Y = 倍率
+  没有关键帧时视为 1
+end note
+
+class FCC_ProgressionSettings <<struct>> {
+  + ExperienceToNext : FRuntimeFloatCurve
+  + BaseExperienceToNext = 20
+  + ExperienceToNextPerLevel = 10
+  + BuffPool : UCC_BuffOfferPool*
+  + MaxLevel = 0（不限）
+  + ChoosingProtectionEffect : TSubclassOf<UGameplayEffect>
+}
+
+class FCC_RespawnSettings <<struct>> {
+  + BaseDelay = 5
+  + DelayPerDeath = 2
+  + MaxDelay = 20
+  + MinRadius = 150
+  + MaxRadius = 400
+  + DeathFinishedTimeout = 5
+  + ReviveEffect : TSubclassOf<UGameplayEffect>
+}
+note right of FCC_RespawnSettings
+  ReviveEffect 建议：回满血
+  + Status.DamageImmunity 2 秒 + 复活 Cue
+end note
+
+class FCC_EnemySpawnParams <<struct，运行时>> {
+  + InitEffect
+  + EffectLevel（= 波次）
+  + HealthScale
+  + ExperienceMultiplier
+  + WaveIndex
+  + bIsSet
+}
+
+class UCC_SurvivalSaveGame <<USaveGame，客户端本地>> {
+  + SaveVersion
+  + BestWave / BestKills / BestSurvivalTime
+}
+
+UCC_SurvivalModeConfig *-- FCC_WaveSettings
+UCC_SurvivalModeConfig *-- FCC_SpawnPacingSettings
+UCC_SurvivalModeConfig *-- FCC_PlayerScalingSettings
+UCC_SurvivalModeConfig *-- FCC_ProgressionSettings
+UCC_SurvivalModeConfig *-- FCC_RespawnSettings
+FCC_WaveSettings *-- "1..*" FCC_WaveTier
+FCC_WaveTier *-- "1..*" FCC_WeightedEnemy
+FCC_WaveTier ..> FCC_EnemySpawnParams : 每波生成
+@enduml

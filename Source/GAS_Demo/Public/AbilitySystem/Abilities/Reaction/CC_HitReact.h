@@ -15,6 +15,19 @@ class GAS_DEMO_API UCC_HitReact : public UCC_GameplayAbility
 	GENERATED_BODY()
 
 public:
+	UCC_HitReact();
+
+	/**
+	 * 激活前的门控：角色已死亡或正在销毁时不能受击。
+	 * 霸体（Status.SuperArmor）与死亡标签由 ActivationBlockedTags 在这一步之前拦截。
+	 */
+	virtual bool CanActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayTagContainer* SourceTags = nullptr,
+		const FGameplayTagContainer* TargetTags = nullptr,
+		FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
+
 	static bool SetAvatarAILogicPaused(AActor* Avatar, bool bPaused);
 	
 	/**
@@ -43,5 +56,6 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category="Crash|Abilities")
 	FVector ToInstigator;
+
 
 };

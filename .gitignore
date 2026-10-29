@@ -6,9 +6,12 @@
 /Build/*/FileOpenOrder/
 /Plugins/**/Intermediate/
 /Plugins/**/Saved/
+/Plugins/**/Binaries/
 # IDE and local build caches
 /.vs/
 /.idea/
+/.vscode/
+*.code-workspace
 /.dotnet/
 *.sln
 *.suo
@@ -39,3 +42,8 @@ Thumbs.db
 # Local inspection probes and unrelated preview artifact
 /.probe_*.py
 /pelican-bike.html
+/Output
+
+# Per-user Claude Code settings and staging area for files pending deletion
+.claude/settings.local.json
+/_to_delete/

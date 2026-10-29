@@ -5,14 +5,22 @@
 #include "GAS_Demo.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
-#include "AbilitySystem/CC_AbilitySystemComponent.h"
-#include "Character/CC_BaseCharacter.h"
-#include "Character/CC_PlayerCharacter.h"
-#include "Engine/OverlapResult.h"
+#include "AbilitySystemComponent.h"
+#include "Actors/Character/CC_BaseCharacter.h"
+#include "Engine/World.h"
 #include "Components/ActionComponent.h"
-#include "Components/PrimitiveComponent.h"
-#include "DrawDebugHelpers.h"
 #include "GameplayTags/CC_Tags.h"
+#include "Utils/Team/CC_TeamStatics.h"
+#include "Animation/Notifies/AnimNotify_MeleeHitBox.h"
+
+UCC_Primary::UCC_Primary()
+{
+	// 激活期间给 ASC 挂上「正在攻击」状态，能力以任何方式结束都会自动移除；连段期间计数不归零。
+	// 使用者：
+	//   - ACC_AIController：0→1 切 Crowd ObstacleOnly（站稳不被推），1→0 恢复避障；攻击中不做被挡检测；
+	//   - CC_KeepDistance / CC_Dash：ActivationBlockedTags，攻击期间不后撤 / 不冲刺。
+	ActivationOwnedTags.AddTag(CCTags::CCAbilities::Attack);
+}
 
 
 
@@ -59,7 +67,7 @@ void UCC_Primary::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const
 	MontageTask->ReadyForActivation();
 	
 	// 方式二：屏幕打印，调试时更直观
-	if (GEngine && ShowDebug)
+	if (GEngine && ShouldShowDebug())
 	{
 		UE_LOG(LogGAS_Demo, Log, TEXT("Ability Activated: %s"), *GetName());
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
@@ -69,90 +77,24 @@ void UCC_Primary::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const
 }
 
 #pragma region hit目标
-TArray<FHitResultAndActor> UCC_Primary::HitBoxOverlapText()
+TArray<FHitResultAndActor> UCC_Primary::HitBoxOverlapFromEvent(const FGameplayEventData& Payload) const
 {
 	TArray<FHitResultAndActor> Hits;
-	AActor* Attacker = GetAvatarActorFromActorInfo();
-	UWorld* World = GetWorld();
-	if (!IsValid(Attacker) || !World)
-	{
-		return Hits;
-	}
-
-	FCollisionQueryParams QueryParams;
-	QueryParams.AddIgnoredActor(Attacker);
-	FCollisionResponseParams ResponseParams;
-	ResponseParams.CollisionResponse.SetAllChannels(ECR_Ignore);
-	ResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Overlap);
-
-	const FVector AttackOrigin = Attacker->GetActorLocation();
-	const FVector HitBoxLocation = AttackOrigin
-		+ Attacker->GetActorForwardVector() * HitBoxForwardOffset;
-	TArray<FOverlapResult> Overlaps;
-	World->OverlapMultiByChannel(Overlaps, HitBoxLocation, FQuat::Identity,
-		ECC_Visibility, FCollisionShape::MakeSphere(HitBoxRadius), QueryParams, ResponseParams);
-
+	// 只接受命中通知发出的事件，使用事件内的检测快照。
+	if (!UAnimNotify_MeleeHitBox::FromEventPayload(Payload)) return Hits;
 	TSet<AActor*> AddedActors;
-	FCollisionQueryParams TraceParams;
-	TraceParams.bTraceComplex = false;
-	for (const FOverlapResult& Overlap : Overlaps)
+	for (int32 Index = 0; Index < Payload.TargetData.Num(); ++Index)
 	{
-		AActor* Target = Overlap.GetActor();
-		UPrimitiveComponent* Component = Overlap.GetComponent();
-		if (!IsValid(Target) || !IsValid(Component) || AddedActors.Contains(Target))
-		{
-			continue;
-		}
-
-		const FVector Center = Component->Bounds.Origin;
-		FVector TowardAttacker = (AttackOrigin - Center).GetSafeNormal();
-		if (TowardAttacker.IsNearlyZero())
-		{
-			TowardAttacker = -Attacker->GetActorForwardVector();
-		}
-		// 补射线取得朝攻击者一侧的碰撞表面；保留原有检测方式。
-		const float Distance = Component->Bounds.SphereRadius + 10.f;
-		FHitResult Hit;
-		if (!Component->LineTraceComponent(Hit, Center + TowardAttacker * Distance,
-			Center - TowardAttacker * Distance, TraceParams) || Hit.bStartPenetrating)
-		{
-			continue;
-		}
-
+		const FGameplayAbilityTargetData* Data = Payload.TargetData.Get(Index);
+		const FHitResult* Hit = Data ? Data->GetHitResult() : nullptr;
+		AActor* Target = Hit ? Hit->GetActor() : nullptr;
+		if (!IsValid(Target) || Target == Payload.Instigator.Get() || AddedActors.Contains(Target)) continue;
 		FHitResultAndActor& Entry = Hits.AddDefaulted_GetRef();
-		Entry.Result = Hit;
+		Entry.Result = *Hit;
 		Entry.hitActor = Target;
-		// 成功后再去重，允许失败时尝试该角色的其他组件。
 		AddedActors.Add(Target);
 	}
-
-	if (ShowDebug)
-	{
-		DrawHitBoxOverlapDebugs(Hits, HitBoxLocation);
-	}
 	return Hits;
-}
-
-void UCC_Primary::DrawHitBoxOverlapDebugs(
-	const TArray<FHitResultAndActor>& Hits, const FVector& HitBoxLocation) const
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-	DrawDebugSphere(World, HitBoxLocation, HitBoxRadius, 16, FColor::Red, false, 5.f);
-	for (const FHitResultAndActor& Hit : Hits)
-	{
-		if (!IsValid(Hit.hitActor))
-		{
-			continue;
-		}
-		const FVector Position = Hit.Result.ImpactPoint;
-		DrawDebugSphere(World, Position, 8.f, 10, FColor::Green, false, 3.f);
-		DrawDebugDirectionalArrow(World, Position, Position + Hit.Result.ImpactNormal * 50.f,
-			10.f, FColor::Yellow, false, 3.f);
-	}
 }
 
 void UCC_Primary::SendEventToActor(const TArray<FHitResultAndActor>& Hits)
@@ -163,11 +105,14 @@ void UCC_Primary::SendEventToActor(const TArray<FHitResultAndActor>& Hits)
 		return;
 	}
 
+	const AActor* Attacker = GetAvatarActorFromActorInfo();
+	if (!IsValid(Attacker) || !Attacker->HasAuthority()) return;
 	TSet<AActor*> SentActors;
 	for (const FHitResultAndActor& Hit : Hits)
 	{
 		ACC_BaseCharacter* Character = Cast<ACC_BaseCharacter>(Hit.hitActor);
-		if (!IsValid(Character) || SentActors.Contains(Character))
+		// 蓝图可能传入自己组装的命中列表，这里再按 IsHostile 过滤一次，友方不受击。
+		if (!IsValid(Character) || SentActors.Contains(Character) || !UCC_TeamStatics::IsHostile(Attacker, Character))
 		{
 			continue;
 		}

@@ -1,7 +1,7 @@
 #include "Data/CC_CharacterConfig.h"
 
 #include "Abilities/GameplayAbility.h"
-#include "Character/Combat/CC_ArrowProjectile.h"
+#include "Actors/Projectiles/CC_ArrowProjectile.h"
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"

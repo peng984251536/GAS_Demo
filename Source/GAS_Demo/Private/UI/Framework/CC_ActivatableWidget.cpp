@@ -4,6 +4,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "UI/Framework/CC_UIController.h"
 #include "UI/Framework/CC_UIModel.h"
+#include "CommonButtonBase.h"
 
 // 初始化页面默认策略：支持返回及焦点恢复。
 UCC_ActivatableWidget::UCC_ActivatableWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -12,29 +13,49 @@ UCC_ActivatableWidget::UCC_ActivatableWidget(const FObjectInitializer& ObjectIni
 	bAutoRestoreFocus = true;
 }
 
-// 把枚举转换为官方输入配置，Menu 模式同时屏蔽移动和视角。
+// 按输入模式补齐鼠标捕获与移动/视角屏蔽，组成官方输入配置。
 TOptional<FUIInputConfig> UCC_ActivatableWidget::GetDesiredInputConfig() const
 {
-	const ECommonInputMode InputMode = InputConfig == ECC_UIInputMode::Menu ?
-		ECommonInputMode::Menu :
-		(InputConfig == ECC_UIInputMode::Game ? ECommonInputMode::Game : ECommonInputMode::All);
-	
-	const EMouseCaptureMode CaptureMode = InputConfig == ECC_UIInputMode::Menu ?
-		EMouseCaptureMode::NoCapture : GameMouseCaptureMode;
-	
+	// 与引擎 FInputModeGameAndUI 一致：混合模式仅在按下时捕获，
+	// 既让 HUD 按钮正常接收首击，也保留未被 UI 消费的地面点击。
+	const EMouseCaptureMode CaptureMode = InputMode == ECommonInputMode::Menu
+		                                      ? EMouseCaptureMode::NoCapture
+		                                      : (InputMode == ECommonInputMode::All
+			                                         ? EMouseCaptureMode::CaptureDuringMouseDown
+			                                         : GameMouseCaptureMode);
+
 	FUIInputConfig Config(InputMode, CaptureMode, false);
-	Config.bIgnoreMoveInput = InputConfig == ECC_UIInputMode::Menu;
-	Config.bIgnoreLookInput = InputConfig == ECC_UIInputMode::Menu;
-	
+	Config.bIgnoreMoveInput = InputMode == ECommonInputMode::Menu;
+	Config.bIgnoreLookInput = InputMode == ECommonInputMode::Menu;
+
 	return Config;
+}
+
+// 绑定可选关闭按钮；不允许关闭的页面（常驻 HUD）直接折叠它。
+void UCC_ActivatableWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	if (CommonButtonBase_Close)
+	{
+		CommonButtonBase_Close->OnClicked().AddUObject(this, &ThisClass::HandleCloseButtonClicked);
+		if (!bAllowClose) CommonButtonBase_Close->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+// 与返回键同一流程，蓝图可在 On Handle Back Action 里拦截（例如未保存提示）。
+void UCC_ActivatableWidget::NativeOnCloseButtonClicked()
+{
+	if (bAllowClose && !BP_OnHandleBackAction()) CloseScreen();
 }
 
 // 页面每次重建 Slate 时重新设置导航边界。
 void UCC_ActivatableWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	for (EUINavigation Direction : {EUINavigation::Left, EUINavigation::Right, EUINavigation::Up,
-		EUINavigation::Down, EUINavigation::Next, EUINavigation::Previous})
+	for (EUINavigation Direction : {
+		     EUINavigation::Left, EUINavigation::Right, EUINavigation::Up,
+		     EUINavigation::Down, EUINavigation::Next, EUINavigation::Previous
+	     })
 	{
 		SetNavigationRuleBase(Direction, EUINavigationRule::Stop);
 	}
@@ -50,7 +71,8 @@ UWidget* UCC_ActivatableWidget::NativeGetDesiredFocusTarget() const
 // 通过所属控制器找到根布局，统一校验后关闭。
 bool UCC_ActivatableWidget::CloseScreen()
 {
-	if (UCC_RootLayout* Root = UCC_UIManagerSubsystem::GetRootLayoutForPlayer(GetOwningPlayer())) return Root->CloseScreen(this);
+	if (UCC_RootLayout* Root = UCC_UIManagerSubsystem::GetRootLayoutForPlayer(GetOwningPlayer())) return Root->
+		CloseScreen(this);
 	return false;
 }
 
@@ -83,6 +105,7 @@ void UCC_ActivatableWidget::ReuseWithContext(UObject* InContext)
 	if (ScreenController) ScreenController->UpdateContext(InContext);
 	BP_OnScreenOpened(InContext);
 }
+
 // 控件释放 Slate 时清除上下文，避免对象池继续持有旧业务对象。
 void UCC_ActivatableWidget::NativeDestruct()
 {
@@ -104,7 +127,10 @@ void UCC_ActivatableWidget::EnsureController()
 	}
 }
 
-UCC_UIModel* UCC_ActivatableWidget::GetUIModel() const { return ScreenController ? ScreenController->GetModel() : nullptr; }
+UCC_UIModel* UCC_ActivatableWidget::GetUIModel() const
+{
+	return ScreenController ? ScreenController->GetModel() : nullptr;
+}
 
 void UCC_ActivatableWidget::NativeOnActivated()
 {
@@ -118,8 +144,12 @@ void UCC_ActivatableWidget::NativeOnActivated()
 
 void UCC_ActivatableWidget::NativeOnDeactivated()
 {
-	if (UCC_UIModel* Model = GetUIModel()) Model->OnChanged.RemoveDynamic(this, &ThisClass::HandleModelChanged);
-	if (ScreenController) ScreenController->Deactivate();
+	if (UCC_UIModel* Model = GetUIModel())
+		Model->OnChanged.RemoveDynamic(this, &ThisClass::HandleModelChanged);
+	
+	if (ScreenController)
+		ScreenController->Deactivate();
+	
 	Super::NativeOnDeactivated();
 }
 
@@ -128,4 +158,7 @@ void UCC_ActivatableWidget::HandleModelChanged()
 	if (IsActivated() && GetUIModel()) NativeOnModelChanged();
 }
 
-void UCC_ActivatableWidget::NativeOnModelChanged() { OnUIModelChanged(GetUIModel()); }
+void UCC_ActivatableWidget::NativeOnModelChanged()
+{
+	OnUIModelChanged(GetUIModel());
+}

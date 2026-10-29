@@ -1,0 +1,119 @@
+@startuml CharacterScreen_Sequence_Update
+' 时序图 2：面板打开期间的数据更新。
+' Buff 侧展示的是联机客户端视角：服务器改 ActiveGE，FastArray 复制到客户端后广播。
+' 单机 / 监听服务器上，NotifyChanged 直接在本机广播 OnBuffsChanged，后半段完全相同。
+
+skinparam defaultFontName "Noto Sans CJK SC"
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 10
+skinparam BoxPadding 8
+
+title 角色面板 · 时序图 2：运行时更新
+
+box "服务器" #F7F7F7
+  participant "ACC_BuffPickup /\n战斗逻辑" as Src
+  participant "ASC (服务器)" as SASC
+  participant "UCC_BuffComponent\n(服务器)" as SBC
+end box
+box "本地客户端" #FFFFFF
+  participant "UCC_BuffComponent\n(客户端副本)" as CBC
+  participant "ASC (客户端)" as CASC
+end box
+box "角色面板" #F4F7FD
+  participant "UCC_CharacterScreenController" as Ctrl
+  participant "UCC_CharacterScreenModel" as Model
+  participant "UCC_CharacterScreenWidget" as View
+  participant "UCC_CharacterBuffEntryWidget" as Entry
+end box
+participant "PlayerController" as PC
+
+== 属性变化（受伤、攻击 Buff 改变 AttackPower 等） ==
+SASC -> CASC : 属性复制
+CASC -> Ctrl : 属性变化委托 → HandleAttributeChanged
+activate Ctrl
+Ctrl -> Ctrl : RefreshStats()
+Ctrl -> Model : SetStats(Name, Vitals, Stats)
+alt 与旧值相同
+  Model --> Ctrl : 不广播
+else 有变化
+  Model -> View : OnChanged（仅属性版本变化）
+  View -> View : OnStatsChanged(…)
+  note right of View : Buff 版本没变，BuffList 不动
+end
+deactivate Ctrl
+
+== 获得 Buff ==
+Src -> SBC : ApplyBuff(GE_Buff_*, 来源, 等级)
+SBC -> SASC : ApplyGameplayEffectSpecToTarget
+SASC --> SBC : OnActiveGameplayEffectAdded(Handle)
+SBC -> SBC : 新建 FCC_BuffInstance、启用 Behavior\nReplicatedBuffs 新增条目（InstanceId、到期时间…）
+SBC -> CBC : FastArray 增量复制
+CBC -> CBC : PostReplicatedReceive → NotifyReplicatedChange
+CBC -> Ctrl : OnBuffsChanged
+activate Ctrl
+Ctrl -> CBC : GetActiveBuffs()
+Ctrl -> Ctrl : RefreshBuffs()\n合成 UIData，过滤 bHiddenInUI，判断 DebuffTag
+Ctrl -> Model : SetBuffs(列表)
+Model -> View : OnChanged（仅 Buff 版本变化）
+activate View
+View -> View : SyncBuffList：条目有增加 → 复用旧条目 + 新建一条，按新顺序放入
+View -> Entry : SetBuff(新条目)
+View -> View : OnBuffsChanged(Buffs)
+deactivate View
+deactivate Ctrl
+
+== 叠层 / 刷新时长 / 抑制 ==
+Src -> SBC : 再次 ApplyBuff（同一 GE）
+SASC --> SBC : OnStackChanged / OnTimeChanged / OnInhibitionChanged
+SBC -> SBC : RefreshFromGAS → MarkItemDirty（InstanceId 不变）
+SBC -> CBC : FastArray 复制
+CBC -> Ctrl : OnBuffsChanged
+activate Ctrl
+Ctrl -> Model : SetBuffs(列表)
+Model -> View : OnChanged
+View -> View : SyncBuffList：集合与顺序未变
+View -> Entry : SetBuff（原地更新层数、到期时间、抑制状态）
+note right of Entry : 不重建控件，条目上的动画和悬停状态保留
+deactivate Ctrl
+
+== 每帧倒计时（不经过 Controller / Model） ==
+loop 每帧
+  Entry -> Entry : NativeTick()
+  Entry -> Entry : 剩余 = EndServerTime − GameState.GetServerWorldTimeSeconds()
+  Entry -> Entry : TimeText：≥10s 取整，<10s 保留一位小数\nTimeBar = 剩余 / Duration
+end
+note over Entry : 无限期显示“持续”、进度条满，不更新。\n单机暂停时服务器时钟冻结，倒计时一起停。
+
+== Buff 到期 / 驱散 / 死亡清理 ==
+SASC --> SBC : OnAnyGameplayEffectRemoved(Handle)
+SBC -> SBC : FinishInstance：Behavior 结束、回收资源\nReplicatedBuffs 删除条目
+SBC -> CBC : FastArray 复制
+CBC -> Ctrl : OnBuffsChanged
+activate Ctrl
+Ctrl -> Model : SetBuffs(列表)
+Model -> View : OnChanged
+View -> View : SyncBuffList：条目减少 → 移除该条目
+View -> View : OnBuffsChanged(Buffs)\n列表为空时可显示“当前没有效果”
+deactivate Ctrl
+
+== 面板打开期间换 Pawn（死亡重生、换角色） ==
+PC -> Ctrl : OnPossessedPawnChanged(旧 Pawn, 新 Pawn)
+activate Ctrl
+Ctrl -> Ctrl : UnbindPawn()\n解绑旧角色 OnASCInitialized、旧 BuffComponent、旧 ASC 属性句柄
+Ctrl -> Ctrl : BindBuffComponent(新角色.GetBuffComponent())
+Ctrl -> Model : SetBuffs(新角色的 Buff)
+alt 新 ASC 已就绪
+  Ctrl -> Ctrl : BindASC → RefreshStats
+  Ctrl -> Model : SetStats(新角色)
+else ASC 尚未就绪
+  Ctrl -> Model : SetStats(零值)（不残留旧角色数据）
+  ... OnASCInitialized ...
+  Ctrl -> Ctrl : HandleASCReady → BindASC → RefreshStats
+  Ctrl -> Model : SetStats(新角色)
+end
+Model -> View : OnChanged → 属性和 Buff 都刷新
+deactivate Ctrl
+
+@enduml

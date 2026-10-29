@@ -1,6 +1,6 @@
 #include "UI/HealthBar/CC_HealthBarWidget.h"
 #include "UI/WorldIndicator/CC_WorldIndicator.h"
-#include "Attribute/CC_AttributeSet.h"
+#include "AbilitySystem/Attributes/CC_AttributeSet.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "Blueprint/WidgetTree.h"
@@ -20,12 +20,12 @@ void UCC_HealthBarWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 	if (WidgetTree->RootWidget) return;
-	Frame = WidgetTree->ConstructWidget<UBorder>();
-	WidgetTree->RootWidget = Frame;
-	BarBox = WidgetTree->ConstructWidget<USizeBox>();
-	Frame->SetContent(BarBox);
+	Border_Frame = WidgetTree->ConstructWidget<UBorder>();
+	WidgetTree->RootWidget = Border_Frame;
+	SizeBox_Bar = WidgetTree->ConstructWidget<USizeBox>();
+	Border_Frame->SetContent(SizeBox_Bar);
 	UOverlay* Layers = WidgetTree->ConstructWidget<UOverlay>();
-	BarBox->SetContent(Layers);
+	SizeBox_Bar->SetContent(Layers);
 	UImage* Background = WidgetTree->ConstructWidget<UImage>();
 	Background->SetColorAndOpacity(BackgroundColor);
 	if (UOverlaySlot* BackgroundSlot = Layers->AddChildToOverlay(Background))
@@ -33,20 +33,20 @@ void UCC_HealthBarWidget::NativeOnInitialized()
 		BackgroundSlot->SetHorizontalAlignment(HAlign_Fill);
 		BackgroundSlot->SetVerticalAlignment(VAlign_Fill);
 	}
-	FillBox = WidgetTree->ConstructWidget<USizeBox>();
-	Fill = WidgetTree->ConstructWidget<UImage>();
-	Fill->SetColorAndOpacity(FillColor);
-	FillBox->SetContent(Fill);
-	if (UOverlaySlot* FillSlot = Layers->AddChildToOverlay(FillBox))
+	SizeBox_Fill = WidgetTree->ConstructWidget<USizeBox>();
+	Image_Fill = WidgetTree->ConstructWidget<UImage>();
+	Image_Fill->SetColorAndOpacity(FillColor);
+	SizeBox_Fill->SetContent(Image_Fill);
+	if (UOverlaySlot* FillSlot = Layers->AddChildToOverlay(SizeBox_Fill))
 	{
 		FillSlot->SetHorizontalAlignment(HAlign_Left);
 		FillSlot->SetVerticalAlignment(VAlign_Fill);
 	}
 	const float Border = FMath::Max(0.f, BorderWidth);
-	Frame->SetBrushColor(Border > 0.f ? BorderColor : FLinearColor::Transparent);
-	Frame->SetPadding(FMargin(Border));
-	BarBox->SetWidthOverride(BarSize.X);
-	BarBox->SetHeightOverride(BarSize.Y);
+	Border_Frame->SetBrushColor(Border > 0.f ? BorderColor : FLinearColor::Transparent);
+	Border_Frame->SetPadding(FMargin(Border));
+	SizeBox_Bar->SetWidthOverride(BarSize.X);
+	SizeBox_Bar->SetHeightOverride(BarSize.Y);
 }
 
 void UCC_HealthBarWidget::BindIndicator_Implementation(UCC_WorldIndicator* Indicator)
@@ -113,10 +113,10 @@ void UCC_HealthBarWidget::RefreshView()
 	const bool bHidden = MaxHealth <= 0.f || (bHideWhenDead && Health <= 0.f) || (bHideWhenFull && Health >= MaxHealth);
 	if (UWidget* Root = WidgetTree ? WidgetTree->RootWidget : nullptr)
 		Root->SetVisibility(bHidden ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
-	if (FillBox && Fill)
+	if (SizeBox_Fill && Image_Fill)
 	{
-		FillBox->SetWidthOverride(BarSize.X * DisplayedFraction);
-		Fill->SetVisibility(DisplayedFraction > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		SizeBox_Fill->SetWidthOverride(BarSize.X * DisplayedFraction);
+		Image_Fill->SetVisibility(DisplayedFraction > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	OnHealthBarUpdated(Health, MaxHealth, DisplayedFraction);
 }

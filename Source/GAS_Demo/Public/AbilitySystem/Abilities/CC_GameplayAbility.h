@@ -6,13 +6,13 @@
 #include "Components/ActionComponent.h"
 #include "Data/AbilityData/CombatActionData.h"
 #include "Data/AbilityData/CombatActionSet.h"
-#include "Utils/FBufferedAbilityInput.h"
+#include "Input/FBufferedAbilityInput.h"
 #include "AbilitySystemComponent.h"
 #include "CC_GameplayAbilityBase.h"
 #include "GameplayTags/CC_Tags.h"
 #include "Abilities/GameplayAbility.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
-#include "Character/CC_BaseCharacter.h"
+#include "Actors/Character/CC_BaseCharacter.h"
 #include "CC_GameplayAbility.generated.h"
 
 class UAbilityTask_PlayMontageAndWait;

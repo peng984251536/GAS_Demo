@@ -36,8 +36,8 @@ class GAS_DEMO_API UCC_BuffBarWidget : public UUserWidget
     virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 
   private:
-    UPROPERTY(Transient) TObjectPtr<UHorizontalBox> BuffBox;
-    UPROPERTY(Transient) TArray<TObjectPtr<UTextBlock>> Timers;
+    UPROPERTY(Transient) TObjectPtr<UHorizontalBox> HorizontalBox_Buffs;
+    UPROPERTY(Transient) TArray<TObjectPtr<UTextBlock>> TextBlocks_Timers;
     TArray<int32> InstanceIds;
     TWeakObjectPtr<UCC_BuffComponent> Observed;
     /**

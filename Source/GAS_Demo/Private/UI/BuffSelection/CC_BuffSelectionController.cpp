@@ -1,5 +1,5 @@
 #include "UI/BuffSelection/CC_BuffSelectionController.h"
-#include "BuffSelection/CC_BuffSelectionComponent.h"
+#include "Components/CC_BuffSelectionComponent.h"
 #include "Data/Buff/CC_BuffUIData.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayEffect.h"
@@ -50,6 +50,7 @@ void UCC_BuffSelectionController::OnActivated()
     {
         Selection->OnOfferChanged.AddUniqueDynamic(this, &ThisClass::HandleOfferChanged);
         Selection->OnChoiceResolved.AddUniqueDynamic(this, &ThisClass::HandleChoiceResolved);
+        Selection->ServerSetSelectionActive(true);
     }
     Refresh();
     Super::OnActivated();
@@ -61,6 +62,7 @@ void UCC_BuffSelectionController::OnDeactivated()
     {
         Selection->OnOfferChanged.RemoveDynamic(this, &ThisClass::HandleOfferChanged);
         Selection->OnChoiceResolved.RemoveDynamic(this, &ThisClass::HandleChoiceResolved);
+        Selection->ServerSetSelectionActive(false);
     }
     Selection.Reset();
     Super::OnDeactivated();

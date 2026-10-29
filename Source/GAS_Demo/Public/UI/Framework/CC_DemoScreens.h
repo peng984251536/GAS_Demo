@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CommonButtonBase.h"
+#include "UI/Framework/CC_ButtonBase.h"
 #include "UI/Framework/CC_ActivatableWidget.h"
 #include "UI/Framework/CC_UIController.h"
 #include "CC_DemoScreens.generated.h"
@@ -31,7 +31,7 @@ public:
 
 /** 原生 CommonButton 示例：用于验证交互与焦点，实际游戏可使用自己的按钮蓝图。 */
 UCLASS()
-class GAS_DEMO_API UCC_MenuButton : public UCommonButtonBase
+class GAS_DEMO_API UCC_MenuButton : public UCC_ButtonBase
 {
 	GENERATED_BODY()
 public:
@@ -42,7 +42,7 @@ protected:
 	virtual void NativeOnInitialized() override;
 private:
 	/** 按钮的文字控件，由内部 WidgetTree 持有。 */
-	UPROPERTY(Transient) TObjectPtr<UTextBlock> Label;
+	UPROPERTY(Transient) TObjectPtr<UTextBlock> TextBlock_Label;
 };
 
 /** 最小暂停菜单示例：继续游戏，或打开退出确认框。 */

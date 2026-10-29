@@ -177,6 +177,8 @@ private:
 	void HandleDisplayed(UCommonActivatableWidget* Screen, FGameplayTag Layer);
 	/** 同步下层命中测试、过渡遮罩以及单机暂停。 */
 	void UpdateInteraction();
+	/** 最后一个菜单退场后，避开关闭按钮的 MouseUp，在下一帧恢复游戏输入。 */
+	void RestoreGameInputAfterMenu();
 	/** 解除仅由本布局持有的全部输入过滤。 */
 	void ReleaseInputTokens();
 
@@ -186,12 +188,12 @@ private:
 	/** 按视觉顺序（下标 0 最底层）排列的运行时层。 */
 	UPROPERTY(Transient) TArray<FCC_UIRuntimeLayer> RuntimeLayers;
 	/** 最底视觉层：世界空间投影的血条与飘字，自身和子控件均不参与命中测试。 */
-	UPROPERTY(Transient) TObjectPtr<UOverlay> WorldOverlayLayer;
+	UPROPERTY(Transient) TObjectPtr<UOverlay> Overlay_World;
 	UPROPERTY(Transient) TObjectPtr<UCC_WorldIndicatorLayer> WorldIndicatorLayer;
 	/** 最上视觉层：提示，其自身和子控件均不参与命中测试。 */
-	UPROPERTY(Transient) TObjectPtr<UOverlay> NotificationLayer;
+	UPROPERTY(Transient) TObjectPtr<UOverlay> Overlay_Notifications;
 	/** 动画期间拦截鼠标点击的透明全屏遮罩。 */
-	UPROPERTY(Transient) TObjectPtr<UWidget> InputShield;
+	UPROPERTY(Transient) TObjectPtr<UWidget> Widget_InputShield;
 	/** 容器到过滤令牌的映射，防止一个容器提前解锁其他容器。 */
 	TMap<UCommonActivatableWidgetContainerBase*, FName> TransitionTokens;
 	/** 软引用页面加载持有的输入锁，与动画令牌独立。 */
@@ -199,6 +201,9 @@ private:
 	uint32 AsyncRequestSerial = 0;
 	/** 临时提示到移除计时器的映射；弱引用不延长控件生命周期。 */
 	TMap<TWeakObjectPtr<UUserWidget>, FTimerHandle> NotificationTimers;
+	/** 延迟恢复输入，切图/销毁时主动取消。 */
+	FTimerHandle RestoreGameInputTimer;
+	bool bRestoreGameInputRequested = false;
 	/** 清理期间禁止回调重新打开页面。 */
 	bool bShuttingDown = false;
 	/** 临时脱离视口时禁止导航，但不是永久销毁。 */

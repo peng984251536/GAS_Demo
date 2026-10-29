@@ -2,7 +2,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AIController.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "Data/CC_CharacterConfig.h"
 #include "Engine/Engine.h"
 #include "GAS_Demo.h"
@@ -161,7 +161,7 @@ void UCC_FindPlayerTarget::HandleMoveFinished(
 	}
 
 	const bool bSucceeded = Result == EPathFollowingResult::Success;
-	if (ShowDebug)
+	if (ShouldShowDebug())
 	{
 		const FString Message = FString::Printf(TEXT("%s: MoveToTarget finished: %s"),
 			*GetNameSafe(GetAvatarActorFromActorInfo()),

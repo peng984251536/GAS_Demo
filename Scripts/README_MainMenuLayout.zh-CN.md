@@ -1,7 +1,7 @@
 # UWG_MainMenu 布局脚本
 
 `generate_mainmenu_layout.py` 只生成主菜单布局。完整的 C++ 父类、多人 ListView 和房间条目接入步骤见
-[LANMenuWidgetSetup.zh-CN.md](../Docs/LANMenuWidgetSetup.zh-CN.md)。
+[LANMenuWidgetSetup.zh-CN.md](../Docs/UI/LANMenuWidgetSetup.zh-CN.md)。
 
 运行前：
 

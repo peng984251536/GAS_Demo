@@ -7,7 +7,7 @@
 #include "UI/HealthBar/CC_HealthBarSource.h"
 #include "UI/DamageText/CC_DamageNumberSource.h"
 #include "UI/WorldIndicator/CC_WorldIndicatorSettings.h"
-#include "Character/CC_EnemyCharacter.h"
+#include "Actors/Character/CC_EnemyCharacter.h"
 #include "CommonGameViewportClient.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"

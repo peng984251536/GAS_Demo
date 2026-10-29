@@ -55,6 +55,8 @@ public:
 		const FName& Tag
 	);
 
+	UFUNCTION(BlueprintCallable)
+	static FLinearColor GetColorFromString(const FString& Text);
 };
 
 

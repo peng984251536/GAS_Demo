@@ -4,22 +4,34 @@
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 
+UCC_BuffOfferCardWidget::UCC_BuffOfferCardWidget(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer)
+{
+    ClickSoundEvent = TEXT("UI.Confirm");
+}
+
 void UCC_BuffOfferCardWidget::SetCardData(const FCC_BuffOfferCardData& InData, UCC_BuffSelectionScreen* InOwner)
 {
     Data = InData;
     OwnerScreen = InOwner;
-    if (Text_Name)
+    if (TextBlock_Name)
     {
-        Text_Name->SetText(Data.DisplayName);
+        TextBlock_Name->SetText(Data.DisplayName);
     }
-    if (Text_Description)
+    if (TextBlock_Description)
     {
-        Text_Description->SetText(Data.Description);
+        TextBlock_Description->SetText(Data.Description);
     }
     if (Image_Icon)
     {
-        Image_Icon->SetBrushFromTexture(Data.Icon);
-        Image_Icon->SetVisibility(Data.Icon ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+        if(Data.Icon)
+        {
+            Image_Icon->SetBrushFromTexture(Data.Icon);
+        }
+        
+        // Image_Icon->SetVisibility(Data.Icon ?
+        //     ESlateVisibility::HitTestInvisible :
+        //     ESlateVisibility::Collapsed);
     }
     OnCardDataSet(Data);
 }

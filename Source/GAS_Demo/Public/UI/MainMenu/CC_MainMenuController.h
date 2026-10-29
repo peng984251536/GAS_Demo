@@ -2,7 +2,7 @@
 
 #include "UI/Framework/CC_UIController.h"
 #include "UI/Framework/CC_UIModel.h"
-#include "OnlineRoom/CC_RoomTypes.h"
+#include "Subsystems/CC_RoomTypes.h"
 #include "CC_MainMenuController.generated.h"
 
 class UCC_ActivatableWidget;
